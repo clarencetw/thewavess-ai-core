@@ -215,14 +215,111 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 
 // analyzeContent 分析消息內容
 func (s *ChatService) analyzeContent(message string) (*ContentAnalysis, error) {
-	// TODO: 實現內容分析邏輯
-	// 這裡先返回基本分析，後續會實現 NSFW 檢測
+	// 基本關鍵詞檢測
+	nsfwKeywords := []string{
+		"親密", "親吻", "擁抱", "床", "脫", "摸", "撫", "愛撫", "激情", "慾望",
+		"性感", "誘惑", "挑逗", "調情", "情慾", "肉體", "身體", "胸", "腰", "腿",
+		"kiss", "touch", "caress", "embrace", "intimate", "passion", "desire",
+		"sexy", "seduce", "tease", "body", "chest", "waist", "leg",
+	}
+	
+	suggestiveKeywords := []string{
+		"喜歡你", "愛你", "想你", "思念", "心動", "臉紅", "害羞", "溫柔", "甜蜜",
+		"浪漫", "約會", "一起", "陪伴", "呵護", "寵愛", "疼愛", "在意",
+		"love", "like", "miss", "romantic", "date", "together", "care", "gentle",
+	}
+	
+	explicitKeywords := []string{
+		"做愛", "性愛", "高潮", "射", "插", "舔", "吸", "咬", "脫光", "赤裸",
+		"陰莖", "陰道", "乳房", "胸部", "私處", "下體", "性器", "雞雞", "小穴",
+		"奶子", "屁股", "臀部", "大腿", "內褲", "胸罩", "濕潤", "勃起", "射精",
+		"sex", "fuck", "cum", "orgasm", "penetrate", "naked", "nude", "penis", 
+		"vagina", "breast", "nipple", "pussy", "cock", "dick", "ass", "wet", "hard",
+	}
+	
+	messageLower := strings.ToLower(message)
+	
+	// 檢測明確的成人內容
+	explicitCount := 0
+	for _, keyword := range explicitKeywords {
+		if strings.Contains(messageLower, strings.ToLower(keyword)) {
+			explicitCount++
+		}
+	}
+	
+	// 檢測 NSFW 內容
+	nsfwCount := 0
+	for _, keyword := range nsfwKeywords {
+		if strings.Contains(messageLower, strings.ToLower(keyword)) {
+			nsfwCount++
+		}
+	}
+	
+	// 檢測暗示性內容
+	suggestiveCount := 0
+	for _, keyword := range suggestiveKeywords {
+		if strings.Contains(messageLower, strings.ToLower(keyword)) {
+			suggestiveCount++
+		}
+	}
+	
+	// 分析結果
+	var isNSFW bool
+	var intensity int
+	var categories []string
+	var shouldUseGrok bool
+	var confidence float64
+	
+	if explicitCount >= 3 {
+		isNSFW = true
+		intensity = 5
+		categories = []string{"explicit", "sexual", "nsfw"}
+		shouldUseGrok = true
+		confidence = 0.95
+	} else if explicitCount >= 1 {
+		isNSFW = true
+		intensity = 4
+		categories = []string{"nsfw", "sexual", "explicit"}
+		shouldUseGrok = false // OpenAI 可以處理適度的成人內容
+		confidence = 0.90
+	} else if nsfwCount >= 2 {
+		isNSFW = true
+		intensity = 3
+		categories = []string{"intimate", "nsfw"}
+		shouldUseGrok = false
+		confidence = 0.85
+	} else if nsfwCount >= 1 {
+		isNSFW = true
+		intensity = 2
+		categories = []string{"intimate", "suggestive"}
+		shouldUseGrok = false
+		confidence = 0.75
+	} else if suggestiveCount >= 2 {
+		isNSFW = false
+		intensity = 2
+		categories = []string{"romantic", "suggestive"}
+		shouldUseGrok = false
+		confidence = 0.80
+	} else {
+		isNSFW = false
+		intensity = 1
+		categories = []string{"normal"}
+		shouldUseGrok = false
+		confidence = 0.90
+	}
+	
+	// 只有極度明確的內容 (intensity 5) 才使用 Grok
+	// OpenAI 可以處理 Level 1-4 的內容
+	if isNSFW && intensity >= 5 {
+		shouldUseGrok = true
+	}
+	
 	return &ContentAnalysis{
-		IsNSFW:        false,
-		Intensity:     1,
-		Categories:    []string{"normal"},
-		ShouldUseGrok: false,
-		Confidence:    0.95,
+		IsNSFW:        isNSFW,
+		Intensity:     intensity,
+		Categories:    categories,
+		ShouldUseGrok: shouldUseGrok,
+		Confidence:    confidence,
 	}, nil
 }
 

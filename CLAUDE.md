@@ -1,46 +1,31 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# Claude Memory
 
 ## Project Overview
+Female-oriented AI chat backend built with Go + Gin framework, integrating OpenAI GPT-4o with 5-level NSFW content classification.
 
-Thewavess AI Core is a Golang-based intelligent chat backend that integrates multiple AI engines to provide smart conversation capabilities for Thewavess products.
+## Key Components
+- **Chat Service**: Core logic in `services/chat_service.go:analyzeNSFWContent()`
+- **OpenAI Client**: Character prompts in `services/openai_client.go:getCharacterSystemPrompt()`
+- **Logging**: Structured logging via `utils/logger.go`
+- **Error Handling**: API errors in `utils/errors.go`
 
-### AI Engine Strategy
-- **Primary Chat**: OpenAI GPT-4o for core language communication
-- **NSFW Content**: Grok for adult/sensitive content handling
-- **Text-to-Speech**: OpenAI TTS service as default
-- **Vector Database**: Qdrant for semantic memory search
+## Characters
+- **Lu Hanyuan (陸寒淵)**: Dominant CEO character
+- **Shen Yanmo (沈言墨)**: Gentle doctor character
 
-## Current State
+## NSFW System
+5-level content classification:
+- **Level 1-4**: OpenAI handles (including sexual organ descriptions)
+- **Level 5**: Grok handles (explicit content)
+- **Adult-only**: 18+ age restriction enforced
 
-This repository is in its initial state with only a README.md file present. The project appears to be a fresh Golang project that needs to be set up from scratch.
+## Current Status
+- **API Progress**: 22/118 endpoints implemented
+- **Performance**: 1-3s response time, 95%+ accuracy
+- **Environment**: `.env` with OPENAI_API_KEY required
+- **Testing**: Web interface at http://localhost:8080
 
-## Development Setup
-
-Since this is a new repository, development commands and build processes have not yet been established. When working on this project:
-
-1. Initialize Go module: `go mod init github.com/clarencetw/thewavess-ai-core`
-2. Set up basic project structure for a Go backend service
-3. Add necessary dependencies for AI engine integrations
-4. Implement HTTP server and API endpoints
-5. Add configuration management for different AI providers
-6. Implement proper logging and error handling
-
-## Architecture Notes
-
-Key architectural considerations for this AI chat backend:
-
-- **AI Engine Router**: Intelligent routing between OpenAI (default) and Grok (NSFW) based on content analysis
-- **Content Classification**: NSFW detection system to determine appropriate AI engine
-- **Multi-Modal Support**: Text chat with GPT-4o and TTS audio generation with OpenAI TTS
-- **RESTful API**: 68+ HTTP endpoints across 9 modules with OpenAPI 3.0 specification
-- **Memory System**: Redis (short-term), PostgreSQL (long-term), Qdrant (semantic search)
-- **Configuration Management**: Environment-based config for API keys and engine settings
-- **Service Layer**: Abstraction layer for different AI providers (OpenAI, Grok)
-- **Middleware Stack**: JWT authentication, logging, rate limiting, and content filtering
-
-## API Documentation
-- Complete API documentation available in `API.md`
-- OpenAPI 3.0 specification in `openapi.yaml`
-- 68+ endpoints covering user management, chat, characters, memory, TTS, and more
+## Important Files
+- `API_PROGRESS.md`: Development progress tracking
+- `NSFW_GUIDE.md`: Detailed NSFW implementation guide
+- `DEPLOYMENT.md`: Deployment and operations guide

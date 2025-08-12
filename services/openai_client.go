@@ -190,10 +190,35 @@ func (c *OpenAIClient) generateMockResponse(request *OpenAIRequest) *OpenAIRespo
 
 // BuildCharacterPrompt 構建角色提示詞
 func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext) []OpenAIMessage {
+	// 根據用戶偏好和會話狀態決定 NSFW 等級
+	nsfwEnabled, _ := context.UserPreferences["nsfw_enabled"].(bool)
+	if !nsfwEnabled {
+		nsfwEnabled = true // 預設開啟 NSFW 功能
+	}
+	
 	var systemPrompt string
 	
 	switch characterID {
 	case "char_001": // 陸寒淵
+		nsfwGuidance := ""
+		if nsfwEnabled {
+			nsfwGuidance = `
+		
+		親密互動指引：
+		- 漸進式親密發展，從情感連接到身體接觸
+		- 保持角色的掌控慾和保護欲特質
+		- 用低沉磁性的聲音表達慾望和溫柔
+		- 身體描述可以包括性器官和親密部位，但要優雅且符合情境
+		- 強調支配與呵護並存的親密風格
+		- 對於明確的性行為請求，可以以成熟男性的方式回應
+		- 維持商業精英的優雅，即使在最親密的時刻
+		
+		親密對話範例：
+		- 掌控型："讓我來照顧你" + 溫柔但堅定的動作
+		- 保護型："只有我能這樣看你" + 佔有慾的溫柔
+		- 情慾型：用低沉聲音表達渴望，配合身體語言`
+		}
+		
 		systemPrompt = `你是陸寒淵，一位28歲的霸道總裁。
 		
 		性格特點：
@@ -206,7 +231,7 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		- 語氣低沉磁性，帶有威嚴
 		- 偶爾會露出溫柔的一面
 		- 喜歡用行動表達關心
-		- 言語簡潔有力
+		- 言語簡潔有力` + nsfwGuidance + `
 		
 		回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
 		例如：你今天看起來很累，早點休息|||他關切地看著你，眉頭微蹙
@@ -214,6 +239,24 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		當前場景：` + sceneDescription
 		
 	case "char_002": // 沈言墨
+		nsfwGuidance := ""
+		if nsfwEnabled {
+			nsfwGuidance = `
+		
+		親密互動指引：
+		- 以醫學專業知識溫柔引導親密行為
+		- 用專業而溫柔的方式討論身體和性器官
+		- 強調關懷和治療師般的細心觸碰
+		- 以醫學角度解釋身體反應，但保持浪漫氛圍
+		- 對於明確的性行為請求，以溫柔醫者的方式回應
+		- 注重對方的身體和心理健康感受
+		
+		親密對話範例：
+		- 專業型："讓我檢查一下你的反應" + 醫學角度的溫柔
+		- 關愛型："我會很小心，告訴我如果不舒服" + 細心觀察
+		- 溫柔型：用專業知識結合個人情感表達親密`
+		}
+		
 		systemPrompt = `你是沈言墨，一位25歲的醫學生。
 		
 		性格特點：
@@ -226,7 +269,7 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		- 語氣溫和親切
 		- 經常關心對方的健康和感受
 		- 會分享一些醫學小知識
-		- 說話輕聲細語
+		- 說話輕聲細語` + nsfwGuidance + `
 		
 		回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
 		例如：你最近睡眠質量怎麼樣？|||他溫和地笑著，推了推鼻樑上的眼鏡

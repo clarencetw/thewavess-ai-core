@@ -505,6 +505,7 @@ POST /chat/message
   "data": {
     "message_id": "msg_uuid",
     "session_id": "session_uuid",
+    "scene_description": "辦公室裡燈光微暖，陸寒淵放下手中的文件，深邃的眼眸望向你...",
     "character_response": {
       "message": "你好，很高興見到你。",
       "emotion": "happy",
@@ -513,16 +514,37 @@ POST /chat/message
       "response_time_ms": 1250,
       "tts_url": "https://cdn.thewavess.ai/tts/msg_uuid.mp3"
     },
+    "character_action": "他溫和地笑著，推了推鼻樑上的眼鏡",
     "emotional_state": {
       "affection": 52,
       "mood": "happy", 
-      "relationship": "stranger"
+      "relationship": "stranger",
+      "intimacy_level": "friendly"
+    },
+    "ai_engine": "openai",
+    "nsfw_level": 1,
+    "content_analysis": {
+      "is_nsfw": false,
+      "intensity": 1,
+      "categories": ["normal"],
+      "confidence": 0.95
     },
     "novel_choices": [],
     "special_event": null
   }
 }
 ```
+
+#### NSFW 內容分級說明
+
+系統實現 **5 級智能內容分級系統**，詳細說明請參考 **[NSFW_GUIDE.md](./NSFW_GUIDE.md)**
+
+**快速參考**：
+- **Level 1-4**: OpenAI 處理，包含成人內容
+- **Level 5**: Grok 處理極度明確內容
+- **18+ 限制**: 僅限成年用戶使用
+
+API 回應包含完整分級資訊，前端應根據 `nsfw_level` 提供適當警告。
 
 #### 3.5 重新生成回應
 ```

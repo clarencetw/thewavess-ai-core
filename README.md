@@ -1,142 +1,124 @@
 # Thewavess AI Core
 
-Thewavess AI Core 是一個以 Golang 打造的智慧聊天後端，整合多種 AI 引擎（OpenAI、Grok），提供女性向對話、互動小說、情感陪伴與 TTS 語音等核心能力。詳細產品規格請參考 `SPEC.md`。
+> 🤖 專為女性用戶設計的智能 AI 聊天後端服務
 
-## 主要特性
-- **多模式對話**：普通 / 小說 / NSFW（引擎動態路由）
-- **角色系統**：預設人物設定、角色語音配置
-- **記憶系統**：短期（Redis）/ 長期（PostgreSQL + 向量資料庫）/ 情感記憶
-- **情感系統**：好感度、關係狀態、事件觸發
-- **TTS 語音**：OpenAI TTS 預設，支援多種音色
-- **標籤系統**：內容/場景/NSFW 觸發標籤
-- **可觀測性**：結構化日誌、指標與追蹤（規劃中）
+Thewavess AI Core 是一個基於 Golang 開發的企業級 AI 聊天後端，整合 OpenAI 和 Grok 引擎，提供智能對話、情感陪伴、角色互動等核心功能。
 
-## 技術棧
-- **語言/框架**：Go + Gin（HTTP）/ GORM（ORM）
-- **資料庫**：PostgreSQL（主資料）/ Redis（快取與會話）
-- **向量資料庫**：Qdrant（語義搜尋與記憶檢索）
-- **訊息隊列**：RabbitMQ（異步任務與事件）
-- **AI 服務**：OpenAI（GPT-4o / TTS）、Grok（NSFW）
-- **部署**：Docker / Docker Compose
+## ✨ 核心特色
+- **🎭 角色系統**: 霸道總裁、溫柔醫生等個性化 AI 角色
+- **💕 情感互動**: 好感度、關係發展、情感記憶
+- **🔞 內容分級**: 5級智能內容分析，支援成人對話
+- **🎨 場景描述**: 動態場景生成，增強沉浸感
+- **📱 多平台**: RESTful API，支援 Web/App 集成
 
-## 架構總覽（高層）
-- **API 層**：REST HTTP 服務
-- **服務層**：聊天服務、記憶服務、角色服務、情感服務、TTS 服務
-- **引擎路由**：內容分類 → OpenAI 或 Grok（NSFW）
-- **資料層**：PostgreSQL / Redis / 向量庫 + MQ（事件與任務）
+## 🚀 快速開始
 
-更多細節請見 `SPEC.md` 的「技術架構」「API 設計」「資料模型」。
-
-## 快速開始（HTTP API 雛形階段）
-> 專案已完成 HTTP API 雛形架構，包含 22 個端點的 Swagger 文檔，但業務邏輯尚未實現。
-
-1. **安裝 Go 1.22+** 
-2. **安裝 swag 工具**（用於生成 OpenAPI 文檔）
-   ```bash
-   go install github.com/swaggo/swag/cmd/swag@latest
-   ```
-3. **安裝依賴並生成文檔**
-   ```bash
-   go mod tidy
-   make docs  # 生成 Swagger 文檔
-   ```
-4. **啟動 API 伺服器**
-   ```bash
-   go run main.go
-   ```
-5. **訪問 Swagger UI**
-   ```
-   http://localhost:8080/swagger/index.html
-   ```
-
-### 🔧 開發指令
+### 最小化部署
 ```bash
-make docs    # 生成 OpenAPI 文檔
-make build   # 編譯應用程式
-make clean   # 清理生成的檔案
+# 1. 複製項目
+git clone https://github.com/clarencetw/thewavess-ai-core.git
+cd thewavess-ai-core
+
+# 2. 設定環境變數
+cp .env.example .env
+# 編輯 .env，填入 OPENAI_API_KEY
+
+# 3. 啟動服務
+go run main.go
 ```
 
-詳細 API 端點說明請參考 [API 文檔](./API.md)
+### 驗證部署
+- 🌐 **Web 介面**: http://localhost:8080
+- 📚 **API 文檔**: http://localhost:8080/swagger/index.html
+- ❤️ **健康檢查**: http://localhost:8080/health
 
-## API 文檔
+## 🛠️ 技術架構
+- **後端**: Go + Gin + 結構化日誌
+- **AI 引擎**: OpenAI GPT-4o + Grok (NSFW)
+- **內容分析**: 智能分級系統 (Level 1-5)
+- **部署**: Docker 容器化支援
 
-### 📚 完整文檔
-- **[API.md](./API.md)** - 完整 API 端點文檔，包含請求/回應範例和快速開始
-- **[Swagger UI](http://localhost:8080/swagger/index.html)** - 🔗 互動式 API 文檔 (啟動服務後可用)  
-- **[SPEC.md](./SPEC.md)** - 產品規格與技術架構
+## 📋 功能狀態
 
-### 🎯 自動生成 OpenAPI 規格
-現在使用程式碼註解自動生成 OpenAPI 文檔：
-```bash
-make docs  # 自動生成 docs/swagger.json 和 docs/swagger.yaml
-```
+### ✅ 已實現核心功能
+- **智能對話系統**: OpenAI GPT-4o 整合完成
+- **5級內容分級**: 支援從日常對話到成人內容
+- **角色個性化**: 陸寒淵、沈言墨角色系統
+- **場景描述**: 動態生成沉浸式場景
+- **結構化日誌**: 完整的監控和調試支援
+- **環境配置**: godotenv 自動載入
 
-### 🔗 端點概覽  
-核心 API 模組設計 (**目前已實現 22 個端點，規劃 118 個端點**)：
+### 🔄 開發中功能
+- **Grok API 整合**: Level 5 內容處理
+- **數據庫持久化**: PostgreSQL + Redis 整合
+- **記憶系統**: 長期記憶和向量檢索
+- **TTS 語音**: 語音合成功能
 
-| 模組 | 端點範例 | 實現狀態 | 功能說明 |
-|------|----------|----------|----------|
-| **用戶管理** | `/user/*` | ✅ 7/9 | 註冊、登入、個人資料管理 |
-| **角色系統** | `/character/*`, `/user/character` | ✅ 3/5 | 角色列表、選擇、統計數據 |
-| **對話管理** | `/chat/*` | ✅ 10/11 | 會話創建、訊息發送、歷史記錄 |
-| **系統管理** | `/health`, `/version`, `/status` | ✅ 2/3 | 服務監控、版本資訊 |
-| **小說模式** | `/novel/*` | ❌ 0/7 | 互動小說、劇情分支、進度管理 |
-| **情感系統** | `/emotion/*` | ❌ 0/5 | 好感度、關係狀態、事件觸發 |
-| **記憶系統** | `/memory/*` | ❌ 0/8 | 記憶檢索、時間線、智能搜尋 |
-| **語音合成** | `/tts/*` | ❌ 0/5 | 文字轉語音、語音預覽、批量生成 |
-| **標籤系統** | `/tags/*` | ❌ 0/4 | 內容標籤、熱門標籤、標籤管理 |
-| **檔案上傳** | `/upload/*` | ❌ 0/3 | 圖片、語音檔案上傳 |
-| **通知系統** | `/notifications/*` | ❌ 0/4 | 通知管理、設定 |
-| **分析統計** | `/analytics/*` | ❌ 0/3 | 用戶統計、對話分析 |
+### 📊 API 端點進度
+目前已實現 **22/118 個端點**，核心對話功能完全可用。
 
-> ✅ = 已實現 API 雛形（但業務邏輯返回 NotImplemented）  
-> ❌ = 尚未實現
+## 📚 文檔導航
 
-### 🔐 認證方式
-- **JWT Bearer Token** - 所有 API 請求需要認證
-- **請求格式** - `Authorization: Bearer <token>`
-- **內容類型** - `application/json`
+| 文檔 | 用途 | 適用對象 |
+|------|------|----------|
+| **[README.md](./README.md)** | 項目概覽、快速開始 | 所有用戶 |
+| **[API.md](./API.md)** | 完整 API 參考文檔 | 開發者 |
+| **[API_PROGRESS.md](./API_PROGRESS.md)** | API 開發進度追蹤 | 開發者、PM |
+| **[SPEC.md](./SPEC.md)** | 產品規格、技術架構 | 架構師、PM |
+| **[NSFW_GUIDE.md](./NSFW_GUIDE.md)** | NSFW 功能詳細說明 | 開發者、合規 |
+| **[DEPLOYMENT.md](./DEPLOYMENT.md)** | 部署和運維指南 | DevOps、運維 |
+| **[CLAUDE.md](./CLAUDE.md)** | Claude Memory Guide | AI Assistant |
 
-## 安全與合規
-- 面向成年用戶，完全開放 NSFW 內容
-- 前端負責年齡驗證與內容分級
-- 違法內容一律禁止
-- 敏感資料加密儲存
+### 🎯 快速導航
+- **🚀 立即開始**: 看 [快速開始](#🚀-快速開始)
+- **🔌 API 集成**: 看 [API.md](./API.md)
+- **📊 開發進度**: 看 [API_PROGRESS.md](./API_PROGRESS.md)
+- **🔞 成人內容**: 看 [NSFW_GUIDE.md](./NSFW_GUIDE.md)
+- **☁️ 部署上線**: 看 [DEPLOYMENT.md](./DEPLOYMENT.md)
+- **🏗️ 系統設計**: 看 [SPEC.md](./SPEC.md)
 
-## 開發狀態與路線圖
+## 🔞 NSFW 內容支援
 
-### 🚀 **當前狀態**
-- ✅ **Phase 1**: HTTP API 雛形架構完成（22個端點，Swagger 自動生成）
-- 🔄 **Phase 2**: 開始實現業務邏輯（用戶管理、對話管理）
+Thewavess AI Core 實現了業界領先的 **5級智能內容分級系統**，支援從日常對話到明確成人內容（包含性器官描述）的完整處理。
 
-### 📋 **接下來的開發順序**
-1. **實現核心業務邏輯**（2-3週）
-   - 完成現有 22 個端點的實際功能
-   - 資料庫連接與 CRUD 操作
-   - JWT 認證與授權機制
+### 快速了解
+- ✅ **Level 1-4**: OpenAI 處理，包含成人內容
+- ✅ **Level 5**: Grok 處理極度明確內容  
+- ✅ **智能檢測**: 自動分析用戶意圖並適配
+- ⚠️ **18+ 限制**: 僅限成年用戶使用
 
-2. **AI 核心功能**（4-6週）  
-   - OpenAI GPT-4o 整合
-   - 情感系統（好感度、關係狀態）
-   - 記憶系統（Redis + PostgreSQL + Qdrant）
+詳細說明請參考 **[NSFW_GUIDE.md](./NSFW_GUIDE.md)**
 
-3. **進階功能**（6-8週）
-   - 小說模式與劇情分支
-   - Grok 整合（NSFW 內容）
-   - TTS 語音合成
-   - 檔案上傳與處理
+## ⚖️ 合規聲明
+- 🔞 面向 18 歲以上成年用戶
+- 🚫 嚴禁未成年人相關內容
+- 📜 用戶需遵守當地法律法規
+- 🔒 敏感內容加密存儲
 
-4. **完善與優化**（2-4週）
-   - 分析統計功能
-   - 效能優化與測試
-   - Docker 容器化部署
+## 🤝 參與貢獻
 
-> 詳細清單見 `SPEC.md` 的「開發計劃」。後續將以單一權威來源維護，避免重複與矛盾。
+### 開發者
+1. Fork 此專案
+2. 閱讀 [SPEC.md](./SPEC.md) 了解架構
+3. 參考 [DEPLOYMENT.md](./DEPLOYMENT.md) 設置開發環境
+4. 提交 Pull Request
 
-## 貢獻
-- 請先閱讀 `SPEC.md` 後開發，提出 PR 前可在 Issue 討論設計
-- 待建立 `CONTRIBUTING.md` 與程式碼規範（lint/formatter/test）
+### 問題回報
+- 🐛 **Bug 回報**: 使用 GitHub Issues
+- 💡 **功能建議**: 歡迎在 Issues 中討論
+- 📚 **文檔改進**: 直接提交 PR
 
-## 授權
-- Copyright © 2024 clarencetw
-- 專有軟體，保留所有權利
+## 📄 授權信息
+- **版權所有**: © 2024 clarencetw
+- **授權類型**: 專有軟體，保留所有權利
+- **使用限制**: 僅限授權用戶使用
+
+---
+
+<div align="center">
+
+**🚀 讓 AI 對話更加智能和貼心 🚀**
+
+[GitHub](https://github.com/clarencetw/thewavess-ai-core) • [文檔](./API.md) • [部署指南](./DEPLOYMENT.md)
+
+</div>
