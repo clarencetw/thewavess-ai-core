@@ -2,9 +2,13 @@ package handlers
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/services"
+	"github.com/clarencetw/thewavess-ai-core/utils"
+	"github.com/sirupsen/logrus"
 )
 
 // CreateChatSession godoc
@@ -82,10 +86,110 @@ func GetChatSessions(c *gin.Context) {
 // @Failure      404 {object} models.APIResponse{error=models.APIError} "會話不存在"
 // @Router       /chat/message [post]
 func SendMessage(c *gin.Context) {
-	// TODO: 實作發送訊息邏輯
-	c.JSON(http.StatusNotImplemented, models.APIResponse{
-		Success: false,
-		Message: "功能尚未實作",
+	startTime := time.Now()
+	requestID := c.GetString("request_id")
+	
+	var request models.SendMessageRequest
+	if err := c.ShouldBindJSON(&request); err != nil {
+		utils.LogError(err, "request validation failed", logrus.Fields{
+			"request_id": requestID,
+			"path":       c.Request.URL.Path,
+		})
+		utils.HandleError(c, utils.ErrValidation.WithDetails(err.Error()))
+		return
+	}
+
+	// 驗證必填字段
+	if err := utils.ValidateRequired(map[string]interface{}{
+		"session_id": request.SessionID,
+		"message":    request.Message,
+	}); err != nil {
+		utils.HandleError(c, err)
+		return
+	}
+
+	// 獲取用戶 ID（通常從 JWT token 中獲取）
+	// 現在先使用模擬的用戶 ID
+	userID := "user_demo_001"
+	characterID := "char_001" // TODO: 從會話中獲取角色 ID
+
+	utils.Logger.WithFields(logrus.Fields{
+		"request_id":   requestID,
+		"user_id":      userID,
+		"session_id":   request.SessionID,
+		"character_id": characterID,
+		"message_len":  len(request.Message),
+	}).Info("Processing chat message")
+
+	// 創建 ChatService 實例
+	chatService := services.NewChatService()
+
+	// 處理消息
+	processRequest := &services.ProcessMessageRequest{
+		SessionID:   request.SessionID,
+		UserMessage: request.Message,
+		CharacterID: characterID,
+		UserID:      userID,
+		Metadata:    map[string]interface{}{},
+	}
+
+	response, err := chatService.ProcessMessage(c.Request.Context(), processRequest)
+	if err != nil {
+		utils.LogChatMessage(request.SessionID, userID, characterID, "unknown", 0, false)
+		utils.HandleError(c, utils.ErrProcessingFailed.WithDetails(err.Error()).WithContext(map[string]interface{}{
+			"session_id":   request.SessionID,
+			"user_id":      userID,
+			"character_id": characterID,
+		}))
+		return
+	}
+
+	// 記錄成功的對話處理
+	duration := time.Since(startTime)
+	utils.LogChatMessage(request.SessionID, userID, characterID, response.AIEngine, duration.Milliseconds(), true)
+	
+	// 記錄 API 請求
+	utils.LogAPIRequest(c.Request.Method, c.Request.URL.Path, userID, request.SessionID, http.StatusOK, duration.Milliseconds())
+
+	// 構建完整的回應，包含場景描述
+	fullResponse := map[string]interface{}{
+		"session_id":  response.SessionID,
+		"message_id":  response.MessageID,
+		"character_response": map[string]interface{}{
+			"message":           response.CharacterDialogue,
+			"emotion":           response.EmotionState.Mood,
+			"affection_change":  1, // TODO: 計算實際的好感度變化
+			"engine_used":       response.AIEngine,
+			"response_time_ms":  response.ResponseTime.Milliseconds(),
+		},
+		"scene_description": response.SceneDescription,
+		"character_action":  response.CharacterAction,
+		"emotional_state": map[string]interface{}{
+			"affection":      response.EmotionState.Affection,
+			"mood":           response.EmotionState.Mood,
+			"relationship":   response.EmotionState.Relationship,
+			"intimacy_level": response.EmotionState.IntimacyLevel,
+		},
+		"ai_engine":   response.AIEngine,
+		"nsfw_level":  response.NSFWLevel,
+		"novel_choices": []models.NovelChoice{},
+		"special_event": nil,
+	}
+
+	utils.Logger.WithFields(logrus.Fields{
+		"request_id":     requestID,
+		"session_id":     request.SessionID,
+		"user_id":        userID,
+		"character_id":   characterID,
+		"response_time":  duration.Milliseconds(),
+		"ai_engine":      response.AIEngine,
+		"affection":      response.EmotionState.Affection,
+	}).Info("Chat message processed successfully")
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "訊息發送成功",
+		Data:    fullResponse,
 	})
 }
 

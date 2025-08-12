@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thewavess AI Core - 測試介面</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        .chat-container { border: 1px solid #ddd; height: 400px; overflow-y: auto; padding: 15px; margin: 20px 0; background: #f9f9f9; }
+        .message { margin: 10px 0; padding: 10px; border-radius: 8px; }
+        .user-message { background: #e3f2fd; text-align: right; }
+        .ai-message { background: #fff3e0; }
+        .scene-description { background: #f3e5f5; font-style: italic; margin: 5px 0; padding: 8px; border-radius: 4px; }
+        .character-action { color: #666; font-size: 14px; margin-top: 5px; }
+        .emotion-state { font-size: 12px; color: #888; margin-top: 5px; }
+        input[type="text"] { width: 70%; padding: 10px; margin: 5px; border: 1px solid #ddd; border-radius: 4px; }
+        button { padding: 10px 20px; margin: 5px; border: none; border-radius: 4px; cursor: pointer; }
+        .send-btn { background: #2196F3; color: white; }
+        .clear-btn { background: #f44336; color: white; }
+        .status { margin: 10px 0; padding: 10px; border-radius: 4px; }
+        .status.success { background: #d4edda; color: #155724; }
+        .status.error { background: #f8d7da; color: #721c24; }
+    </style>
+</head>
+<body>
+    <h1>🤖 Thewavess AI Core 測試</h1>
+    
+    <div id="status" class="status"></div>
+    
+    <div class="chat-container" id="chatContainer">
+        <div class="message ai-message">
+            <div class="scene-description">辦公室裡燈光微暖，陸寒淵正專注地處理文件...</div>
+            <div><strong>陸寒淵：</strong>歡迎來到我的辦公室，有什麼事嗎？</div>
+            <div class="character-action">他抬起頭，深邃的眼眸注視著你</div>
+            <div class="emotion-state">好感度: 50 | 關係: 陌生人 | 心情: neutral</div>
+        </div>
+    </div>
+    
+    <div>
+        <input type="text" id="messageInput" placeholder="輸入你想說的話..." onkeypress="handleKeyPress(event)">
+        <button class="send-btn" onclick="sendMessage()">發送</button>
+        <button class="clear-btn" onclick="clearChat()">清空</button>
+    </div>
+    
+    <div style="margin-top: 20px; font-size: 14px; color: #666;">
+        <p><strong>使用說明：</strong></p>
+        <ul>
+            <li>直接輸入訊息與陸寒淵對話</li>
+            <li>系統會自動生成場景描述和角色動作</li>
+            <li>好感度和關係狀態會根據對話內容變化</li>
+            <li>按 Enter 鍵或點擊發送按鈕發送訊息</li>
+        </ul>
+    </div>
+
+    <script>
+        let sessionId = 'web_test_' + Date.now();
+        let messageCount = 0;
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            // 顯示用戶訊息
+            addUserMessage(message);
+            input.value = '';
+
+            // 發送到 API
+            fetch('/api/v1/test/message', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    message: message
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    addAIMessage(data.data);
+                    showStatus('✅ 訊息發送成功', 'success');
+                } else {
+                    showStatus('❌ 錯誤: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                showStatus('❌ 網路錯誤: ' + error.message, 'error');
+            });
+        }
+
+        function addUserMessage(message) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user-message';
+            messageDiv.innerHTML = `<div><strong>你：</strong>${escapeHtml(message)}</div>`;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function addAIMessage(data) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ai-message';
+            
+            let html = '';
+            
+            // 場景描述
+            if (data.scene_description) {
+                html += `<div class="scene-description">${escapeHtml(data.scene_description)}</div>`;
+            }
+            
+            // 角色對話
+            html += `<div><strong>陸寒淵：</strong>${escapeHtml(data.character_response.message)}</div>`;
+            
+            // 角色動作
+            if (data.character_action) {
+                html += `<div class="character-action">${escapeHtml(data.character_action)}</div>`;
+            }
+            
+            // 情感狀態
+            const emotion = data.emotional_state;
+            html += `<div class="emotion-state">好感度: ${emotion.affection} | 關係: ${emotion.relationship} | 心情: ${emotion.mood}</div>`;
+            
+            messageDiv.innerHTML = html;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function clearChat() {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = `
+                <div class="message ai-message">
+                    <div class="scene-description">辦公室裡燈光微暖，陸寒淵正專注地處理文件...</div>
+                    <div><strong>陸寒淵：</strong>歡迎來到我的辦公室，有什麼事嗎？</div>
+                    <div class="character-action">他抬起頭，深邃的眼眸注視著你</div>
+                    <div class="emotion-state">好感度: 50 | 關係: 陌生人 | 心情: neutral</div>
+                </div>
+            `;
+            sessionId = 'web_test_' + Date.now();
+            messageCount = 0;
+            showStatus('💬 對話已重置', 'success');
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = 'status ' + type;
+            setTimeout(() => {
+                status.textContent = '';
+                status.className = 'status';
+            }, 3000);
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // 頁面載入時顯示狀態
+        window.onload = function() {
+            showStatus('🚀 測試介面已準備就緒', 'success');
+        };
+    </script>
+</body>
+</html>

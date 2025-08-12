@@ -11,6 +11,9 @@ func SetupRoutes(router *gin.RouterGroup) {
 	// 系統管理路由（無需認證）
 	router.GET("/version", handlers.GetVersion)
 	router.GET("/status", handlers.GetStatus)
+	
+	// 測試路由（無需認證） - 用於開發測試
+	router.POST("/test/message", handlers.SendMessage)
 
 	// 用戶認證路由（無需認證）
 	userAuth := router.Group("/user")
