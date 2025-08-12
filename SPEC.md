@@ -204,18 +204,21 @@ GET    /api/v1/memory/timeline               - 記憶時間線
 ```
 POST   /api/v1/chat/session              - 創建新會話
 GET    /api/v1/chat/session/{id}         - 獲取會話資訊
-GET    /api/v1/chat/sessions             - 獲取用戶會話列表
+GET    /api/v1/chat/sessions             - 獲取用戶會話列表 (支援分頁)
 POST   /api/v1/chat/message              - 發送訊息
 POST   /api/v1/chat/regenerate           - 重新生成回應
 PUT    /api/v1/chat/session/{id}/mode    - 切換對話模式
-GET    /api/v1/chat/session/{id}/history - 獲取會話對話歷史
+GET    /api/v1/chat/session/{id}/history - 獲取會話對話歷史 (支援分頁)
 POST   /api/v1/chat/session/{id}/tag     - 為會話添加標籤
-DELETE /api/v1/chat/session/{id}       - 結束對話
+GET    /api/v1/chat/session/{id}/export  - 匯出對話記錄
+DELETE /api/v1/chat/session/{id}        - 結束對話
 ```
 
 #### 6.2 角色相關
 ```
-GET    /api/v1/character/list        - 獲取角色列表
+GET    /api/v1/character/list        - 獲取角色列表 (支援分頁與篩選)
+GET    /api/v1/character/{id}        - 獲取角色詳細資訊
+GET    /api/v1/character/{id}/stats  - 獲取角色統計數據
 GET    /api/v1/user/character        - 獲取當前選擇角色
 PUT    /api/v1/user/character        - 選擇當前角色
 ```
@@ -239,8 +242,10 @@ POST   /api/v1/emotion/event         - 觸發特殊事件
 #### 6.5 TTS 相關
 ```
 POST   /api/v1/tts/generate          - 生成語音
+POST   /api/v1/tts/batch             - 批量生成語音
 GET    /api/v1/tts/voices            - 獲取語音列表
 POST   /api/v1/tts/preview           - 預覽語音
+GET    /api/v1/tts/history           - 語音生成歷史
 ```
 
 #### 6.6 記憶系統
@@ -275,6 +280,13 @@ GET    /api/v1/status                - 系統狀態
 GET    /api/v1/tags                  - 獲取所有可用標籤
 GET    /api/v1/tags/popular          - 獲取熱門標籤
 ```
+
+#### API 設計說明
+- **端點總數**: 68+ 個完整 API 端點
+- **設計原則**: 符合 RESTful 規範，支援分頁、篩選、批量操作
+- **認證方式**: JWT Bearer Token 統一認證
+- **文檔格式**: 提供 OpenAPI 3.0 規格文件
+- **詳細文檔**: 請參閱 [API.md](./API.md) 和 [openapi.yaml](./openapi.yaml)
 
 ### 7. 資料模型
 

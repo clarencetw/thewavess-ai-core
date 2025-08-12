@@ -27,46 +27,75 @@ Thewavess AI Core 是一個以 Golang 打造的智慧聊天後端，整合多種
 
 更多細節請見 `SPEC.md` 的「技術架構」「API 設計」「資料模型」。
 
-## 快速開始（目前為初始化階段）
-> 專案仍在規劃與初始化，以下為建議的本地開發步驟（尚未提供完整程式碼）。
+## 快速開始（HTTP API 雛形階段）
+> 專案已完成 HTTP API 雛形架構，包含 22 個端點的 Swagger 文檔，但業務邏輯尚未實現。
 
-1. 安裝環境
-   - Go 1.22+
-   - PostgreSQL 14+、Redis 6+（或使用 Docker）
-2. 初始化 Go 模組（僅首次）
+1. **安裝 Go 1.22+** 
+2. **安裝 swag 工具**（用於生成 OpenAPI 文檔）
    ```bash
-   go mod init github.com/clarencetw/thewavess-ai-core
+   go install github.com/swaggo/swag/cmd/swag@latest
+   ```
+3. **安裝依賴並生成文檔**
+   ```bash
    go mod tidy
+   make docs  # 生成 Swagger 文檔
    ```
-3. 設定環境變數（建立 `.env` 或使用 shell 匯入）
+4. **啟動 API 伺服器**
    ```bash
-   export OPENAI_API_KEY=...
-   export GROK_API_KEY=...
-   export POSTGRES_DSN="postgres://user:pass@localhost:5432/ai_core?sslmode=disable"
-   export REDIS_URL="redis://localhost:6379/0"
-   export RABBITMQ_URL="amqp://guest:guest@localhost:5672/"
-   export QDRANT_URL="http://localhost:6333"
+   go run main.go
    ```
-4. 服務啟動
-   - 待後端框架落地（Gin 專案骨架、路由與 handler 建置後補）
+5. **訪問 Swagger UI**
+   ```
+   http://localhost:8080/swagger/index.html
+   ```
 
-## API 概覽
-核心端點已在 `SPEC.md` 的「API 設計」定義：
-- 對話：`/api/v1/chat/*` (9個端點)
-- 角色：`/api/v1/character/*` + `/api/v1/user/character` (3個端點)
-- 小說模式：`/api/v1/novel/*` (5個端點)
-- 情感系統：`/api/v1/emotion/*` (3個端點)
-- TTS：`/api/v1/tts/*` (3個端點)
-- 記憶系統：`/api/v1/memory/*` (5個端點)
-- 用戶系統：`/api/v1/user/*` (7個端點)
-- 標籤系統：`/api/v1/tags/*` (2個端點)
-- 系統管理：`/api/v1/health`, `/api/v1/version`, `/api/v1/status` (3個端點)
+### 🔧 開發指令
+```bash
+make docs    # 生成 OpenAPI 文檔
+make build   # 編譯應用程式
+make clean   # 清理生成的檔案
+```
 
-**總計 40 個 API 端點**
+詳細 API 端點說明請參考 [API 文檔](./API.md)
 
-實作時將同步補充：
-- 請求/回應範例（含錯誤格式）
-- 認證（API Key / JWT — 規劃中）
+## API 文檔
+
+### 📚 完整文檔
+- **[API.md](./API.md)** - 完整 API 端點文檔，包含請求/回應範例和快速開始
+- **[Swagger UI](http://localhost:8080/swagger/index.html)** - 🔗 互動式 API 文檔 (啟動服務後可用)  
+- **[SPEC.md](./SPEC.md)** - 產品規格與技術架構
+
+### 🎯 自動生成 OpenAPI 規格
+現在使用程式碼註解自動生成 OpenAPI 文檔：
+```bash
+make docs  # 自動生成 docs/swagger.json 和 docs/swagger.yaml
+```
+
+### 🔗 端點概覽  
+核心 API 模組設計 (**目前已實現 22 個端點，規劃 118 個端點**)：
+
+| 模組 | 端點範例 | 實現狀態 | 功能說明 |
+|------|----------|----------|----------|
+| **用戶管理** | `/user/*` | ✅ 7/9 | 註冊、登入、個人資料管理 |
+| **角色系統** | `/character/*`, `/user/character` | ✅ 3/5 | 角色列表、選擇、統計數據 |
+| **對話管理** | `/chat/*` | ✅ 10/11 | 會話創建、訊息發送、歷史記錄 |
+| **系統管理** | `/health`, `/version`, `/status` | ✅ 2/3 | 服務監控、版本資訊 |
+| **小說模式** | `/novel/*` | ❌ 0/7 | 互動小說、劇情分支、進度管理 |
+| **情感系統** | `/emotion/*` | ❌ 0/5 | 好感度、關係狀態、事件觸發 |
+| **記憶系統** | `/memory/*` | ❌ 0/8 | 記憶檢索、時間線、智能搜尋 |
+| **語音合成** | `/tts/*` | ❌ 0/5 | 文字轉語音、語音預覽、批量生成 |
+| **標籤系統** | `/tags/*` | ❌ 0/4 | 內容標籤、熱門標籤、標籤管理 |
+| **檔案上傳** | `/upload/*` | ❌ 0/3 | 圖片、語音檔案上傳 |
+| **通知系統** | `/notifications/*` | ❌ 0/4 | 通知管理、設定 |
+| **分析統計** | `/analytics/*` | ❌ 0/3 | 用戶統計、對話分析 |
+
+> ✅ = 已實現 API 雛形（但業務邏輯返回 NotImplemented）  
+> ❌ = 尚未實現
+
+### 🔐 認證方式
+- **JWT Bearer Token** - 所有 API 請求需要認證
+- **請求格式** - `Authorization: Bearer <token>`
+- **內容類型** - `application/json`
 
 ## 安全與合規
 - 面向成年用戶，完全開放 NSFW 內容
@@ -74,16 +103,33 @@ Thewavess AI Core 是一個以 Golang 打造的智慧聊天後端，整合多種
 - 違法內容一律禁止
 - 敏感資料加密儲存
 
-## 路線圖（14週）
-- Phase 1：基礎建設（專案骨架 / 資料庫 / API 框架 / 系統 API）
-- Phase 2：用戶與會話（註冊登入 / JWT 認證 / 會話管理）
-- Phase 3：核心對話（OpenAI 整合 / 對話功能 / 兩個預設角色）
-- Phase 4：記憶系統（Redis / PostgreSQL / Qdrant / 檢索機制）
-- Phase 5：模式系統（普通 / 小說 / NSFW 模式 / 標籤系統）
-- Phase 6：NSFW 功能（Grok 整合 / 內容路由 / 觸發機制）
-- Phase 7：情感系統（好感度 / 關係狀態 / 特殊事件）
-- Phase 8：語音功能（OpenAI TTS / 角色語音 / API）
-- Phase 9：測試優化（測試 / 優化 / Docker 容器化）
+## 開發狀態與路線圖
+
+### 🚀 **當前狀態**
+- ✅ **Phase 1**: HTTP API 雛形架構完成（22個端點，Swagger 自動生成）
+- 🔄 **Phase 2**: 開始實現業務邏輯（用戶管理、對話管理）
+
+### 📋 **接下來的開發順序**
+1. **實現核心業務邏輯**（2-3週）
+   - 完成現有 22 個端點的實際功能
+   - 資料庫連接與 CRUD 操作
+   - JWT 認證與授權機制
+
+2. **AI 核心功能**（4-6週）  
+   - OpenAI GPT-4o 整合
+   - 情感系統（好感度、關係狀態）
+   - 記憶系統（Redis + PostgreSQL + Qdrant）
+
+3. **進階功能**（6-8週）
+   - 小說模式與劇情分支
+   - Grok 整合（NSFW 內容）
+   - TTS 語音合成
+   - 檔案上傳與處理
+
+4. **完善與優化**（2-4週）
+   - 分析統計功能
+   - 效能優化與測試
+   - Docker 容器化部署
 
 > 詳細清單見 `SPEC.md` 的「開發計劃」。後續將以單一權威來源維護，避免重複與矛盾。
 

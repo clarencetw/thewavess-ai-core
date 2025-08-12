@@ -34,7 +34,13 @@ Key architectural considerations for this AI chat backend:
 - **AI Engine Router**: Intelligent routing between OpenAI (default) and Grok (NSFW) based on content analysis
 - **Content Classification**: NSFW detection system to determine appropriate AI engine
 - **Multi-Modal Support**: Text chat with GPT-4o and TTS audio generation with OpenAI TTS
-- **RESTful API**: Standard HTTP endpoints for chat, TTS, and engine management
+- **RESTful API**: 68+ HTTP endpoints across 9 modules with OpenAPI 3.0 specification
+- **Memory System**: Redis (short-term), PostgreSQL (long-term), Qdrant (semantic search)
 - **Configuration Management**: Environment-based config for API keys and engine settings
 - **Service Layer**: Abstraction layer for different AI providers (OpenAI, Grok)
-- **Middleware Stack**: Authentication, logging, rate limiting, and content filtering
+- **Middleware Stack**: JWT authentication, logging, rate limiting, and content filtering
+
+## API Documentation
+- Complete API documentation available in `API.md`
+- OpenAPI 3.0 specification in `openapi.yaml`
+- 68+ endpoints covering user management, chat, characters, memory, TTS, and more
