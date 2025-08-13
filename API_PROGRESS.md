@@ -1,7 +1,7 @@
 # API 開發進度
 
 ## 📊 總體進度
-**22/118 個端點已完成** - 核心對話功能可用
+**32/118 個端點已完成** - 核心對話功能 + 用戶系統可用
 
 ## ✅ 已實現端點
 
@@ -13,16 +13,28 @@
 ### 測試功能 (1/1)
 - [x] `POST /api/v1/test/message` - 測試對話
 
-### 對話核心 (18/35)
-#### 會話管理 (6/9)
+### 用戶系統 (5/10) ✨ 新增
+- [x] `POST /api/v1/user/register` - 用戶註冊
+- [x] `POST /api/v1/user/login` - 用戶登入
+- [x] `GET /api/v1/user/profile` - 個人資料
+- [x] `PUT /api/v1/user/profile` - 更新資料
+- [x] `PUT /api/v1/user/preferences` - 更新偏好
+- [ ] `POST /api/v1/user/logout` - 用戶登出
+- [ ] `POST /api/v1/user/refresh` - 刷新Token
+- [ ] `POST /api/v1/user/avatar` - 上傳頭像
+- [ ] `DELETE /api/v1/user/account` - 刪除帳號
+- [ ] `POST /api/v1/user/verify` - 年齡驗證
+
+### 對話核心 (20/35) ✨ 新增
+#### 會話管理 (8/9) ✨ 新增
 - [x] `POST /api/v1/chat/session` - 創建會話
 - [x] `GET /api/v1/chat/session/{id}` - 獲取會話
 - [x] `GET /api/v1/chat/sessions` - 會話列表
 - [x] `PUT /api/v1/chat/session/{id}/mode` - 切換模式
 - [x] `POST /api/v1/chat/session/{id}/tag` - 添加標籤
 - [x] `DELETE /api/v1/chat/session/{id}` - 刪除會話
-- [ ] `GET /api/v1/chat/session/{id}/history` - 對話歷史
-- [ ] `GET /api/v1/chat/session/{id}/export` - 匯出對話
+- [x] `GET /api/v1/chat/session/{id}/history` - 對話歷史 ✨ 新增
+- [x] `GET /api/v1/chat/session/{id}/export` - 匯出對話 ✨ 新增
 - [ ] `GET /api/v1/chat/search` - 搜尋對話
 
 #### 訊息處理 (2/2)
@@ -49,17 +61,18 @@
 
 ## 🔄 優先開發計劃
 
-### Phase 1: 用戶系統 (0/10)
+### ~~Phase 1: 用戶系統 (5/10)~~ ✅ 基本完成
 ```
-POST   /api/v1/user/register        - 用戶註冊
-POST   /api/v1/user/login           - 用戶登入
-POST   /api/v1/user/logout          - 用戶登出
-POST   /api/v1/user/refresh         - 刷新Token
-GET    /api/v1/user/profile         - 個人資料
-PUT    /api/v1/user/profile         - 更新資料
-PUT    /api/v1/user/preferences     - 更新偏好
-POST   /api/v1/user/avatar          - 上傳頭像
-DELETE /api/v1/user/account         - 刪除帳號
+✅ POST   /api/v1/user/register        - 用戶註冊
+✅ POST   /api/v1/user/login           - 用戶登入
+✅ GET    /api/v1/user/profile         - 個人資料
+✅ PUT    /api/v1/user/profile         - 更新資料
+✅ PUT    /api/v1/user/preferences     - 更新偏好
+⏳ POST   /api/v1/user/logout          - 用戶登出
+⏳ POST   /api/v1/user/refresh         - 刷新Token
+⏳ POST   /api/v1/user/avatar          - 上傳頭像
+⏳ DELETE /api/v1/user/account         - 刪除帳號
+⏳ POST   /api/v1/user/verify          - 年齡驗證
 ```
 
 ### Phase 2: 記憶系統 (0/8)
@@ -102,6 +115,9 @@ GET    /api/v1/tts/config           - 語音配置
 - ✅ **場景描述**: 動態生成沉浸式場景
 - ✅ **情感追蹤**: 好感度和關係狀態管理
 - ✅ **會話管理**: 完整的對話會話生命週期
+- ✅ **用戶系統**: 註冊、登入、資料管理 ✨ 新增
+- ✅ **會話歷史**: 分頁歷史查詢和匯出功能 ✨ 新增
+- ✅ **18+ 驗證**: 註冊時年齡限制驗證 ✨ 新增
 
 ## 📋 測試狀態
 - **Web介面**: ✅ 基本測試可用

@@ -48,6 +48,36 @@ type MessageContext struct {
 	Scene        string `json:"scene,omitempty" example:"辦公室"`
 }
 
+// MessageHistoryItem 歷史訊息項目
+type MessageHistoryItem struct {
+	BaseModel
+	SessionID        string                 `json:"session_id" example:"session_001"`
+	Role             string                 `json:"role" example:"user" enums:"user,assistant"`
+	Content          string                 `json:"content" example:"你好"`
+	SceneDescription string                 `json:"scene_description,omitempty" example:"辦公室裡燈光微暖..."`
+	CharacterAction  string                 `json:"character_action,omitempty" example:"他溫和地笑著"`
+	EmotionalState   map[string]interface{} `json:"emotional_state,omitempty"`
+	NSFWLevel        int                    `json:"nsfw_level" example:"1"`
+	AIEngine         string                 `json:"ai_engine" example:"openai"`
+	ResponseTime     int                    `json:"response_time,omitempty" example:"1250"`
+}
+
+// MessageHistoryResponse 歷史訊息回應
+type MessageHistoryResponse struct {
+	SessionID  string               `json:"session_id" example:"session_001"`
+	Messages   []MessageHistoryItem `json:"messages"`
+	Pagination PaginationInfo       `json:"pagination"`
+}
+
+// PaginationInfo 分頁資訊
+type PaginationInfo struct {
+	CurrentPage int  `json:"current_page" example:"1"`
+	TotalPages  int  `json:"total_pages" example:"5"`
+	TotalCount  int  `json:"total_count" example:"50"`
+	HasNext     bool `json:"has_next" example:"true"`
+	HasPrev     bool `json:"has_prev" example:"false"`
+}
+
 // ChatResponse 對話回應
 type ChatResponse struct {
 	SessionID       string        `json:"session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
@@ -81,11 +111,6 @@ type SessionListResponse struct {
 	Pagination PaginationResponse `json:"pagination"`
 }
 
-// MessageHistoryResponse 訊息歷史回應
-type MessageHistoryResponse struct {
-	Messages   []ChatMessage      `json:"messages"`
-	Pagination PaginationResponse `json:"pagination"`
-}
 
 // UpdateModeRequest 切換模式請求
 type UpdateModeRequest struct {
@@ -100,5 +125,6 @@ type AddTagsRequest struct {
 
 // RegenerateRequest 重新生成請求
 type RegenerateRequest struct {
-	MessageID string `json:"message_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440001"`
+	MessageID           string `json:"message_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440001"`
+	RegenerationReason  string `json:"regeneration_reason,omitempty" example:"tone" enums:"tone,content,length"`
 }
