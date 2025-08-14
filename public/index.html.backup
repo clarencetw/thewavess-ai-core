@@ -1,0 +1,832 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Thewavess AI Core - API 測試界面</title>
+    <style>
+        * { box-sizing: border-box; }
+        body { 
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0; padding: 20px; background: #f5f5f5; 
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { background: white; padding: 20px; border-radius: 8px; margin-bottom: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tabs { display: flex; background: white; border-radius: 8px; margin-bottom: 20px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tab { padding: 15px 25px; cursor: pointer; border: none; background: #f8f9fa; flex: 1; text-align: center; transition: all 0.3s; }
+        .tab.active { background: #007bff; color: white; }
+        .tab-content { background: white; padding: 20px; border-radius: 8px; display: none; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .tab-content.active { display: block; }
+        
+        /* Chat Interface */
+        .chat-container { 
+            border: 1px solid #ddd; height: 400px; overflow-y: auto; 
+            padding: 15px; margin: 20px 0; background: #fafafa; border-radius: 8px;
+        }
+        .message { margin: 10px 0; padding: 12px; border-radius: 12px; max-width: 80%; }
+        .user-message { background: #007bff; color: white; margin-left: auto; }
+        .ai-message { background: white; border: 1px solid #e0e0e0; }
+        .scene-description { background: #e8f5e8; font-style: italic; margin: 5px 0; padding: 8px; border-radius: 6px; border-left: 3px solid #4caf50; }
+        .character-action { color: #666; font-size: 14px; margin-top: 5px; padding: 4px 8px; background: #f0f0f0; border-radius: 4px; }
+        .emotion-state { font-size: 12px; color: #888; margin-top: 8px; padding: 4px; background: #fff3cd; border-radius: 4px; }
+        
+        /* Forms */
+        .form-group { margin-bottom: 15px; }
+        .form-group label { display: block; margin-bottom: 5px; font-weight: 500; }
+        input, select, textarea { 
+            width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px;
+            font-size: 14px; transition: border-color 0.3s;
+        }
+        input:focus, select:focus, textarea:focus { outline: none; border-color: #007bff; }
+        button { 
+            padding: 10px 20px; margin: 5px; border: none; border-radius: 4px; 
+            cursor: pointer; font-size: 14px; transition: all 0.3s;
+        }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-secondary { background: #6c757d; color: white; }
+        button:hover { opacity: 0.9; transform: translateY(-1px); }
+        button:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
+        
+        /* Status */
+        .status { margin: 10px 0; padding: 12px; border-radius: 6px; border-left: 4px solid; }
+        .status.success { background: #d4edda; color: #155724; border-color: #28a745; }
+        .status.error { background: #f8d7da; color: #721c24; border-color: #dc3545; }
+        .status.info { background: #d1ecf1; color: #0c5460; border-color: #17a2b8; }
+        
+        /* Response Display */
+        .response-box { 
+            background: #f8f9fa; border: 1px solid #dee2e6; border-radius: 6px; 
+            padding: 15px; margin: 10px 0; font-family: monospace; font-size: 13px;
+            max-height: 300px; overflow-y: auto;
+        }
+        
+        /* Session Management */
+        .session-list { margin: 15px 0; }
+        .session-item { 
+            background: white; border: 1px solid #dee2e6; border-radius: 6px; 
+            padding: 15px; margin: 10px 0; cursor: pointer; transition: all 0.3s;
+        }
+        .session-item:hover { border-color: #007bff; box-shadow: 0 2px 4px rgba(0,123,255,0.1); }
+        .session-item.active { border-color: #007bff; background: #f8f9ff; }
+        .session-title { font-weight: 500; color: #333; }
+        .session-meta { font-size: 12px; color: #666; margin-top: 5px; }
+        
+        /* Grid Layout */
+        .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .full-width { grid-column: 1 / -1; }
+        
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: 1fr; }
+            .tabs { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🤖 Thewavess AI Core - 完整功能測試</h1>
+            <p>基於真實 API 的完整功能測試界面，所有數據來自後端 API</p>
+            <div id="globalStatus" class="status"></div>
+        </div>
+
+        <div class="tabs">
+            <button class="tab active" onclick="switchTab('session')">會話管理</button>
+            <button class="tab" onclick="switchTab('chat')">對話測試</button>
+            <button class="tab" onclick="switchTab('user')">用戶功能</button>
+            <button class="tab" onclick="switchTab('character')">角色系統</button>
+        </div>
+
+        <!-- 會話管理 -->
+        <div id="sessionTab" class="tab-content active">
+            <h2>📝 會話管理</h2>
+            <div class="grid">
+                <div>
+                    <h3>創建新會話</h3>
+                    <div class="form-group">
+                        <label>角色選擇</label>
+                        <select id="characterSelect">
+                            <option value="">選擇角色...</option>
+                            <option value="char_001">陸寒淵 (霸道總裁)</option>
+                            <option value="char_002">沈言墨 (溫柔醫生)</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>會話標題</label>
+                        <input type="text" id="sessionTitle" placeholder="輸入會話標題">
+                    </div>
+                    <div class="form-group">
+                        <label>對話模式</label>
+                        <select id="sessionMode">
+                            <option value="normal">普通模式</option>
+                            <option value="novel">小說模式</option>
+                            <option value="nsfw">成人模式</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary" onclick="createSession()">創建會話</button>
+                </div>
+                
+                <div>
+                    <h3>我的會話列表</h3>
+                    <button class="btn-secondary" onclick="loadSessions()">刷新列表</button>
+                    <div id="sessionList" class="session-list"></div>
+                </div>
+            </div>
+            
+            <div class="full-width">
+                <h3>會話操作</h3>
+                <div class="grid">
+                    <div>
+                        <button class="btn-secondary" onclick="switchMode()">切換模式</button>
+                        <button class="btn-success" onclick="addTags()">添加標籤</button>
+                        <button class="btn-primary" onclick="exportSession()">匯出會話</button>
+                    </div>
+                    <div>
+                        <button class="btn-danger" onclick="deleteSession()">刪除會話</button>
+                        <input type="text" id="selectedSession" placeholder="當前選中會話 ID" readonly>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 對話測試 -->
+        <div id="chatTab" class="tab-content">
+            <h2>💬 對話測試</h2>
+            <div id="chatStatus" class="status info">請先在會話管理中創建或選擇一個會話</div>
+            
+            <div class="chat-container" id="chatContainer">
+                <div class="message ai-message">
+                    <div>🤖 請先創建或選擇一個會話開始對話</div>
+                </div>
+            </div>
+            
+            <div class="grid">
+                <div>
+                    <input type="text" id="messageInput" placeholder="輸入訊息..." onkeypress="handleKeyPress(event)">
+                    <button class="btn-primary" onclick="sendMessage()">發送</button>
+                    <button class="btn-secondary" onclick="regenerateMessage()">重新生成</button>
+                </div>
+                <div>
+                    <button class="btn-success" onclick="loadHistory()">載入歷史</button>
+                    <button class="btn-danger" onclick="clearChat()">清空顯示</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 用戶功能 -->
+        <div id="userTab" class="tab-content">
+            <h2>👤 用戶功能測試</h2>
+            <div class="grid">
+                <div>
+                    <h3>用戶註冊</h3>
+                    <div class="form-group">
+                        <input type="text" id="regUsername" placeholder="用戶名">
+                    </div>
+                    <div class="form-group">
+                        <input type="email" id="regEmail" placeholder="Email">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="regPassword" placeholder="密碼">
+                    </div>
+                    <div class="form-group">
+                        <input type="date" id="regBirthDate">
+                    </div>
+                    <div class="form-group">
+                        <select id="regGender">
+                            <option value="female">女</option>
+                            <option value="male">男</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    <button class="btn-primary" onclick="registerUser()">註冊用戶</button>
+                </div>
+                
+                <div>
+                    <h3>用戶登入</h3>
+                    <div class="form-group">
+                        <input type="text" id="loginUsername" placeholder="用戶名">
+                    </div>
+                    <div class="form-group">
+                        <input type="password" id="loginPassword" placeholder="密碼">
+                    </div>
+                    <button class="btn-success" onclick="loginUser()">登入</button>
+                    <button class="btn-secondary" onclick="getProfile()">獲取資料</button>
+                </div>
+            </div>
+            
+            <div class="response-box" id="userResponse"></div>
+        </div>
+
+        <!-- 角色系統 -->
+        <div id="characterTab" class="tab-content">
+            <h2>🎭 角色系統</h2>
+            <button class="btn-primary" onclick="loadCharacters()">載入角色列表</button>
+            <div id="characterList"></div>
+            <div class="response-box" id="characterResponse"></div>
+        </div>
+    </div>
+
+    <script>
+        // 全局變量
+        let currentSessionId = null;
+        let currentToken = 'Bearer demo_token_12345678901234567890'; // 測試用 token
+        let lastMessageId = null;
+
+        // 頁面初始化
+        window.onload = function() {
+            showGlobalStatus('🚀 API 測試界面已載入，所有功能基於真實 API', 'info');
+            loadSessions();
+            loadCharacters();
+        };
+
+        // Tab 切換
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+            
+            event.target.classList.add('active');
+            document.getElementById(tabName + 'Tab').classList.add('active');
+        }
+
+        // 狀態顯示
+        function showGlobalStatus(message, type) {
+            const status = document.getElementById('globalStatus');
+            status.textContent = message;
+            status.className = 'status ' + type;
+        }
+
+        function showStatus(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            if (element) {
+                element.textContent = message;
+                element.className = 'status ' + type;
+            }
+        }
+
+        // ========== 會話管理功能 ==========
+        
+        async function createSession() {
+            const characterId = document.getElementById('characterSelect').value;
+            const title = document.getElementById('sessionTitle').value;
+            const mode = document.getElementById('sessionMode').value;
+
+            if (!characterId) {
+                showGlobalStatus('❌ 請選擇角色', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/chat/session', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': currentToken
+                    },
+                    body: JSON.stringify({
+                        character_id: characterId,
+                        title: title || '新對話',
+                        mode: mode,
+                        tags: ['測試', 'API']
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    currentSessionId = data.data.id;
+                    document.getElementById('selectedSession').value = currentSessionId;
+                    showGlobalStatus('✅ 會話創建成功: ' + data.data.title, 'success');
+                    loadSessions(); // 刷新列表
+                    
+                    // 清空表單
+                    document.getElementById('sessionTitle').value = '';
+                } else {
+                    showGlobalStatus('❌ 創建失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        async function loadSessions() {
+            try {
+                const response = await fetch('/api/v1/chat/sessions?limit=10', {
+                    headers: { 'Authorization': currentToken }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    displaySessions(data.data.sessions, data.data.summary);
+                } else {
+                    showGlobalStatus('❌ 載入會話失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 載入會話網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        function displaySessions(sessions, summary) {
+            const list = document.getElementById('sessionList');
+            if (!sessions || sessions.length === 0) {
+                list.innerHTML = '<div class="session-item">暫無會話，請創建新會話</div>';
+                return;
+            }
+
+            let html = `<div style="padding: 10px; background: #e9ecef; border-radius: 4px; margin-bottom: 10px;">
+                總計: ${sessions.length} 個會話 | 活躍: ${summary?.active_count || 0} | 總訊息: ${summary?.total_messages || 0}
+            </div>`;
+
+            sessions.forEach(session => {
+                const isActive = session.id === currentSessionId;
+                html += `
+                    <div class="session-item ${isActive ? 'active' : ''}" onclick="selectSession('${session.id}')">
+                        <div class="session-title">${session.title}</div>
+                        <div class="session-meta">
+                            ID: ${session.id} | 模式: ${session.mode} | 訊息: ${session.message_count} | 狀態: ${session.status}
+                            <br>角色: ${session.character_id} | 標籤: ${session.tags.join(', ')}
+                        </div>
+                    </div>
+                `;
+            });
+
+            list.innerHTML = html;
+        }
+
+        function selectSession(sessionId) {
+            currentSessionId = sessionId;
+            document.getElementById('selectedSession').value = sessionId;
+            showGlobalStatus('✅ 已選擇會話: ' + sessionId, 'success');
+            
+            // 刷新會話列表顯示
+            loadSessions();
+            
+            // 更新聊天狀態
+            showStatus('chatStatus', '當前會話: ' + sessionId, 'info');
+            
+            // 載入該會話的歷史
+            loadHistory();
+        }
+
+        async function switchMode() {
+            if (!currentSessionId) {
+                showGlobalStatus('❌ 請先選擇會話', 'error');
+                return;
+            }
+
+            const newMode = prompt('輸入新模式 (normal/novel/nsfw):', 'normal');
+            if (!newMode) return;
+
+            try {
+                const response = await fetch(`/api/v1/chat/session/${currentSessionId}/mode`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': currentToken
+                    },
+                    body: JSON.stringify({
+                        mode: newMode,
+                        transition_message: `切換到${newMode}模式`
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showGlobalStatus('✅ 模式切換成功: ' + newMode, 'success');
+                    loadSessions(); // 刷新列表
+                } else {
+                    showGlobalStatus('❌ 模式切換失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 模式切換網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        async function addTags() {
+            if (!currentSessionId) {
+                showGlobalStatus('❌ 請先選擇會話', 'error');
+                return;
+            }
+
+            const tags = prompt('輸入標籤 (用逗號分隔):', '測試,API');
+            if (!tags) return;
+
+            try {
+                const response = await fetch(`/api/v1/chat/session/${currentSessionId}/tag`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': currentToken
+                    },
+                    body: JSON.stringify({
+                        tags: tags.split(',').map(t => t.trim())
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showGlobalStatus('✅ 標籤添加成功', 'success');
+                    loadSessions(); // 刷新列表
+                } else {
+                    showGlobalStatus('❌ 標籤添加失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 標籤添加網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        async function exportSession() {
+            if (!currentSessionId) {
+                showGlobalStatus('❌ 請先選擇會話', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v1/chat/session/${currentSessionId}/export`, {
+                    headers: { 'Authorization': currentToken }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    // 下載 JSON 文件
+                    const blob = new Blob([JSON.stringify(data.data, null, 2)], { type: 'application/json' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `chat_${currentSessionId}_${new Date().toISOString().slice(0,10)}.json`;
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    
+                    showGlobalStatus('✅ 會話匯出成功', 'success');
+                } else {
+                    showGlobalStatus('❌ 會話匯出失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 會話匯出網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        async function deleteSession() {
+            if (!currentSessionId) {
+                showGlobalStatus('❌ 請先選擇會話', 'error');
+                return;
+            }
+
+            if (!confirm('確定要刪除會話 ' + currentSessionId + ' 嗎？')) {
+                return;
+            }
+
+            try {
+                const response = await fetch(`/api/v1/chat/session/${currentSessionId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer demo_token' } // 使用正確的短 token
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    showGlobalStatus('✅ 會話刪除成功', 'success');
+                    currentSessionId = null;
+                    document.getElementById('selectedSession').value = '';
+                    loadSessions(); // 刷新列表
+                    clearChat();
+                } else {
+                    showGlobalStatus('❌ 會話刪除失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 會話刪除網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        // ========== 對話功能 ==========
+
+        function handleKeyPress(event) {
+            if (event.key === 'Enter') {
+                sendMessage();
+            }
+        }
+
+        async function sendMessage() {
+            if (!currentSessionId) {
+                showGlobalStatus('❌ 請先選擇會話', 'error');
+                return;
+            }
+
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+            
+            if (!message) return;
+
+            // 顯示用戶訊息
+            addUserMessage(message);
+            input.value = '';
+
+            try {
+                const response = await fetch('/api/v1/chat/message', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': currentToken
+                    },
+                    body: JSON.stringify({
+                        session_id: currentSessionId,
+                        message: message
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    addAIMessage(data.data);
+                    lastMessageId = data.data.message_id;
+                    showGlobalStatus('✅ 訊息發送成功', 'success');
+                } else {
+                    showGlobalStatus('❌ 訊息發送失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 訊息發送網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        async function regenerateMessage() {
+            if (!lastMessageId) {
+                showGlobalStatus('❌ 沒有可重新生成的訊息', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/chat/regenerate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': currentToken
+                    },
+                    body: JSON.stringify({
+                        message_id: lastMessageId,
+                        regeneration_reason: 'tone'
+                    })
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    addAIMessage(data.data, true);
+                    showGlobalStatus('✅ 訊息重新生成成功', 'success');
+                } else {
+                    showGlobalStatus('❌ 訊息重新生成失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 訊息重新生成網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        async function loadHistory() {
+            if (!currentSessionId) return;
+
+            try {
+                const response = await fetch(`/api/v1/chat/session/${currentSessionId}/history?limit=20`, {
+                    headers: { 'Authorization': currentToken }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    displayHistory(data.data.messages);
+                    showStatus('chatStatus', `已載入 ${data.data.messages.length} 條歷史訊息`, 'info');
+                } else {
+                    showGlobalStatus('❌ 載入歷史失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 載入歷史網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        function displayHistory(messages) {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = '';
+
+            if (!messages || messages.length === 0) {
+                chatContainer.innerHTML = '<div class="message ai-message"><div>暫無歷史訊息，開始新對話吧！</div></div>';
+                return;
+            }
+
+            messages.forEach(msg => {
+                if (msg.role === 'user') {
+                    const messageDiv = document.createElement('div');
+                    messageDiv.className = 'message user-message';
+                    messageDiv.innerHTML = `<div><strong>你：</strong>${escapeHtml(msg.content)}</div>`;
+                    chatContainer.appendChild(messageDiv);
+                } else if (msg.role === 'assistant') {
+                    const messageData = {
+                        scene_description: msg.scene_description,
+                        character_response: { message: msg.content },
+                        character_action: msg.character_action,
+                        emotional_state: msg.emotional_state || {}
+                    };
+                    addAIMessage(messageData);
+                }
+            });
+
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function addUserMessage(message) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message user-message';
+            messageDiv.innerHTML = `<div><strong>你：</strong>${escapeHtml(message)}</div>`;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function addAIMessage(data, isRegenerated = false) {
+            const chatContainer = document.getElementById('chatContainer');
+            const messageDiv = document.createElement('div');
+            messageDiv.className = 'message ai-message';
+            
+            let html = '';
+            
+            if (isRegenerated) {
+                html += '<div style="color: #ff6b6b; font-size: 12px; margin-bottom: 5px;">🔄 重新生成</div>';
+            }
+            
+            // 場景描述
+            if (data.scene_description) {
+                html += `<div class="scene-description">${escapeHtml(data.scene_description)}</div>`;
+            }
+            
+            // 角色對話
+            const characterName = currentSessionId && currentSessionId.includes('char_002') ? '沈言墨' : '陸寒淵';
+            html += `<div><strong>${characterName}：</strong>${escapeHtml(data.character_response.message)}</div>`;
+            
+            // 角色動作
+            if (data.character_action) {
+                html += `<div class="character-action">${escapeHtml(data.character_action)}</div>`;
+            }
+            
+            // 情感狀態
+            if (data.emotional_state) {
+                const emotion = data.emotional_state;
+                html += `<div class="emotion-state">
+                    好感度: ${emotion.affection || 50} | 
+                    關係: ${emotion.relationship || 'friend'} | 
+                    心情: ${emotion.mood || 'neutral'}
+                    ${emotion.intimacy_level ? ' | 親密度: ' + emotion.intimacy_level : ''}
+                </div>`;
+            }
+            
+            messageDiv.innerHTML = html;
+            chatContainer.appendChild(messageDiv);
+            chatContainer.scrollTop = chatContainer.scrollHeight;
+        }
+
+        function clearChat() {
+            const chatContainer = document.getElementById('chatContainer');
+            chatContainer.innerHTML = '<div class="message ai-message"><div>對話已清空，輸入訊息開始新對話</div></div>';
+            lastMessageId = null;
+        }
+
+        // ========== 用戶功能 ==========
+
+        async function registerUser() {
+            const userData = {
+                username: document.getElementById('regUsername').value,
+                email: document.getElementById('regEmail').value,
+                password: document.getElementById('regPassword').value,
+                birth_date: document.getElementById('regBirthDate').value,
+                gender: document.getElementById('regGender').value,
+                nickname: document.getElementById('regUsername').value + '測試'
+            };
+
+            if (!userData.username || !userData.email || !userData.password || !userData.birth_date) {
+                showGlobalStatus('❌ 請填寫所有必要信息', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/user/register', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(userData)
+                });
+
+                const data = await response.json();
+                const responseBox = document.getElementById('userResponse');
+                responseBox.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.success) {
+                    showGlobalStatus('✅ 用戶註冊成功', 'success');
+                    // 可以保存 token
+                    if (data.data?.access_token) {
+                        currentToken = 'Bearer ' + data.data.access_token;
+                    }
+                } else {
+                    showGlobalStatus('❌ 用戶註冊失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 註冊網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        async function loginUser() {
+            const loginData = {
+                username: document.getElementById('loginUsername').value,
+                password: document.getElementById('loginPassword').value
+            };
+
+            if (!loginData.username || !loginData.password) {
+                showGlobalStatus('❌ 請輸入用戶名和密碼', 'error');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/v1/user/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(loginData)
+                });
+
+                const data = await response.json();
+                const responseBox = document.getElementById('userResponse');
+                responseBox.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.success) {
+                    showGlobalStatus('✅ 登入成功', 'success');
+                    if (data.data?.access_token) {
+                        currentToken = 'Bearer ' + data.data.access_token;
+                    }
+                } else {
+                    showGlobalStatus('❌ 登入失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 登入網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        async function getProfile() {
+            try {
+                const response = await fetch('/api/v1/user/profile', {
+                    headers: { 'Authorization': currentToken }
+                });
+
+                const data = await response.json();
+                const responseBox = document.getElementById('userResponse');
+                responseBox.textContent = JSON.stringify(data, null, 2);
+                
+                if (data.success) {
+                    showGlobalStatus('✅ 獲取用戶資料成功', 'success');
+                } else {
+                    showGlobalStatus('❌ 獲取用戶資料失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 獲取用戶資料網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        // ========== 角色功能 ==========
+
+        async function loadCharacters() {
+            try {
+                const response = await fetch('/api/v1/character/list?limit=10', {
+                    headers: { 'Authorization': currentToken }
+                });
+
+                const data = await response.json();
+                if (data.success) {
+                    displayCharacters(data.data.characters);
+                    document.getElementById('characterResponse').textContent = JSON.stringify(data, null, 2);
+                } else {
+                    showGlobalStatus('❌ 載入角色失敗: ' + (data.error?.message || '未知錯誤'), 'error');
+                }
+            } catch (error) {
+                showGlobalStatus('❌ 載入角色網路錯誤: ' + error.message, 'error');
+            }
+        }
+
+        function displayCharacters(characters) {
+            const list = document.getElementById('characterList');
+            if (!characters || characters.length === 0) {
+                list.innerHTML = '<div>暫無角色數據</div>';
+                return;
+            }
+
+            let html = '';
+            characters.forEach(char => {
+                html += `
+                    <div class="session-item">
+                        <div class="session-title">${char.name} (${char.type})</div>
+                        <div class="session-meta">
+                            ID: ${char.id} | 人氣: ${char.popularity} | 描述: ${char.description}
+                            <br>標籤: ${char.tags.join(', ')}
+                        </div>
+                    </div>
+                `;
+            });
+            
+            list.innerHTML = html;
+        }
+
+        // 工具函數
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

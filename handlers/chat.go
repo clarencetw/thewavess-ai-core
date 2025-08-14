@@ -703,7 +703,7 @@ func UpdateSessionMode(c *gin.Context) {
 	}
 
 	// 模擬檢查會話是否存在
-	validSessions := []string{"test_session", "session_001", "demo_session"}
+	validSessions := []string{"test_session", "session_001", "demo_session", "session_1", "session_2", "session_3"}
 	if !utils.StringInSlice(sessionID, validSessions) {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
@@ -876,7 +876,7 @@ func GetMessageHistory(c *gin.Context) {
 	}
 
 	// 模擬檢查會話是否存在
-	validSessions := []string{"test_session", "session_001", "demo_session"}
+	validSessions := []string{"test_session", "session_001", "demo_session", "session_1", "session_2", "session_3"}
 	sessionExists := false
 	for _, validSession := range validSessions {
 		if sessionID == validSession {
@@ -1057,7 +1057,7 @@ func AddSessionTags(c *gin.Context) {
 	}
 
 	// 模擬檢查會話是否存在
-	validSessions := []string{"test_session", "session_001", "demo_session"}
+	validSessions := []string{"test_session", "session_001", "demo_session", "session_1", "session_2", "session_3"}
 	if !utils.StringInSlice(sessionID, validSessions) {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
@@ -1180,7 +1180,7 @@ func ExportChatHistory(c *gin.Context) {
 	format := "json"
 
 	// 模擬檢查會話是否存在
-	validSessions := []string{"test_session", "session_001", "demo_session"}
+	validSessions := []string{"test_session", "session_001", "demo_session", "session_1", "session_2", "session_3"}
 	if !utils.StringInSlice(sessionID, validSessions) {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,

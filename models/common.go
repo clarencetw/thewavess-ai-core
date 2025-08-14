@@ -32,9 +32,10 @@ type PaginationRequest struct {
 	Limit int `json:"limit" form:"limit" example:"20" default:"20"`
 }
 
-// BaseModel 基礎資料模型
+// BaseModel API層基礎模型 (Data Transfer Object Layer)
+// 用於 JSON 序列化、API 響應等場景，使用 UUID 字符串作為主鍵
 type BaseModel struct {
-	ID        string    `json:"id" gorm:"type:uuid;primary_key" example:"550e8400-e29b-41d4-a716-446655440000"`
-	CreatedAt time.Time `json:"created_at" example:"2023-01-01T00:00:00Z"`
-	UpdatedAt time.Time `json:"updated_at" example:"2023-01-01T00:00:00Z"`
+	ID        string    `json:"id" db:"id" example:"550e8400-e29b-41d4-a716-446655440000"`
+	CreatedAt time.Time `json:"created_at" db:"created_at" example:"2023-01-01T00:00:00Z"`
+	UpdatedAt time.Time `json:"updated_at" db:"updated_at" example:"2023-01-01T00:00:00Z"`
 }

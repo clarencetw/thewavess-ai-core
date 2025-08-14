@@ -1,0 +1,544 @@
+// Thewavess AI Core - 共用 JavaScript 模組
+
+// 全局狀態管理
+const AppState = {
+    // 系統狀態
+    systemOnline: false,
+    isAuthenticated: false,
+    currentUser: null,
+    accessToken: null,
+    refreshToken: null,
+    
+    // 用戶流程狀態
+    ageVerified: false,
+    selectedCharacter: null,
+    currentSession: null,
+    
+    // 對話狀態
+    messages: [],
+    emotions: [],
+    
+    // 監控數據
+    apiLogs: [],
+    
+    // 用戶偏好
+    preferences: {
+        nsfw_enabled: false,
+        theme: 'dark',
+        auto_scroll: true
+    }
+};
+
+// API 基礎配置
+const API_CONFIG = {
+    baseURL: '',
+    timeout: 30000,
+    headers: {
+        'Content-Type': 'application/json'
+    }
+};
+
+// 工具函數
+const Utils = {
+    // 時間格式化
+    formatTime(date) {
+        return new Date(date).toLocaleTimeString('zh-TW', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+    },
+    
+    // 生成隨機 ID
+    generateId() {
+        return Math.random().toString(36).substr(2, 9);
+    },
+    
+    // 延遲函數
+    sleep(ms) {
+        return new Promise(resolve => setTimeout(resolve, ms));
+    },
+    
+    // 本地存儲操作
+    storage: {
+        set(key, value) {
+            try {
+                localStorage.setItem(key, JSON.stringify(value));
+            } catch (e) {
+                console.warn('無法保存到本地存儲:', e);
+            }
+        },
+        
+        get(key, defaultValue = null) {
+            try {
+                const value = localStorage.getItem(key);
+                return value ? JSON.parse(value) : defaultValue;
+            } catch (e) {
+                console.warn('無法從本地存儲讀取:', e);
+                return defaultValue;
+            }
+        },
+        
+        remove(key) {
+            try {
+                localStorage.removeItem(key);
+            } catch (e) {
+                console.warn('無法從本地存儲刪除:', e);
+            }
+        }
+    },
+    
+    // 表單驗證
+    validation: {
+        email(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        },
+        
+        password(password) {
+            // 至少8位，包含大小寫字母和數字
+            const re = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)[a-zA-Z\d@$!%*?&]{8,}$/;
+            return re.test(password);
+        },
+        
+        age(birthDate) {
+            const today = new Date();
+            const birth = new Date(birthDate);
+            const age = today.getFullYear() - birth.getFullYear();
+            const monthDiff = today.getMonth() - birth.getMonth();
+            
+            if (monthDiff < 0 || (monthDiff === 0 && today.getDate() < birth.getDate())) {
+                return age - 1;
+            }
+            return age;
+        }
+    }
+};
+
+// API 請求封裝
+const ApiClient = {
+    // 通用請求方法
+    async request(method, endpoint, data = null, options = {}) {
+        const url = API_CONFIG.baseURL + endpoint;
+        const config = {
+            method,
+            headers: { ...API_CONFIG.headers, ...options.headers },
+            ...options
+        };
+        
+        // 添加認證頭
+        if (AppState.accessToken) {
+            config.headers.Authorization = `Bearer ${AppState.accessToken}`;
+        }
+        
+        // 添加請求體
+        if (data) {
+            config.body = JSON.stringify(data);
+        }
+        
+        try {
+            const response = await fetch(url, config);
+            const result = await response.json();
+            
+            // 記錄 API 調用
+            this.logApiCall(method, endpoint, response.status, result);
+            
+            // 處理認證失敗
+            if (response.status === 401) {
+                await this.handleUnauthorized();
+                throw new Error('認證失敗，請重新登入');
+            }
+            
+            if (!response.ok) {
+                throw new Error(result.error?.message || `HTTP ${response.status}`);
+            }
+            
+            return result;
+        } catch (error) {
+            this.logApiCall(method, endpoint, 0, { error: error.message });
+            throw error;
+        }
+    },
+    
+    // HTTP 方法快捷方式
+    get(endpoint, options = {}) {
+        return this.request('GET', endpoint, null, options);
+    },
+    
+    post(endpoint, data, options = {}) {
+        return this.request('POST', endpoint, data, options);
+    },
+    
+    put(endpoint, data, options = {}) {
+        return this.request('PUT', endpoint, data, options);
+    },
+    
+    delete(endpoint, options = {}) {
+        return this.request('DELETE', endpoint, null, options);
+    },
+    
+    // API 調用記錄
+    logApiCall(method, endpoint, status, data) {
+        const log = {
+            id: Utils.generateId(),
+            timestamp: new Date().toISOString(),
+            method,
+            endpoint,
+            status,
+            data,
+            isSuccess: status >= 200 && status < 300
+        };
+        
+        AppState.apiLogs.unshift(log);
+        
+        // 限制日誌數量
+        if (AppState.apiLogs.length > 100) {
+            AppState.apiLogs = AppState.apiLogs.slice(0, 100);
+        }
+        
+        // 觸發日誌更新事件
+        this.dispatchEvent('apiLogUpdated', log);
+    },
+    
+    // 處理認證失敗
+    async handleUnauthorized() {
+        if (AppState.refreshToken) {
+            try {
+                const result = await this.post('/api/v1/user/refresh', {
+                    refresh_token: AppState.refreshToken
+                });
+                
+                if (result.success) {
+                    AppState.accessToken = result.data.access_token;
+                    AppState.refreshToken = result.data.refresh_token;
+                    Utils.storage.set('tokens', {
+                        access: AppState.accessToken,
+                        refresh: AppState.refreshToken
+                    });
+                    return;
+                }
+            } catch (error) {
+                console.warn('Token 刷新失敗:', error);
+            }
+        }
+        
+        // 清除認證狀態
+        this.logout();
+    },
+    
+    // 登出
+    logout() {
+        AppState.isAuthenticated = false;
+        AppState.currentUser = null;
+        AppState.accessToken = null;
+        AppState.refreshToken = null;
+        AppState.selectedCharacter = null;
+        AppState.currentSession = null;
+        
+        Utils.storage.remove('tokens');
+        Utils.storage.remove('user');
+        
+        this.dispatchEvent('userLoggedOut');
+    },
+    
+    // 事件系統
+    events: {},
+    
+    addEventListener(event, callback) {
+        if (!this.events[event]) {
+            this.events[event] = [];
+        }
+        this.events[event].push(callback);
+    },
+    
+    removeEventListener(event, callback) {
+        if (this.events[event]) {
+            this.events[event] = this.events[event].filter(cb => cb !== callback);
+        }
+    },
+    
+    dispatchEvent(event, data = null) {
+        if (this.events[event]) {
+            this.events[event].forEach(callback => {
+                try {
+                    callback(data);
+                } catch (error) {
+                    console.error('事件處理錯誤:', error);
+                }
+            });
+        }
+    }
+};
+
+// UI 工具函數
+const UI = {
+    // Toast 通知
+    showToast(message, type = 'info', duration = 3000) {
+        const toast = document.createElement('div');
+        toast.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg text-white`;
+        
+        switch (type) {
+            case 'success':
+                toast.className += ' bg-green-600 text-white';
+                break;
+            case 'error':
+                toast.className += ' bg-red-600 text-white';
+                break;
+            case 'warning':
+                toast.className += ' bg-yellow-600 text-white';
+                break;
+            default:
+                toast.className += ' bg-blue-500';
+        }
+        
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.opacity = '0';
+            setTimeout(() => {
+                if (toast.parentNode) {
+                    toast.parentNode.removeChild(toast);
+                }
+            }, 300);
+        }, duration);
+    },
+    
+    // 顯示載入狀態
+    showLoading(element, show = true) {
+        if (show) {
+            element.disabled = true;
+            element.innerHTML = '<svg class="animate-spin h-5 w-5 mr-2 inline" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>載入中...';
+        } else {
+            element.disabled = false;
+        }
+    },
+    
+    // 模態框控制
+    modal: {
+        show(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+        },
+        
+        hide(modalId) {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
+        }
+    },
+    
+    // 動態更新元素內容
+    updateElement(selector, content) {
+        const element = document.querySelector(selector);
+        if (element) {
+            element.innerHTML = content;
+        }
+    },
+    
+    // 切換元素可見性
+    toggleElement(selector, show) {
+        const element = document.querySelector(selector);
+        if (element) {
+            if (show) {
+                element.classList.remove('hidden');
+            } else {
+                element.classList.add('hidden');
+            }
+        }
+    }
+};
+
+// 頁面路由系統
+const Router = {
+    routes: {
+        '/': '/public/',
+        '/age-verify': '/public/age-verify.html',
+        '/auth': '/public/auth.html',
+        '/character': '/public/character.html',
+        '/chat': '/public/chat.html',
+        '/profile': '/public/profile.html'
+    },
+    
+    navigate(path) {
+        if (this.routes[path]) {
+            const targetPath = this.routes[path];
+            const currentPath = window.location.pathname;
+            
+            // 防止無限跳轉 - 如果已經在目標路徑，不要再跳轉
+            if (currentPath !== targetPath) {
+                window.location.href = targetPath;
+            }
+        }
+    },
+    
+    getCurrentPage() {
+        const path = window.location.pathname;
+        const page = path.split('/').pop() || 'index.html';
+        return page.replace('.html', '');
+    }
+};
+
+// 初始化應用
+const App = {
+    async init() {
+        try {
+            // 載入保存的狀態
+            this.loadSavedState();
+            
+            // 檢查系統狀態
+            await this.checkSystemHealth();
+            
+            // 設置事件監聽器
+            this.setupEventListeners();
+            
+            console.log('應用初始化完成');
+        } catch (error) {
+            console.error('應用初始化失敗:', error);
+        }
+    },
+    
+    loadSavedState() {
+        // 載入保存的 tokens
+        const tokens = Utils.storage.get('tokens');
+        if (tokens) {
+            AppState.accessToken = tokens.access;
+            AppState.refreshToken = tokens.refresh;
+            AppState.isAuthenticated = true;
+        }
+        
+        // 載入用戶資料
+        const user = Utils.storage.get('user');
+        if (user) {
+            AppState.currentUser = user;
+        }
+        
+        // 載入用戶偏好
+        const preferences = Utils.storage.get('preferences');
+        if (preferences) {
+            AppState.preferences = { ...AppState.preferences, ...preferences };
+        }
+    },
+    
+    async checkSystemHealth() {
+        try {
+            const result = await ApiClient.get('/health');
+            AppState.systemOnline = result.success || result.status === 'healthy';
+        } catch (error) {
+            AppState.systemOnline = false;
+            console.warn('系統健康檢查失敗:', error);
+        }
+    },
+    
+    setupEventListeners() {
+        // 監聽 API 日誌更新
+        ApiClient.addEventListener('apiLogUpdated', (log) => {
+            this.onApiLogUpdated(log);
+        });
+        
+        // 監聽用戶登出
+        ApiClient.addEventListener('userLoggedOut', () => {
+            this.onUserLoggedOut();
+        });
+        
+        // 監聽頁面卸載，保存狀態
+        window.addEventListener('beforeunload', () => {
+            this.saveState();
+        });
+    },
+    
+    onApiLogUpdated(log) {
+        // 可以在這裡更新 UI 或觸發其他操作
+        console.log('API 調用記錄:', log);
+    },
+    
+    onUserLoggedOut() {
+        // 用戶登出後的處理
+        UI.showToast('已登出', 'info');
+        Router.navigate('/');
+    },
+    
+    saveState() {
+        // 保存用戶偏好
+        Utils.storage.set('preferences', AppState.preferences);
+    }
+};
+
+// 字符系統相關
+const CharacterSystem = {
+    characters: [
+        {
+            id: 'char_001',
+            name: '陸寒淵',
+            title: '霸道總裁',
+            description: '冷酷外表下隱藏著溫柔的心，商場上的王者',
+            avatar: 'https://placehold.co/150x150/6366f1/ffffff?text=陸',
+            personality: ['霸道', '冷酷', '專業', '隱藏溫柔'],
+            nsfw_level: 'adult',
+            popularity: 95
+        },
+        {
+            id: 'char_002',
+            name: '沈言墨',
+            title: '溫柔醫生',
+            description: '治癒系醫生，總是溫和地關心每一個人',
+            avatar: 'https://placehold.co/150x150/10b981/ffffff?text=沈',
+            personality: ['溫柔', '體貼', '專業', '治癒'],
+            nsfw_level: 'mild',
+            popularity: 88
+        },
+        {
+            id: 'char_003',
+            name: '林夜白',
+            title: '神秘學者',
+            description: '博學多才的神秘學者，總有意想不到的知識',
+            avatar: 'https://placehold.co/150x150/8b5cf6/ffffff?text=林',
+            personality: ['神秘', '博學', '理性', '深邃'],
+            nsfw_level: 'safe',
+            popularity: 92
+        }
+    ],
+    
+    getCharacter(id) {
+        return this.characters.find(char => char.id === id);
+    },
+    
+    getCharactersByLevel(nsfwLevel) {
+        return this.characters.filter(char => char.nsfw_level === nsfwLevel);
+    }
+};
+
+// NSFW 內容系統
+const NSFWSystem = {
+    levels: {
+        1: { name: '日常對話', color: 'bg-green-500', description: '工作、興趣、天氣' },
+        2: { name: '浪漫內容', color: 'bg-yellow-500', description: '愛你、想你、約會' },
+        3: { name: '親密內容', color: 'bg-orange-500', description: '擁抱、親吻、愛撫' },
+        4: { name: '成人內容', color: 'bg-red-500', description: '身體接觸、情慾表達' },
+        5: { name: '明確內容', color: 'bg-purple-500', description: '性器官描述、明確性行為' }
+    },
+    
+    getLevelInfo(level) {
+        return this.levels[level] || this.levels[1];
+    },
+    
+    checkAge(birthDate) {
+        const age = Utils.validation.age(birthDate);
+        return age >= 18;
+    }
+};
+
+// 導出全局對象
+window.AppState = AppState;
+window.Utils = Utils;
+window.ApiClient = ApiClient;
+window.UI = UI;
+window.Router = Router;
+window.App = App;
+window.CharacterSystem = CharacterSystem;
+window.NSFWSystem = NSFWSystem;

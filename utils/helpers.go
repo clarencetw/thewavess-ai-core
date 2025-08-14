@@ -1,6 +1,8 @@
 package utils
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"strconv"
 )
 
@@ -38,4 +40,13 @@ func Min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// GenerateID 生成隨機ID
+func GenerateID(length int) string {
+	bytes := make([]byte, length/2)
+	if _, err := rand.Read(bytes); err != nil {
+		return ""
+	}
+	return hex.EncodeToString(bytes)
 }

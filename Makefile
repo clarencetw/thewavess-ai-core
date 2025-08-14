@@ -1,4 +1,4 @@
-.PHONY: help install run build test clean docs docker
+.PHONY: help install run build test clean docs
 
 # Default target
 help: ## Show this help message
@@ -36,4 +36,13 @@ docker-build: ## Build Docker image
 docker-run: ## Run Docker container
 	docker run -p 8080:8080 thewavess-ai-core
 
+
 dev: docs run ## Development mode: generate docs and run server
+
+check: ## Check if all services are running
+	@echo "=== Service Health Check ==="
+	@echo "Web UI: http://localhost:8080/"
+	@echo "Swagger: http://localhost:8080/swagger/index.html"
+	@echo "Health: http://localhost:8080/health"
+	@echo ""
+	@curl -s http://localhost:8080/health | jq '.' || echo "❌ API Server not running"

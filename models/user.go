@@ -5,14 +5,17 @@ import "time"
 // User 用戶模型
 type User struct {
 	BaseModel
-	Username    string    `json:"username" gorm:"uniqueIndex" example:"alice123"`
-	Email       string    `json:"email" gorm:"uniqueIndex" example:"alice@example.com"`
-	Nickname    string    `json:"nickname" example:"小愛"`
-	BirthDate   time.Time `json:"birth_date" example:"2000-01-01T00:00:00Z"`
-	Gender      string    `json:"gender" example:"female" enums:"female,male,other"`
-	AvatarURL   string    `json:"avatar_url,omitempty" example:"https://example.com/avatar.jpg"`
-	IsActive    bool      `json:"is_active" example:"true"`
-	LastLoginAt time.Time `json:"last_login_at,omitempty" example:"2023-01-01T00:00:00Z"`
+	Username    string     `json:"username" db:"username" example:"alice123"`
+	Email       string     `json:"email" db:"email" example:"alice@example.com"`
+	Password    string     `json:"-" db:"password"`  // 密碼（不存儲明文，不輸出到JSON）
+	Nickname    string     `json:"nickname" example:"小愛"`
+	BirthDate   time.Time  `json:"birth_date" example:"2000-01-01T00:00:00Z"`
+	Gender      string     `json:"gender" example:"female" enums:"female,male,other"`
+	AvatarURL   string     `json:"avatar_url,omitempty" example:"https://example.com/avatar.jpg"`
+	IsActive    bool       `json:"is_active" example:"true"`
+	IsVerified  bool       `json:"is_verified" example:"false"`
+	IsAdult     bool       `json:"is_adult" example:"true"`
+	LastLoginAt *time.Time `json:"last_login_at,omitempty" example:"2023-01-01T00:00:00Z"`
 }
 
 // UserRegisterRequest 用戶註冊請求

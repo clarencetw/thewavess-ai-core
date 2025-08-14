@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>個人資料 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+</head>
+<body class="min-h-full p-4 bg-gray-50 text-gray-900">
+    <!-- 頂部導航 -->
+    <nav class="bg-white border rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <button 
+                    class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded"
+                    onclick="goBack()"
+                >
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                
+                <h1 class="text-2xl font-bold">
+                    <i class="fas fa-user text-blue-400 mr-2"></i>
+                    個人資料
+                </h1>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <button 
+                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                    onclick="saveProfile()"
+                >
+                    <i class="fas fa-save mr-2"></i>
+                    儲存變更
+                </button>
+                <button 
+                    class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                    onclick="logout()"
+                >
+                    <i class="fas fa-sign-out-alt mr-2"></i>
+                    登出
+                </button>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主內容區域 -->
+    <div class="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- 左側 - 用戶信息 -->
+        <div class="lg:col-span-2 space-y-6">
+            <!-- 基本信息 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">
+                    <i class="fas fa-id-card text-blue-400 mr-2"></i>
+                    基本信息
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-medium mb-2">用戶名</label>
+                        <input 
+                            type="text" 
+                            id="username"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                            readonly
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">暱稱</label>
+                        <input 
+                            type="text" 
+                            id="nickname"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">信箱</label>
+                        <input 
+                            type="email" 
+                            id="email"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">生日</label>
+                        <input 
+                            type="date" 
+                            id="birthDate"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">性別</label>
+                        <select 
+                            id="gender"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="female">女性</option>
+                            <option value="male">男性</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">註冊時間</label>
+                        <input 
+                            type="text" 
+                            id="joinedAt"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900"
+                            readonly
+                        >
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 偏好設定 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">
+                    <i class="fas fa-cogs text-blue-600 mr-2"></i>
+                    偏好設定
+                </h2>
+                
+                <div class="space-y-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="font-medium">NSFW 內容</span>
+                            <p class="text-sm">允許顯示成人內容</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="nsfwEnabled" class="sr-only peer">
+                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="font-medium">自動滾動</span>
+                            <p class="text-sm">聊天時自動滾動到最新消息</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="autoScroll" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <span class="font-medium">深色主題</span>
+                            <p class="text-sm">使用深色界面主題</p>
+                        </div>
+                        <label class="relative inline-flex items-center cursor-pointer">
+                            <input type="checkbox" id="darkTheme" class="sr-only peer" checked>
+                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+                        </label>
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">預設角色</label>
+                        <select 
+                            id="defaultCharacter"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="">請選擇預設角色</option>
+                            <option value="char_001">陸寒淵 - 霸道總裁</option>
+                            <option value="char_002">沈言墨 - 溫柔醫生</option>
+                            <option value="char_003">林夜白 - 神秘學者</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 安全設定 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">
+                    <i class="fas fa-shield-alt text-green-400 mr-2"></i>
+                    安全設定
+                </h2>
+                
+                <div class="space-y-4">
+                    <button 
+                        class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-3 px-4 rounded text-left"
+                        onclick="changePassword()"
+                    >
+                        <i class="fas fa-key mr-2"></i>
+                        變更密碼
+                    </button>
+                    
+                    <button 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded text-left"
+                        onclick="refreshTokens()"
+                    >
+                        <i class="fas fa-sync mr-2"></i>
+                        刷新登入狀態
+                    </button>
+                    
+                    <button 
+                        class="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded text-left"
+                        onclick="clearAllData()"
+                    >
+                        <i class="fas fa-trash mr-2"></i>
+                        清除所有本地數據
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右側 - 統計和狀態 -->
+        <div class="space-y-6">
+            <!-- 用戶統計 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-chart-bar text-yellow-400 mr-2"></i>
+                    使用統計
+                </h3>
+                
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-blue-400" id="totalChats">--</div>
+                        <div class="text-sm">總對話數</div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-green-400" id="totalMessages">--</div>
+                        <div class="text-sm">總消息數</div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-blue-600" id="activeCharacters">--</div>
+                        <div class="text-sm">互動角色數</div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="text-3xl font-bold text-red-400" id="lastActive">--</div>
+                        <div class="text-sm">最後活動</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 帳號狀態 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-user-check text-green-400 mr-2"></i>
+                    帳號狀態
+                </h3>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span>年齡驗證</span>
+                        <span class="text-green-400">
+                            <i class="fas fa-check-circle"></i>
+                            已驗證
+                        </span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300">信箱驗證</span>
+                        <span class="text-yellow-400">
+                            <i class="fas fa-clock"></i>
+                            待驗證
+                        </span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300">NSFW 權限</span>
+                        <span class="text-green-400">
+                            <i class="fas fa-check-circle"></i>
+                            已啟用
+                        </span>
+                    </div>
+                    
+                    <div class="flex items-center justify-between">
+                        <span class="text-gray-300">帳號等級</span>
+                        <span class="bg-blue-600 text-white px-2 py-1 rounded text-sm">
+                            標準用戶
+                        </span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 最喜愛的角色 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-heart text-red-400 mr-2"></i>
+                    最喜愛角色
+                </h3>
+                
+                <div class="space-y-3" id="favoriteCharacters">
+                    <!-- 將動態生成 -->
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 變更密碼模態框 -->
+    <div id="passwordModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white border rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-key text-yellow-400 mr-2"></i>
+                變更密碼
+            </h3>
+            
+            <form id="passwordForm" class="space-y-4">
+                <div>
+                    <label class="block font-medium mb-2">當前密碼</label>
+                    <input 
+                        type="password" 
+                        id="currentPassword"
+                        class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        required
+                    >
+                </div>
+                
+                <div>
+                    <label class="block font-medium mb-2">新密碼</label>
+                    <input 
+                        type="password" 
+                        id="newPassword"
+                        class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        required
+                    >
+                </div>
+                
+                <div>
+                    <label class="block font-medium mb-2">確認新密碼</label>
+                    <input 
+                        type="password" 
+                        id="confirmPassword"
+                        class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        required
+                    >
+                </div>
+                
+                <div class="flex space-x-4">
+                    <button 
+                        type="submit"
+                        class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white py-3 px-6 rounded font-semibold"
+                    >
+                        <i class="fas fa-save mr-2"></i>
+                        確認變更
+                    </button>
+                    
+                    <button 
+                        type="button"
+                        class="bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded font-semibold"
+                        onclick="UI.modal.hide('passwordModal')"
+                    >
+                        取消
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        let userProfile = null;
+        let hasChanges = false;
+        
+        // 頁面初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await App.init();
+            
+            // 檢查認證狀態
+            if (!AppState.isAuthenticated) {
+                Router.navigate('/auth');
+                return;
+            }
+            
+            // 載入用戶資料
+            await loadUserProfile();
+            
+            // 設置事件監聽器
+            setupEventListeners();
+            
+            // 載入統計數據
+            loadStatistics();
+            
+            // 載入最喜愛角色
+            loadFavoriteCharacters();
+        });
+        
+        // 載入用戶資料
+        async function loadUserProfile() {
+            try {
+                const result = await ApiClient.get('/api/v1/user/profile');
+                
+                if (result.success && result.data) {
+                    userProfile = result.data;
+                    populateProfile(userProfile);
+                } else {
+                    throw new Error(result.error?.message || '載入用戶資料失敗');
+                }
+            } catch (error) {
+                console.error('載入用戶資料失敗:', error);
+                
+                // 使用本地數據
+                userProfile = AppState.currentUser || Utils.storage.get('user') || {
+                    username: 'demo_user',
+                    nickname: '演示用戶',
+                    email: 'demo@example.com',
+                    birth_date: '1995-01-01',
+                    gender: 'female',
+                    joined_at: new Date().toISOString()
+                };
+                
+                populateProfile(userProfile);
+                UI.showToast('使用本地用戶資料', 'warning');
+            }
+        }
+        
+        // 填充用戶資料
+        function populateProfile(profile) {
+            document.getElementById('username').value = profile.username || '';
+            document.getElementById('nickname').value = profile.nickname || '';
+            document.getElementById('email').value = profile.email || '';
+            document.getElementById('birthDate').value = profile.birth_date || '';
+            document.getElementById('gender').value = profile.gender || 'female';
+            
+            // 格式化註冊時間
+            if (profile.joined_at) {
+                const joinDate = new Date(profile.joined_at);
+                document.getElementById('joinedAt').value = joinDate.toLocaleDateString('zh-TW');
+            }
+            
+            // 載入偏好設定
+            loadPreferences();
+        }
+        
+        // 載入偏好設定
+        function loadPreferences() {
+            const preferences = AppState.preferences;
+            
+            document.getElementById('nsfwEnabled').checked = preferences.nsfw_enabled;
+            document.getElementById('autoScroll').checked = preferences.auto_scroll;
+            document.getElementById('darkTheme').checked = preferences.theme === 'dark';
+            
+            if (AppState.selectedCharacter) {
+                document.getElementById('defaultCharacter').value = AppState.selectedCharacter.id;
+            }
+        }
+        
+        // 設置事件監聽器
+        function setupEventListeners() {
+            // 監聽表單變更
+            const inputs = ['nickname', 'email', 'birthDate', 'gender', 'nsfwEnabled', 'autoScroll', 'darkTheme', 'defaultCharacter'];
+            
+            inputs.forEach(id => {
+                const element = document.getElementById(id);
+                if (element) {
+                    element.addEventListener('change', () => {
+                        hasChanges = true;
+                        updateSaveButtonState();
+                    });
+                }
+            });
+            
+            // 密碼表單提交
+            document.getElementById('passwordForm').addEventListener('submit', handlePasswordChange);
+            
+            // 頁面卸載前檢查未保存的變更
+            window.addEventListener('beforeunload', (e) => {
+                if (hasChanges) {
+                    e.preventDefault();
+                    e.returnValue = '您有未保存的變更，確定要離開嗎？';
+                }
+            });
+        }
+        
+        // 更新保存按鈕狀態
+        function updateSaveButtonState() {
+            const saveButton = document.querySelector('[onclick="saveProfile()"]');
+            if (hasChanges) {
+                saveButton.classList.remove('bg-green-600', 'hover:bg-green-700');
+                saveButton.classList.add('bg-blue-600', 'hover:bg-blue-700');
+                saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>儲存變更 *';
+            } else {
+                saveButton.classList.remove('bg-blue-600', 'hover:bg-blue-700');
+                saveButton.classList.add('bg-green-600', 'hover:bg-green-700');
+                saveButton.innerHTML = '<i class="fas fa-save mr-2"></i>儲存變更';
+            }
+        }
+        
+        // 儲存用戶資料
+        async function saveProfile() {
+            if (!hasChanges) {
+                UI.showToast('沒有變更需要保存', 'info');
+                return;
+            }
+            
+            const updatedProfile = {
+                nickname: document.getElementById('nickname').value,
+                email: document.getElementById('email').value,
+                birth_date: document.getElementById('birthDate').value,
+                gender: document.getElementById('gender').value
+            };
+            
+            const updatedPreferences = {
+                nsfw_enabled: document.getElementById('nsfwEnabled').checked,
+                auto_scroll: document.getElementById('autoScroll').checked,
+                theme: document.getElementById('darkTheme').checked ? 'dark' : 'light',
+                default_character: document.getElementById('defaultCharacter').value
+            };
+            
+            try {
+                // 保存用戶資料
+                const result = await ApiClient.put('/api/v1/user/profile', updatedProfile);
+                
+                if (result.success) {
+                    // 更新本地狀態
+                    userProfile = { ...userProfile, ...updatedProfile };
+                    AppState.currentUser = userProfile;
+                    AppState.preferences = { ...AppState.preferences, ...updatedPreferences };
+                    
+                    // 保存到本地存儲
+                    Utils.storage.set('user', userProfile);
+                    Utils.storage.set('preferences', AppState.preferences);
+                    
+                    hasChanges = false;
+                    updateSaveButtonState();
+                    
+                    UI.showToast('資料已成功保存', 'success');
+                } else {
+                    throw new Error(result.error?.message || '保存失敗');
+                }
+            } catch (error) {
+                console.error('保存失敗:', error);
+                
+                // 至少保存本地數據
+                AppState.currentUser = { ...userProfile, ...updatedProfile };
+                AppState.preferences = { ...AppState.preferences, ...updatedPreferences };
+                Utils.storage.set('user', AppState.currentUser);
+                Utils.storage.set('preferences', AppState.preferences);
+                
+                hasChanges = false;
+                updateSaveButtonState();
+                
+                UI.showToast('已保存到本地', 'warning');
+            }
+        }
+        
+        // 載入統計數據
+        function loadStatistics() {
+            // 模擬統計數據
+            document.getElementById('totalChats').textContent = '12';
+            document.getElementById('totalMessages').textContent = '156';
+            document.getElementById('activeCharacters').textContent = '3';
+            document.getElementById('lastActive').textContent = '剛剛';
+        }
+        
+        // 載入最喜愛角色
+        function loadFavoriteCharacters() {
+            const favoriteCharactersDiv = document.getElementById('favoriteCharacters');
+            
+            const favorites = [
+                { id: 'char_001', name: '陸寒淵', avatar: 'https://placehold.co/40x40/6366f1/ffffff?text=陸', chats: 8 },
+                { id: 'char_002', name: '沈言墨', avatar: 'https://placehold.co/40x40/10b981/ffffff?text=沈', chats: 4 }
+            ];
+            
+            favoriteCharactersDiv.innerHTML = favorites.map(char => `
+                <div class="flex items-center space-x-3 p-2 rounded-lg hover:bg-white hover:bg-opacity-5 transition-all cursor-pointer">
+                    <img src="${char.avatar}" alt="${char.name}" class="w-8 h-8 rounded-full">
+                    <div class="flex-1">
+                        <div class="font-medium">${char.name}</div>
+                        <div class="text-sm">${char.chats} 次對話</div>
+                    </div>
+                    <i class="fas fa-heart text-red-400"></i>
+                </div>
+            `).join('');
+        }
+        
+        // 變更密碼
+        function changePassword() {
+            UI.modal.show('passwordModal');
+        }
+        
+        // 處理密碼變更
+        async function handlePasswordChange(e) {
+            e.preventDefault();
+            
+            const currentPassword = document.getElementById('currentPassword').value;
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+            
+            if (newPassword !== confirmPassword) {
+                UI.showToast('新密碼確認不匹配', 'error');
+                return;
+            }
+            
+            if (!Utils.validation.password(newPassword)) {
+                UI.showToast('新密碼不符合要求', 'error');
+                return;
+            }
+            
+            try {
+                // TODO: 實現密碼變更 API
+                UI.showToast('密碼變更功能暫未實現', 'warning');
+                UI.modal.hide('passwordModal');
+                
+                // 清空表單
+                document.getElementById('passwordForm').reset();
+            } catch (error) {
+                UI.showToast('密碼變更失敗: ' + error.message, 'error');
+            }
+        }
+        
+        // 刷新登入狀態
+        async function refreshTokens() {
+            try {
+                if (AppState.refreshToken) {
+                    const result = await ApiClient.post('/api/v1/user/refresh', {
+                        refresh_token: AppState.refreshToken
+                    });
+                    
+                    if (result.success) {
+                        AppState.accessToken = result.data.access_token;
+                        AppState.refreshToken = result.data.refresh_token;
+                        
+                        Utils.storage.set('tokens', {
+                            access: AppState.accessToken,
+                            refresh: AppState.refreshToken
+                        });
+                        
+                        UI.showToast('登入狀態已刷新', 'success');
+                    } else {
+                        throw new Error(result.error?.message || '刷新失敗');
+                    }
+                } else {
+                    throw new Error('沒有有效的 refresh token');
+                }
+            } catch (error) {
+                UI.showToast('刷新失敗: ' + error.message, 'error');
+            }
+        }
+        
+        // 清除所有本地數據
+        function clearAllData() {
+            if (confirm('確定要清除所有本地數據嗎？此操作無法撤銷，您需要重新登入。')) {
+                try {
+                    // 清除所有本地存儲
+                    localStorage.clear();
+                    
+                    // 重置應用狀態
+                    AppState.isAuthenticated = false;
+                    AppState.currentUser = null;
+                    AppState.accessToken = null;
+                    AppState.refreshToken = null;
+                    AppState.selectedCharacter = null;
+                    AppState.currentSession = null;
+                    
+                    UI.showToast('本地數據已清除', 'info');
+                    
+                    // 跳轉到首頁
+                    setTimeout(() => {
+                        Router.navigate('/');
+                    }, 1000);
+                } catch (error) {
+                    UI.showToast('清除失敗: ' + error.message, 'error');
+                }
+            }
+        }
+        
+        // 登出
+        function logout() {
+            if (hasChanges) {
+                if (!confirm('您有未保存的變更，確定要登出嗎？')) {
+                    return;
+                }
+            }
+            
+            if (confirm('確定要登出嗎？')) {
+                ApiClient.logout();
+                UI.showToast('已登出', 'info');
+                Router.navigate('/');
+            }
+        }
+        
+        // 返回上一頁
+        function goBack() {
+            if (hasChanges) {
+                if (!confirm('您有未保存的變更，確定要離開嗎？')) {
+                    return;
+                }
+            }
+            
+            // 檢查來源頁面
+            if (AppState.selectedCharacter) {
+                Router.navigate('/character');
+            } else {
+                Router.navigate('/');
+            }
+        }
+    </script>
+</body>
+</html>

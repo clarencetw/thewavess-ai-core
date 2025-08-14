@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
 // AuthMiddleware JWT 認證中間件
@@ -43,30 +44,26 @@ func AuthMiddleware() gin.HandlerFunc {
 
 		token := tokenParts[1]
 
-		// TODO: 實作 JWT token 驗證邏輯
-		// 這裡應該包含：
-		// 1. JWT token 解析和驗證
-		// 2. 檢查 token 是否過期
-		// 3. 從 token 中提取用戶資訊
-		// 4. 檢查用戶是否存在且為活躍狀態
-
-		// 暫時的假驗證邏輯
-		if token == "" {
+		// 驗證 JWT token
+		claims, err := utils.ValidateToken(token)
+		if err != nil {
 			c.JSON(http.StatusUnauthorized, models.APIResponse{
 				Success: false,
 				Message: "無效的認證令牌",
 				Error: &models.APIError{
 					Code:    "INVALID_TOKEN",
-					Message: "JWT token 無效或已過期",
+					Message: "JWT token 無效或已過期: " + err.Error(),
 				},
 			})
 			c.Abort()
 			return
 		}
 
-		// 設定用戶 ID 到 context（實際實作時從 JWT 中提取）
-		c.Set("user_id", "550e8400-e29b-41d4-a716-446655440000")
-		c.Set("username", "demo_user")
+		// 設定用戶資訊到 context
+		c.Set("user_id", claims.UserID)
+		c.Set("username", claims.Username)
+		c.Set("email", claims.Email)
+		c.Set("claims", claims)
 
 		c.Next()
 	}

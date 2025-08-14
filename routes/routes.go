@@ -18,8 +18,8 @@ func SetupRoutes(router *gin.RouterGroup) {
 	// 用戶認證路由（無需認證）
 	userAuth := router.Group("/user")
 	{
-		userAuth.POST("/register", handlers.RegisterUser)
-		userAuth.POST("/login", handlers.LoginUser)
+		userAuth.POST("/register", handlers.RegisterUserReal)  // 使用真實版本
+		userAuth.POST("/login", handlers.LoginUserReal)        // 使用真實版本
 	}
 
 	// 需要認證的路由
@@ -31,19 +31,21 @@ func SetupRoutes(router *gin.RouterGroup) {
 	{
 		user.POST("/logout", handlers.LogoutUser)
 		user.POST("/refresh", handlers.RefreshToken)
-		user.GET("/profile", handlers.GetProfile)
+		user.GET("/profile", handlers.GetProfileReal)  // 使用真實版本
 		user.PUT("/profile", handlers.UpdateProfile)
 		user.PUT("/preferences", handlers.UpdatePreferences)
-		user.GET("/character", handlers.GetCurrentCharacter)
-		user.PUT("/character", handlers.SelectCharacter)
+		// 角色選擇功能暫時移除（未實現）
+		// user.GET("/character", handlers.GetCurrentCharacter)
+		// user.PUT("/character", handlers.SelectCharacter)
 	}
 
 	// 角色管理路由
 	character := authenticated.Group("/character")
 	{
 		character.GET("/list", handlers.GetCharacterList)
-		character.GET("/:character_id", handlers.GetCharacterDetails)
-		character.GET("/:character_id/stats", handlers.GetCharacterStats)
+		// 詳細功能暫時移除（未實現）
+		// character.GET("/:character_id", handlers.GetCharacterDetails)
+		// character.GET("/:character_id/stats", handlers.GetCharacterStats)
 	}
 
 	// 對話管理路由

@@ -9,6 +9,7 @@ import (
 	"github.com/swaggo/files"
 	"github.com/swaggo/gin-swagger"
 
+	"github.com/clarencetw/thewavess-ai-core/database"
 	_ "github.com/clarencetw/thewavess-ai-core/docs"
 	"github.com/clarencetw/thewavess-ai-core/routes"
 	"github.com/clarencetw/thewavess-ai-core/utils"
@@ -44,6 +45,17 @@ func main() {
 
 	// Initialize logger
 	utils.InitLogger()
+	
+	// Initialize database
+	if err := database.InitDatabase(); err != nil {
+		log.Fatalf("Failed to initialize database: %v", err)
+	}
+	defer database.CloseDatabase()
+	
+	// Run database migrations
+	if err := database.RunMigrations(); err != nil {
+		log.Fatalf("Failed to run database migrations: %v", err)
+	}
 	
 	// Initialize Gin router
 	router := gin.Default()
@@ -91,9 +103,20 @@ func main() {
 // @Success      200  {object}  map[string]string
 // @Router       /health [get]
 func healthCheck(c *gin.Context) {
-	c.JSON(http.StatusOK, gin.H{
+	response := gin.H{
 		"status":  "ok",
 		"service": "thewavess-ai-core",
 		"version": "1.0.0",
-	})
+	}
+	
+	// Check database health
+	if err := database.HealthCheck(); err != nil {
+		response["database"] = "unhealthy"
+		response["database_error"] = err.Error()
+		c.JSON(http.StatusServiceUnavailable, response)
+		return
+	}
+	
+	response["database"] = "healthy"
+	c.JSON(http.StatusOK, response)
 }
