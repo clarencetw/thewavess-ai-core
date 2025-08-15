@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>角色選擇 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+</head>
+<body class="min-h-full p-4 bg-gray-50 text-gray-900">
+    <!-- 頂部導航 -->
+    <nav class="bg-white border rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <h1 class="text-2xl font-bold">
+                    <i class="fas fa-masks-theater text-blue-600 mr-2"></i>
+                    角色選擇
+                </h1>
+                <div class="text-sm">
+                    歡迎，<span id="userNickname" class="text-blue-400 font-medium">--</span>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <button 
+                    class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+                    onclick="Router.navigate('/profile')"
+                >
+                    <i class="fas fa-user mr-2"></i>
+                    個人資料
+                </button>
+                <button 
+                    class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                    onclick="logout()"
+                >
+                    <i class="fas fa-sign-out-alt mr-2"></i>
+                    登出
+                </button>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主內容區域 -->
+    <div class="max-w-6xl mx-auto">
+        <!-- 角色篩選 -->
+        <div class="bg-white border rounded-lg p-6 mb-4">
+            <div class="flex flex-col md:flex-row items-start md:items-center justify-between space-y-4 md:space-y-0">
+                <div>
+                    <h2 class="text-xl font-semibold mb-2">
+                        <i class="fas fa-filter text-blue-400 mr-2"></i>
+                        選擇您的專屬 AI 伴侶
+                    </h2>
+                    <p>
+                        每個角色都有獨特的性格和對話風格，請選擇最適合您的一個
+                    </p>
+                </div>
+                
+                <div class="flex space-x-3">
+                    <select 
+                        id="nsfwFilter"
+                        class="px-4 py-2 rounded bg-gray-100 border text-gray-900"
+                        onchange="filterCharacters()"
+                    >
+                        <option value="all">所有角色</option>
+                        <option value="safe">安全內容</option>
+                        <option value="mild">輕度內容</option>
+                        <option value="adult">成人內容</option>
+                    </select>
+                    
+                    <select 
+                        id="sortBy"
+                        class="px-4 py-2 rounded bg-gray-100 border text-gray-900"
+                        onchange="sortCharacters()"
+                    >
+                        <option value="popularity">人氣排序</option>
+                        <option value="name">名稱排序</option>
+                        <option value="newest">最新加入</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 角色卡片網格 -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6" id="characterGrid">
+            <!-- 角色卡片將動態生成 -->
+        </div>
+        
+        <!-- 已選擇的角色 -->
+        <div id="selectedCharacterPanel" class="bg-white border rounded-lg p-6 hidden">
+            <h3 class="text-xl font-semibold mb-4">
+                <i class="fas fa-check-circle text-green-400 mr-2"></i>
+                已選擇角色
+            </h3>
+            
+            <div class="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-6">
+                <div class="flex-shrink-0">
+                    <img 
+                        id="selectedAvatar"
+                        class="w-24 h-24 rounded-full border-4 border-blue-400"
+                        src=""
+                        alt="選中的角色"
+                    >
+                </div>
+                
+                <div class="flex-1">
+                    <div class="flex items-center space-x-3 mb-2">
+                        <h4 id="selectedName" class="text-2xl font-bold"></h4>
+                        <span id="selectedTitle" class="px-3 py-1 rounded-full text-sm font-medium"></span>
+                        <span id="selectedNsfwBadge" class="px-2 py-1 rounded text-xs font-medium"></span>
+                    </div>
+                    
+                    <p id="selectedDescription" class="mb-3"></p>
+                    
+                    <div class="flex flex-wrap gap-2 mb-4">
+                        <span class="text-sm">性格特徵：</span>
+                        <div id="selectedPersonality" class="flex flex-wrap gap-1"></div>
+                    </div>
+                    
+                    <div class="flex space-x-3">
+                        <button 
+                            class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded font-semibold"
+                            onclick="startChatting()"
+                        >
+                            <i class="fas fa-comments mr-2"></i>
+                            開始對話
+                        </button>
+                        
+                        <button 
+                            class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded font-semibold"
+                            onclick="clearSelection()"
+                        >
+                            <i class="fas fa-times mr-2"></i>
+                            重新選擇
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 角色詳情模態框 -->
+        <div id="characterModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white border rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+                <div class="flex items-start space-x-6 mb-6">
+                    <img 
+                        id="modalAvatar"
+                        class="w-32 h-32 rounded-full border-4 border-purple-400"
+                        src=""
+                        alt="角色頭像"
+                    >
+                    
+                    <div class="flex-1">
+                        <div class="flex items-center space-x-3 mb-2">
+                            <h3 id="modalName" class="text-3xl font-bold"></h3>
+                            <span id="modalTitle" class="px-3 py-1 rounded-full text-sm font-medium"></span>
+                        </div>
+                        
+                        <div class="flex items-center space-x-4 mb-3">
+                            <span id="modalNsfwBadge" class="px-2 py-1 rounded text-xs font-medium"></span>
+                            <span class="text-yellow-400">
+                                <i class="fas fa-star mr-1"></i>
+                                <span id="modalPopularity"></span>% 人氣
+                            </span>
+                        </div>
+                        
+                        <p id="modalDescription"></p>
+                    </div>
+                </div>
+                
+                <div class="space-y-4 mb-6">
+                    <div>
+                        <h4 class="text-lg font-semibold mb-2">
+                            <i class="fas fa-heart text-red-400 mr-2"></i>
+                            性格特徵
+                        </h4>
+                        <div id="modalPersonality" class="flex flex-wrap gap-2"></div>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-lg font-semibold mb-2">
+                            <i class="fas fa-comment-dots text-blue-400 mr-2"></i>
+                            對話風格
+                        </h4>
+                        <p id="modalChatStyle"></p>
+                    </div>
+                    
+                    <div>
+                        <h4 class="text-lg font-semibold mb-2">
+                            <i class="fas fa-shield-alt text-green-400 mr-2"></i>
+                            內容分級
+                        </h4>
+                        <p id="modalContentInfo"></p>
+                    </div>
+                </div>
+                
+                <div class="flex space-x-4">
+                    <button 
+                        class="flex-1 bg-purple-500 hover:bg-purple-600 text-white py-3 px-6 rounded font-semibold"
+                        onclick="selectCharacterFromModal()"
+                    >
+                        <i class="fas fa-check mr-2"></i>
+                        選擇這個角色
+                    </button>
+                    
+                    <button 
+                        class="bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded font-semibold"
+                        onclick="UI.modal.hide('characterModal')"
+                    >
+                        <i class="fas fa-times mr-2"></i>
+                        關閉
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        let characters = [];
+        let filteredCharacters = [];
+        let selectedCharacter = null;
+        
+        // 頁面初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await App.init();
+            
+            // 檢查認證狀態
+            if (!AppState.isAuthenticated) {
+                Router.navigate('/auth');
+                return;
+            }
+            
+            // 載入用戶信息
+            loadUserInfo();
+            
+            // 載入角色列表
+            await loadCharacters();
+            
+            // 渲染角色卡片
+            renderCharacters();
+        });
+        
+        // 載入用戶信息
+        function loadUserInfo() {
+            const user = AppState.currentUser || Utils.storage.get('user');
+            if (user) {
+                document.getElementById('userNickname').textContent = user.nickname || user.username || '用戶';
+            }
+        }
+        
+        // 載入角色列表
+        async function loadCharacters() {
+            try {
+                const result = await ApiClient.get('/api/v1/character/list');
+                
+                if (result.success && result.data && result.data.characters) {
+                    characters = result.data.characters;
+                    
+                    // 添加額外的角色屬性和格式轉換
+                    characters = characters.map(char => ({
+                        ...char,
+                        // 格式轉換
+                        avatar: char.avatar_url,
+                        title: getCharacterTitle(char.type),
+                        nsfw_level: getCharacterNsfwLevel(char.type),
+                        personality: char.personality.traits || [],
+                        // 額外屬性
+                        chatStyle: getChatStyle(char.id),
+                        contentInfo: getContentInfo(getCharacterNsfwLevel(char.type))
+                    }));
+                    
+                    filteredCharacters = [...characters];
+                    renderCharacters();
+                } else {
+                    throw new Error(result.error?.message || '無法載入角色數據');
+                }
+                
+            } catch (error) {
+                console.error('載入角色失敗:', error);
+                UI.showToast(`載入角色失敗: ${error.message}`, 'error');
+                
+                // 顯示錯誤狀態
+                displayErrorState();
+            }
+        }
+        
+        // 顯示錯誤狀態
+        function displayErrorState() {
+            const charactersGrid = document.getElementById('characterGrid');
+            charactersGrid.innerHTML = `
+                <div class="col-span-full text-center py-12">
+                    <i class="fas fa-exclamation-triangle text-red-400 text-6xl mb-4"></i>
+                    <h3 class="text-xl font-semibold text-gray-900 mb-2">載入角色失敗</h3>
+                    <p class="text-gray-600 mb-4">無法從伺服器載入角色數據，請檢查網路連線或稍後再試。</p>
+                    <button 
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-lg font-semibold"
+                        onclick="loadCharacters()"
+                    >
+                        <i class="fas fa-sync mr-2"></i>重新載入
+                    </button>
+                </div>
+            `;
+        }
+        
+        // 根據角色類型獲取標題
+        function getCharacterTitle(type) {
+            const titles = {
+                'dominant': '霸道總裁',
+                'gentle': '溫柔醫生',
+                'ascetic': '禁慾學者',
+                'sunny': '陽光少年',
+                'cunning': '狡猾商人'
+            };
+            return titles[type] || '神秘角色';
+        }
+        
+        // 根據角色類型獲取 NSFW 級別
+        function getCharacterNsfwLevel(type) {
+            const nsfwLevels = {
+                'dominant': 'adult',
+                'gentle': 'mild',
+                'ascetic': 'safe',
+                'sunny': 'safe',
+                'cunning': 'mild'
+            };
+            return nsfwLevels[type] || 'safe';
+        }
+        
+        // 獲取對話風格描述
+        function getChatStyle(characterId) {
+            const styles = {
+                'char_001': '霸道而直接，偶爾展現溫柔的一面。喜歡掌控對話節奏，但會細心觀察你的反應。',
+                'char_002': '溫和而耐心，總是以關懷的口吻對話。擅長傾聽，會給出貼心的建議和安慰。',
+                'char_003': '深邃而理性，喜歡分享知識和見解。對話富有哲學性，能引導你思考更深層的問題。'
+            };
+            return styles[characterId] || '友善而有趣的對話夥伴，能適應各種話題和情境。';
+        }
+        
+        // 獲取內容分級信息
+        function getContentInfo(nsfwLevel) {
+            const info = {
+                'safe': '適合所有場合的安全內容，專注於日常對話和情感交流。',
+                'mild': '包含輕度浪漫內容，適合成熟的情感表達和親密對話。',
+                'adult': '包含成人內容，提供更深層的情感和身體親密度表達。'
+            };
+            return info[nsfwLevel] || '根據對話情境動態調整內容級別。';
+        }
+        
+        // 渲染角色卡片
+        function renderCharacters() {
+            const grid = document.getElementById('characterGrid');
+            grid.innerHTML = '';
+            
+            filteredCharacters.forEach(character => {
+                const card = createCharacterCard(character);
+                grid.appendChild(card);
+            });
+        }
+        
+        // 創建角色卡片
+        function createCharacterCard(character) {
+            const card = document.createElement('div');
+            card.className = 'bg-white border rounded-lg p-6 cursor-pointer';
+            card.onclick = () => showCharacterModal(character);
+            
+            const nsfwColor = {
+                'safe': 'bg-green-500',
+                'mild': 'bg-yellow-500', 
+                'adult': 'bg-red-500'
+            }[character.nsfw_level] || 'bg-gray-500';
+            
+            const titleColor = {
+                'char_001': 'bg-blue-600 text-white',
+                'char_002': 'bg-green-600 text-white',
+                'char_003': 'bg-blue-600 text-white'
+            }[character.id] || 'bg-gray-600 text-white';
+            
+            card.innerHTML = `
+                <div class="text-center mb-4">
+                    <div class="relative inline-block">
+                        <img 
+                            src="${character.avatar}" 
+                            alt="${character.name}"
+                            class="w-24 h-24 rounded-full mx-auto border-4 border-opacity-50 border-white transition-all"
+                        >
+                        <div class="absolute -top-2 -right-2">
+                            <span class="${nsfwColor} w-4 h-4 rounded-full block"></span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="text-center mb-4">
+                    <h3 class="text-xl font-bold mb-1">${character.name}</h3>
+                    <span class="${titleColor} px-3 py-1 rounded-full text-sm font-medium">${character.title}</span>
+                </div>
+                
+                <p class="text-gray-300 text-sm mb-4 overflow-hidden text-ellipsis">${character.description}</p>
+                
+                <div class="flex flex-wrap gap-1 mb-4">
+                    ${(character.tags || []).map(tag => 
+                        `<span class="bg-gray-600 bg-opacity-70 border border-gray-500 px-2 py-1 rounded text-xs">${tag}</span>`
+                    ).join('')}
+                </div>
+                
+                <div class="flex items-center justify-between text-sm">
+                    <div class="flex items-center text-yellow-400">
+                        <i class="fas fa-star mr-1"></i>
+                        <span>${character.popularity}%</span>
+                    </div>
+                    <button 
+                        class="bg-purple-500 hover:bg-purple-600 text-white px-4 py-2 rounded"
+                        onclick="event.stopPropagation(); selectCharacter('${character.id}')"
+                    >
+                        <i class="fas fa-hand-pointer mr-1"></i>
+                        選擇
+                    </button>
+                </div>
+            `;
+            
+            return card;
+        }
+        
+        // 顯示角色詳情模態框
+        function showCharacterModal(character) {
+            document.getElementById('modalAvatar').src = character.avatar || character.avatar_url;
+            document.getElementById('modalName').textContent = character.name;
+            document.getElementById('modalTitle').textContent = character.title;
+            document.getElementById('modalDescription').textContent = character.description;
+            document.getElementById('modalPopularity').textContent = character.popularity;
+            document.getElementById('modalChatStyle').textContent = character.chatStyle;
+            document.getElementById('modalContentInfo').textContent = character.contentInfo;
+            
+            // 設置 NSFW 標籤
+            const nsfwBadge = document.getElementById('modalNsfwBadge');
+            const nsfwInfo = {
+                'safe': { text: '安全內容', class: 'bg-green-500 text-white' },
+                'mild': { text: '輕度內容', class: 'bg-yellow-500 text-white' },
+                'adult': { text: '成人內容', class: 'bg-red-500 text-white' }
+            }[character.nsfw_level] || { text: '未知', class: 'bg-gray-500 text-white' };
+            
+            nsfwBadge.textContent = nsfwInfo.text;
+            nsfwBadge.className = `px-2 py-1 rounded text-xs font-medium ${nsfwInfo.class}`;
+            
+            // 設置標題顏色
+            const titleElement = document.getElementById('modalTitle');
+            const titleColor = {
+                'char_001': 'bg-blue-600 text-white',
+                'char_002': 'bg-green-600 text-white',
+                'char_003': 'bg-blue-600 text-white'
+            }[character.id] || 'bg-gray-600 text-white';
+            titleElement.className = `px-3 py-1 rounded-full text-sm font-medium ${titleColor}`;
+            
+            // 設置性格特徵
+            const personalityDiv = document.getElementById('modalPersonality');
+            const traits = character.personality || (character.personality && character.personality.traits) || [];
+            personalityDiv.innerHTML = traits.map(trait => 
+                `<span class="bg-blue-700 text-blue-200 px-3 py-1 rounded-full text-sm">${trait}</span>`
+            ).join('');
+            
+            // 保存當前查看的角色
+            window.currentModalCharacter = character;
+            
+            UI.modal.show('characterModal');
+        }
+        
+        // 從模態框選擇角色
+        function selectCharacterFromModal() {
+            if (window.currentModalCharacter) {
+                selectCharacter(window.currentModalCharacter.id);
+                UI.modal.hide('characterModal');
+            }
+        }
+        
+        // 選擇角色
+        function selectCharacter(characterId) {
+            selectedCharacter = characters.find(char => char.id === characterId);
+            
+            if (selectedCharacter) {
+                AppState.selectedCharacter = selectedCharacter;
+                Utils.storage.set('selectedCharacter', selectedCharacter);
+                
+                // 更新選中狀態顯示
+                updateSelectedCharacterDisplay();
+                
+                // 滾動到選中角色面板
+                document.getElementById('selectedCharacterPanel').scrollIntoView({ 
+                    behavior: 'smooth' 
+                });
+                
+                UI.showToast(`已選擇 ${selectedCharacter.name}`, 'success');
+            }
+        }
+        
+        // 更新選中角色顯示
+        function updateSelectedCharacterDisplay() {
+            if (!selectedCharacter) return;
+            
+            const panel = document.getElementById('selectedCharacterPanel');
+            panel.classList.remove('hidden');
+            
+            document.getElementById('selectedAvatar').src = selectedCharacter.avatar || selectedCharacter.avatar_url;
+            document.getElementById('selectedName').textContent = selectedCharacter.name;
+            document.getElementById('selectedDescription').textContent = selectedCharacter.description;
+            
+            // 設置標題
+            const titleElement = document.getElementById('selectedTitle');
+            titleElement.textContent = selectedCharacter.title;
+            const titleColor = {
+                'char_001': 'bg-blue-600 text-white',
+                'char_002': 'bg-green-600 text-white', 
+                'char_003': 'bg-blue-600 text-white'
+            }[selectedCharacter.id] || 'bg-gray-600 text-white';
+            titleElement.className = `px-3 py-1 rounded-full text-sm font-medium ${titleColor}`;
+            
+            // 設置 NSFW 標籤
+            const nsfwBadge = document.getElementById('selectedNsfwBadge');
+            const nsfwInfo = {
+                'safe': { text: '安全', class: 'bg-green-500 text-white' },
+                'mild': { text: '輕度', class: 'bg-yellow-500 text-white' },
+                'adult': { text: '成人', class: 'bg-red-500 text-white' }
+            }[selectedCharacter.nsfw_level] || { text: '未知', class: 'bg-gray-500 text-white' };
+            
+            nsfwBadge.textContent = nsfwInfo.text;
+            nsfwBadge.className = `px-2 py-1 rounded text-xs font-medium ${nsfwInfo.class}`;
+            
+            // 設置性格特徵
+            const personalityDiv = document.getElementById('selectedPersonality');
+            const traits = selectedCharacter.personality || (selectedCharacter.personality && selectedCharacter.personality.traits) || [];
+            personalityDiv.innerHTML = traits.map(trait => 
+                `<span class="bg-blue-700 text-blue-200 px-2 py-1 rounded text-xs">${trait}</span>`
+            ).join('');
+        }
+        
+        // 清除選擇
+        function clearSelection() {
+            selectedCharacter = null;
+            AppState.selectedCharacter = null;
+            Utils.storage.remove('selectedCharacter');
+            
+            document.getElementById('selectedCharacterPanel').classList.add('hidden');
+            UI.showToast('已清除選擇', 'info');
+        }
+        
+        // 開始聊天
+        function startChatting() {
+            if (selectedCharacter) {
+                Router.navigate('/chat');
+            } else {
+                UI.showToast('請先選擇一個角色', 'warning');
+            }
+        }
+        
+        // 篩選角色
+        function filterCharacters() {
+            const nsfwFilter = document.getElementById('nsfwFilter').value;
+            
+            if (nsfwFilter === 'all') {
+                filteredCharacters = [...characters];
+            } else {
+                filteredCharacters = characters.filter(char => char.nsfw_level === nsfwFilter);
+            }
+            
+            sortCharacters();
+        }
+        
+        // 排序角色
+        function sortCharacters() {
+            const sortBy = document.getElementById('sortBy').value;
+            
+            switch (sortBy) {
+                case 'popularity':
+                    filteredCharacters.sort((a, b) => b.popularity - a.popularity);
+                    break;
+                case 'name':
+                    filteredCharacters.sort((a, b) => a.name.localeCompare(b.name));
+                    break;
+                case 'newest':
+                    // 假設 ID 越大越新
+                    filteredCharacters.sort((a, b) => b.id.localeCompare(a.id));
+                    break;
+            }
+            
+            renderCharacters();
+        }
+        
+        // 登出
+        function logout() {
+            if (confirm('確定要登出嗎？')) {
+                ApiClient.logout();
+                UI.showToast('已登出', 'info');
+                Router.navigate('/');
+            }
+        }
+    </script>
+</body>
+</html>

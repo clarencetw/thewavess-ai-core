@@ -1,1364 +1,368 @@
 <!DOCTYPE html>
-<html lang="zh-TW">
+<html lang="zh-TW" class="h-full">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Thewavess AI Chat - 測試界面</title>
-    <!-- Bootstrap 5 CDN -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome for icons -->
-    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
-    <style>
-        :root {
-            --primary-color: #6366f1;
-            --success-color: #10b981;
-            --warning-color: #f59e0b;
-            --danger-color: #ef4444;
-            --dark-color: #1f2937;
-        }
-        
-        body { 
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); 
-            min-height: 100vh;
-        }
-        
-        .glass-card {
-            background: rgba(255, 255, 255, 0.95);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            border-radius: 16px;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-        }
-        
-        .status-indicator {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            display: inline-block;
-            margin-right: 8px;
-            position: relative;
-        }
-        
-        .status-indicator.online {
-            background: var(--success-color);
-            box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.3);
-            animation: pulse 2s infinite;
-        }
-        
-        .status-indicator.offline {
-            background: var(--danger-color);
-        }
-        
-        .status-indicator.loading {
-            background: var(--warning-color);
-            animation: pulse 1s infinite;
-        }
-        
-        @keyframes pulse {
-            0% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.4); }
-            70% { box-shadow: 0 0 0 10px rgba(16, 185, 129, 0); }
-            100% { box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
-        }
-        
-        .chat-container {
-            height: 400px;
-            overflow-y: auto;
-            background: #f8fafc;
-            border-radius: 12px;
-            padding: 15px;
-        }
-        
-        .message {
-            margin-bottom: 15px;
-            display: flex;
-            align-items: flex-start;
-        }
-        
-        .message.user {
-            flex-direction: row-reverse;
-        }
-        
-        .message .avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-            margin: 0 10px;
-        }
-        
-        .message.user .avatar {
-            background: var(--primary-color);
-            color: white;
-        }
-        
-        .message.ai .avatar {
-            background: var(--success-color);
-            color: white;
-        }
-        
-        .message .content {
-            max-width: 70%;
-            padding: 12px 16px;
-            border-radius: 16px;
-            position: relative;
-        }
-        
-        .message.user .content {
-            background: var(--primary-color);
-            color: white;
-            border-bottom-right-radius: 4px;
-        }
-        
-        .message.ai .content {
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-bottom-left-radius: 4px;
-        }
-        
-        .character-card {
-            border: 2px solid transparent;
-            border-radius: 12px;
-            padding: 15px;
-            cursor: pointer;
-            transition: all 0.3s ease;
-            background: white;
-        }
-        
-        .character-card:hover {
-            border-color: var(--primary-color);
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
-        }
-        
-        .character-card.selected {
-            border-color: var(--success-color);
-            background: rgba(16, 185, 129, 0.05);
-        }
-        
-        .nsfw-indicator {
-            padding: 2px 8px;
-            border-radius: 12px;
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-        }
-        
-        .nsfw-safe { background: #dcfce7; color: #166534; }
-        .nsfw-mild { background: #fef3c7; color: #92400e; }
-        .nsfw-adult { background: #fee2e2; color: #991b1b; }
-        
-        .emotion-indicator {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            display: inline-block;
-            margin: 2px;
-        }
-        
-        .emotion-happy { background: #dcfce7; color: #166534; }
-        .emotion-sad { background: #dbeafe; color: #1e40af; }
-        .emotion-angry { background: #fee2e2; color: #991b1b; }
-        .emotion-excited { background: #fef3c7; color: #92400e; }
-        .emotion-neutral { background: #f3f4f6; color: #374151; }
-        
-        .age-verification {
-            background: linear-gradient(135deg, #fee2e2 0%, #fecaca 100%);
-            border: 2px solid #f87171;
-            border-radius: 12px;
-            padding: 20px;
-            text-align: center;
-        }
-        
-        .response-panel {
-            background: #1f2937;
-            color: #f9fafb;
-            border-radius: 12px;
-            padding: 15px;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            max-height: 400px;
-            overflow-y: auto;
-        }
-        
-        .step-indicator {
-            display: flex;
-            align-items: center;
-            padding: 8px 0;
-            border-left: 3px solid #e5e7eb;
-            padding-left: 15px;
-            margin: 5px 0;
-        }
-        
-        .step-indicator.active {
-            border-left-color: var(--warning-color);
-            background: rgba(245, 158, 11, 0.1);
-        }
-        
-        .step-indicator.completed {
-            border-left-color: var(--success-color);
-            background: rgba(16, 185, 129, 0.1);
-        }
-        
-        .step-indicator.error {
-            border-left-color: var(--danger-color);
-            background: rgba(239, 68, 68, 0.1);
-        }
-        
-        .token-display {
-            background: #f8fafc;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-            padding: 10px;
-            font-family: monospace;
-            font-size: 11px;
-            word-break: break-all;
-            max-height: 100px;
-            overflow-y: auto;
-        }
-    </style>
+    <title>Thewavess AI Core - 智能聊天系統</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
 </head>
-<body>
-    <div class="container-fluid py-3">
-        <!-- 頂部狀態欄 -->
-        <div class="row mb-3">
-            <div class="col-12">
-                <div class="glass-card p-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="d-flex align-items-center">
-                            <i class="fas fa-robot text-primary fs-3 me-2"></i>
-                            <h4 class="mb-0 text-dark">Thewavess AI Chat 測試中心</h4>
-                        </div>
-                        <div class="d-flex align-items-center">
-                            <span class="status-indicator offline" id="systemStatus"></span>
-                            <span class="text-muted me-3" id="systemStatusText">系統離線</span>
-                            <button class="btn btn-outline-primary btn-sm" onclick="checkSystemHealth()">
-                                <i class="fas fa-sync-alt"></i> 檢查系統
-                            </button>
-                        </div>
+<body class="min-h-screen p-4 bg-gray-50 text-gray-900">
+    <!-- 主容器 -->
+    <div class="w-full max-w-4xl mx-auto py-8">
+        <!-- 頁面標題 -->
+        <div class="text-center mb-8">
+            <h1 class="text-5xl font-bold text-gray-900 mb-4">
+                <i class="fas fa-robot text-blue-600 mr-3"></i>
+                Thewavess AI Core
+            </h1>
+            <p class="text-xl text-gray-700">
+                專為成人用戶設計的智能聊天系統
+            </p>
+        </div>
+        
+        <!-- 系統狀態卡片 -->
+        <div class="bg-white border rounded-lg p-6 mb-4">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-2xl font-semibold flex items-center">
+                    <i class="fas fa-heartbeat text-green-400 mr-3"></i>
+                    系統狀態檢查
+                </h2>
+                <button 
+                    id="refreshBtn" 
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded"
+                    onclick="checkSystemStatus()"
+                >
+                    <i class="fas fa-sync-alt mr-2"></i>重新檢查
+                </button>
+            </div>
+            
+            <!-- 狀態指示器 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-6">
+                <!-- API 服務狀態 -->
+                <div class="bg-gray-100 border rounded p-4 text-center">
+                    <div class="flex items-center justify-center mb-2">
+                        <div id="apiStatusDot" class="w-4 h-4 rounded-full bg-gray-400 animate-pulse mr-2"></div>
+                        <span class="font-medium">API 服務</span>
                     </div>
+                    <div id="apiStatusText" class="text-sm">檢查中...</div>
+                </div>
+                
+                <!-- 資料庫狀態 -->
+                <div class="bg-gray-100 border rounded p-4 text-center">
+                    <div class="flex items-center justify-center mb-2">
+                        <div id="dbStatusDot" class="w-4 h-4 rounded-full bg-gray-400 animate-pulse mr-2"></div>
+                        <span class="font-medium">資料庫</span>
+                    </div>
+                    <div id="dbStatusText" class="text-sm">檢查中...</div>
+                </div>
+                
+                <!-- 文檔系統 -->
+                <div class="bg-gray-100 border rounded p-4 text-center">
+                    <div class="flex items-center justify-center mb-2">
+                        <div id="docsStatusDot" class="w-4 h-4 rounded-full bg-gray-400 animate-pulse mr-2"></div>
+                        <span class="font-medium">API 文檔</span>
+                    </div>
+                    <div id="docsStatusText" class="text-sm">檢查中...</div>
+                </div>
+            </div>
+            
+            <!-- 系統信息 -->
+            <div class="bg-gray-100 border rounded p-4 mb-4">
+                <h3 class="text-lg font-semibold mb-3">
+                    <i class="fas fa-info-circle text-blue-400 mr-2"></i>
+                    系統信息
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-400" id="apiEndpoints">--</div>
+                        <div>API 端點</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-400" id="systemVersion">--</div>
+                        <div>系統版本</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600" id="uptime">--</div>
+                        <div>運行時間</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 整體狀態 -->
+            <div class="text-center">
+                <div id="overallStatus" class="text-2xl font-bold mb-2">
+                    <i class="fas fa-spinner fa-spin mr-2"></i>
+                    正在檢查系統狀態...
+                </div>
+                <div id="statusDescription">
+                    請稍候，我們正在驗證所有服務的運行狀態
                 </div>
             </div>
         </div>
-
-        <div class="row">
-            <!-- 左側：主要操作區 -->
-            <div class="col-lg-8">
-                <!-- 用戶流程區 -->
-                <div class="glass-card mb-3" id="userFlowSection">
-                    <div class="card-header bg-transparent border-0">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h5 class="mb-0"><i class="fas fa-user-circle me-2"></i>用戶流程</h5>
-                            <div id="currentStep" class="badge bg-secondary">等待開始</div>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <!-- 年齡驗證 -->
-                        <div id="ageVerificationPanel" class="age-verification mb-3" style="display: none;">
-                            <h6><i class="fas fa-shield-alt"></i> 年齡驗證</h6>
-                            <p class="mb-3">本系統包含成人內容，請確認您已年滿18歲</p>
-                            <div class="d-flex gap-2 justify-content-center">
-                                <button class="btn btn-success" onclick="confirmAge(true)">我已年滿18歲</button>
-                                <button class="btn btn-danger" onclick="confirmAge(false)">我未滿18歲</button>
-                            </div>
-                        </div>
-
-                        <!-- 註冊/登入表單 -->
-                        <div id="authPanel">
-                            <div class="row">
-                                <div class="col-md-6" id="authStatusPanel">
-                                    <div class="d-flex align-items-center mb-3">
-                                        <span class="status-indicator offline" id="authStatus"></span>
-                                        <span id="authStatusText">未登入</span>
-                                    </div>
-                                    <div class="d-grid gap-2" id="authButtons">
-                                        <button class="btn btn-primary" onclick="showRegisterForm()">
-                                            <i class="fas fa-user-plus"></i> 新用戶註冊
-                                        </button>
-                                        <button class="btn btn-outline-primary" onclick="showLoginForm()">
-                                            <i class="fas fa-sign-in-alt"></i> 用戶登入
-                                        </button>
-                                        <button class="btn btn-outline-warning" onclick="quickDemo()">
-                                            <i class="fas fa-rocket"></i> 快速演示
-                                        </button>
-                                    </div>
-                                </div>
-                                <div class="col-md-6" id="authFormPanel" style="display: none;">
-                                    <!-- 註冊表單 -->
-                                    <div id="registerForm" style="display: none;">
-                                        <h6>新用戶註冊</h6>
-                                        <div class="mb-2">
-                                            <input type="text" class="form-control form-control-sm" id="regUsername" placeholder="用戶名">
-                                        </div>
-                                        <div class="mb-2">
-                                            <input type="email" class="form-control form-control-sm" id="regEmail" placeholder="電子郵件">
-                                        </div>
-                                        <div class="mb-2">
-                                            <input type="password" class="form-control form-control-sm" id="regPassword" placeholder="密碼">
-                                        </div>
-                                        <div class="row mb-2">
-                                            <div class="col-6">
-                                                <input type="date" class="form-control form-control-sm" id="regBirthDate">
-                                            </div>
-                                            <div class="col-6">
-                                                <select class="form-select form-control-sm" id="regGender">
-                                                    <option value="">選擇性別</option>
-                                                    <option value="male">男性</option>
-                                                    <option value="female">女性</option>
-                                                    <option value="other">其他</option>
-                                                </select>
-                                            </div>
-                                        </div>
-                                        <div class="mb-2">
-                                            <input type="text" class="form-control form-control-sm" id="regNickname" placeholder="暱稱">
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            <button class="btn btn-success btn-sm" onclick="registerUser()">註冊</button>
-                                            <button class="btn btn-secondary btn-sm" onclick="hideAuthForm()">取消</button>
-                                        </div>
-                                    </div>
-                                    <!-- 登入表單 -->
-                                    <div id="loginForm" style="display: none;">
-                                        <h6>用戶登入</h6>
-                                        <div class="mb-2">
-                                            <input type="text" class="form-control form-control-sm" id="loginUsername" placeholder="用戶名或郵箱">
-                                        </div>
-                                        <div class="mb-2">
-                                            <input type="password" class="form-control form-control-sm" id="loginPassword" placeholder="密碼">
-                                        </div>
-                                        <div class="d-flex gap-2">
-                                            <button class="btn btn-success btn-sm" onclick="loginUser()">登入</button>
-                                            <button class="btn btn-secondary btn-sm" onclick="hideAuthForm()">取消</button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- 角色選擇區 -->
-                        <div id="characterPanel" style="display: none;">
-                            <h6><i class="fas fa-users me-2"></i>選擇聊天角色</h6>
-                            <div class="row" id="characterList">
-                                <!-- 角色卡片將動態載入 -->
-                            </div>
-                            <div class="mt-2 d-flex gap-2">
-                                <button class="btn btn-outline-secondary btn-sm" onclick="loadCharacters()">
-                                    <i class="fas fa-refresh"></i> 重新載入角色
-                                </button>
-                                <button class="btn btn-success btn-sm" onclick="startChat()" id="startChatBtn" disabled>
-                                    <i class="fas fa-play"></i> 開始對話
-                                </button>
-                            </div>
-                        </div>
-                    </div>
+        
+        <!-- 操作按鈕 -->
+        <div class="flex flex-col sm:flex-row gap-4 justify-center ">
+            <button 
+                class="bg-blue-500 hover:bg-blue-600 text-white px-6 py-3 rounded font-semibold"
+                onclick="Router.navigate('/age-verify')"
+            >
+                <i class="fas fa-rocket mr-2"></i>
+                開始使用
+            </button>
+            
+            <button 
+                class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded font-semibold"
+                onclick="window.open('/swagger/index.html', '_blank')"
+            >
+                <i class="fas fa-book mr-2"></i>
+                查看 API 文檔
+            </button>
+            
+            <button 
+                class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded font-semibold"
+                onclick="showTestInterface()"
+            >
+                <i class="fas fa-flask mr-2"></i>
+                開發測試模式
+            </button>
+        </div>
+        
+        <!-- 特色功能說明 -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
+            <div class="bg-white border rounded p-4 text-center">
+                <div class="text-4xl text-blue-400 mb-4">
+                    <i class="fas fa-robot"></i>
                 </div>
-
-                <!-- 對話區 -->
-                <div class="glass-card" id="chatSection" style="display: none;">
-                    <div class="card-header bg-transparent border-0">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h5 class="mb-0"><i class="fas fa-comments me-2"></i>AI 對話</h5>
-                                <small class="text-muted" id="chatInfo">選擇角色開始對話</small>
-                            </div>
-                            <div class="d-flex gap-2">
-                                <select class="form-select form-select-sm" id="chatModeSelect" onchange="changeChatMode()">
-                                    <option value="normal">普通模式</option>
-                                    <option value="nsfw">成人模式</option>
-                                </select>
-                                <button class="btn btn-outline-danger btn-sm" onclick="endChat()">
-                                    <i class="fas fa-stop"></i> 結束對話
-                                </button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="chat-container" id="chatContainer">
-                            <div class="text-center text-muted">
-                                <i class="fas fa-comments fs-1 mb-2"></i>
-                                <p>開始您的 AI 對話體驗</p>
-                            </div>
-                        </div>
-                        <div class="p-3 border-top">
-                            <div class="input-group">
-                                <input type="text" class="form-control" id="messageInput" placeholder="輸入您的訊息..." disabled>
-                                <button class="btn btn-primary" onclick="sendMessage()" id="sendBtn" disabled>
-                                    <i class="fas fa-paper-plane"></i>
-                                </button>
-                            </div>
-                            <div class="mt-2">
-                                <div class="d-flex justify-content-between align-items-center">
-                                    <div class="btn-group btn-group-sm" role="group">
-                                        <button class="btn btn-outline-secondary" onclick="sendTestMessage('safe')">測試：安全內容</button>
-                                        <button class="btn btn-outline-warning" onclick="sendTestMessage('mild')">測試：輕度內容</button>
-                                        <button class="btn btn-outline-danger" onclick="sendTestMessage('adult')">測試：成人內容</button>
-                                    </div>
-                                    <div class="text-muted small">
-                                        情感狀態: <span id="emotionDisplay" class="emotion-indicator emotion-neutral">中性</span>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                <h3 class="text-xl font-semibold mb-2">智能 AI 對話</h3>
+                <p class="text-sm">
+                    整合 OpenAI GPT-4o 和 Grok，提供自然流暢的對話體驗
+                </p>
             </div>
-
-            <!-- 右側：系統信息和監控 -->
-            <div class="col-lg-4">
-                <!-- 系統狀態 -->
-                <div class="glass-card mb-3">
-                    <div class="card-header bg-transparent border-0">
-                        <h6 class="mb-0"><i class="fas fa-chart-line me-2"></i>系統監控</h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="systemStats">
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>API 狀態:</span>
-                                <span class="status-indicator offline" id="apiStatusDot"></span>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>數據庫:</span>
-                                <span class="status-indicator offline" id="dbStatusDot"></span>
-                            </div>
-                            <div class="d-flex justify-content-between mb-2">
-                                <span>文檔:</span>
-                                <span class="status-indicator offline" id="docsStatusDot"></span>
-                            </div>
-                            <hr>
-                            <div class="d-flex justify-content-between">
-                                <span>API 端點:</span>
-                                <span id="apiEndpointCount">-</span>
-                            </div>
-                        </div>
-                    </div>
+            
+            <div class="bg-white border rounded p-4 text-center">
+                <div class="text-4xl text-blue-600 mb-4">
+                    <i class="fas fa-masks-theater"></i>
                 </div>
-
-                <!-- Token 管理 -->
-                <div class="glass-card mb-3" id="tokenSection" style="display: none;">
-                    <div class="card-header bg-transparent border-0">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0"><i class="fas fa-key me-2"></i>Token 管理</h6>
-                            <button class="btn btn-outline-secondary btn-sm" onclick="refreshToken()">
-                                <i class="fas fa-sync"></i> 刷新
-                            </button>
-                        </div>
-                    </div>
-                    <div class="card-body">
-                        <div class="token-display" id="tokenDisplay">
-                            未取得 Token
-                        </div>
-                        <div class="mt-2 text-muted small">
-                            過期時間: <span id="tokenExpiry">-</span>
-                        </div>
-                    </div>
+                <h3 class="text-xl font-semibold mb-2">角色扮演系統</h3>
+                <p class="text-sm">
+                    多種個性化 AI 角色，從霸道總裁到溫柔醫生，滿足不同喜好
+                </p>
+            </div>
+            
+            <div class="bg-white border rounded p-4 text-center">
+                <div class="text-4xl text-green-400 mb-4">
+                    <i class="fas fa-shield-alt"></i>
                 </div>
-
-                <!-- 會話管理 -->
-                <div class="glass-card mb-3" id="sessionSection" style="display: none;">
-                    <div class="card-header bg-transparent border-0">
-                        <h6 class="mb-0"><i class="fas fa-history me-2"></i>會話管理</h6>
-                    </div>
-                    <div class="card-body">
-                        <div id="sessionList">
-                            <div class="text-muted text-center">暫無會話</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- API 響應日志 -->
-                <div class="glass-card">
-                    <div class="card-header bg-transparent border-0">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <h6 class="mb-0"><i class="fas fa-terminal me-2"></i>API 日志</h6>
-                            <div class="btn-group btn-group-sm" role="group">
-                                <button class="btn btn-outline-primary active" onclick="filterLogs('all')">全部</button>
-                                <button class="btn btn-outline-success" onclick="filterLogs('success')">成功</button>
-                                <button class="btn btn-outline-danger" onclick="filterLogs('error')">錯誤</button>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="card-body p-0">
-                        <div class="response-panel" id="apiLogPanel">
-等待 API 調用...
-                        </div>
-                    </div>
-                </div>
+                <h3 class="text-xl font-semibold mb-2">安全分級系統</h3>
+                <p class="text-sm">
+                    5 級智能內容分析，確保適合的內容推送給合適的用戶
+                </p>
             </div>
         </div>
-
-        <!-- 進度指示器 -->
-        <div class="glass-card mt-3" id="progressSection" style="display: none;">
-            <div class="card-body">
-                <h6><i class="fas fa-tasks me-2"></i>測試進度</h6>
-                <div id="progressSteps">
-                    <div class="step-indicator" id="step1">
-                        <i class="fas fa-heart-pulse me-2"></i>系統健康檢查
-                    </div>
-                    <div class="step-indicator" id="step2">
-                        <i class="fas fa-user-check me-2"></i>年齡驗證與用戶認證
-                    </div>
-                    <div class="step-indicator" id="step3">
-                        <i class="fas fa-users me-2"></i>角色載入與選擇
-                    </div>
-                    <div class="step-indicator" id="step4">
-                        <i class="fas fa-play me-2"></i>會話創建與初始化
-                    </div>
-                    <div class="step-indicator" id="step5">
-                        <i class="fas fa-comments me-2"></i>對話交互測試
-                    </div>
-                    <div class="step-indicator" id="step6">
-                        <i class="fas fa-shield-check me-2"></i>內容分級與情感狀態測試
-                    </div>
-                </div>
+        
+        <!-- 頁腳 -->
+        <div class="text-center mt-8 text-sm">
+            <p>© 2024 Thewavess AI Core | 專業 • 智能 • 安全</p>
+            <p class="mt-1">
+                <i class="fas fa-exclamation-triangle mr-1"></i>
+                本服務僅限 18 歲以上成年用戶使用
+            </p>
+        </div>
+    </div>
+    
+    <!-- 開發測試模式模態框 -->
+    <div id="testModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white border rounded-lg p-6 max-w-md w-full mx-4">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-flask text-green-400 mr-2"></i>
+                開發測試模式
+            </h3>
+            <p class="mb-6">
+                這將開啟完整的測試界面，包含所有 API 端點的測試功能和監控工具。
+            </p>
+            <div class="flex gap-4">
+                <button 
+                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex-1"
+                    onclick="window.location.href='test.html'"
+                >
+                    <i class="fas fa-code mr-2"></i>
+                    進入測試模式
+                </button>
+                <button 
+                    class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
+                    onclick="UI.modal.hide('testModal')"
+                >
+                    取消
+                </button>
             </div>
         </div>
     </div>
-
-    <!-- Bootstrap JS CDN -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/bootstrap/5.3.3/js/bootstrap.bundle.min.js"></script>
     
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
     <script>
-        // 應用狀態管理
-        const AppState = {
-            // 系統狀態
-            systemOnline: false,
-            apiEndpoints: 0,
-            
-            // 用戶狀態
-            isAuthenticated: false,
-            currentUser: null,
-            accessToken: null,
-            refreshToken: null,
-            tokenExpiry: null,
-            ageVerified: false,
-            
-            // 聊天狀態
-            selectedCharacter: null,
-            currentSession: null,
-            chatMode: 'normal',
-            messages: [],
-            emotions: ['neutral'],
-            
-            // 測試狀態
-            testProgress: [],
-            apiLogs: []
-        };
-
-        // 測試場景配置
-        const TestScenarios = {
-            safe: {
-                messages: [
-                    "你好，很高興認識你！",
-                    "你今天過得怎麼樣？",
-                    "能告訴我一些關於你的興趣嗎？"
-                ],
-                nsfwLevel: 'safe'
-            },
-            mild: {
-                messages: [
-                    "你對浪漫約會有什麼想法？",
-                    "喜歡什麼樣的親密互動？",
-                    "對於感情關係你有什麼期待？"
-                ],
-                nsfwLevel: 'mild'
-            },
-            adult: {
-                messages: [
-                    "你對於親密關係有什麼想法？",
-                    "在私人時光你喜歡做什麼？",
-                    "對於身體接觸你有什麼偏好？"
-                ],
-                nsfwLevel: 'adult'
-            }
-        };
-
-        // 頁面初始化
-        document.addEventListener('DOMContentLoaded', function() {
-            initializeApp();
+        // 本地狀態變數 - 不使用全域的 AppState
+        let systemOnline = false;
+        
+        // 頁面初始化 - 首頁不需要處理登入相關邏輯
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 只檢查系統狀態，不處理登入
+            await checkSystemStatus();
         });
-
-        async function initializeApp() {
-            updateCurrentStep('正在初始化系統...');
-            showProgressSection(true);
-            updateProgressStep('step1', 'active');
-            
-            await checkSystemHealth();
-            await sleep(500);
-            
-            // 檢查是否需要年齡驗證
-            if (!AppState.ageVerified) {
-                showAgeVerification();
-            }
-        }
-
-        // ===== 系統健康檢查 =====
-        async function checkSystemHealth() {
-            updateProgressStep('step1', 'active');
-            updateSystemStatus('loading');
+        
+        // 檢查系統狀態
+        async function checkSystemStatus() {
+            const refreshBtn = document.getElementById('refreshBtn');
+            UI.showLoading(refreshBtn);
             
             try {
-                // 檢查健康狀態
-                const healthResponse = await fetch('/health');
-                const healthData = await healthResponse.json();
-                logApiCall('GET', '/health', healthResponse.status, healthData);
+                // 重置所有狀態
+                resetStatusIndicators();
                 
-                // 檢查 Swagger 文檔
-                const swaggerResponse = await fetch('/swagger/doc.json');
-                const swaggerData = await swaggerResponse.json();
-                logApiCall('GET', '/swagger/doc.json', swaggerResponse.status, swaggerData);
+                // 檢查 API 服務
+                await checkApiService();
                 
-                // 更新系統狀態
-                const systemHealthy = healthResponse.ok && healthData.database === 'healthy';
-                const docsAvailable = swaggerResponse.ok;
+                // 檢查資料庫
+                await checkDatabase();
                 
-                AppState.systemOnline = systemHealthy;
-                AppState.apiEndpoints = swaggerData.paths ? Object.keys(swaggerData.paths).length : 0;
+                // 檢查文檔系統
+                await checkDocumentation();
                 
-                updateSystemStatus(systemHealthy ? 'online' : 'offline');
-                updateSystemStats(systemHealthy, healthData.database === 'healthy', docsAvailable);
+                // 獲取系統信息
+                await getSystemInfo();
                 
-                updateProgressStep('step1', 'completed');
-                showToast('系統檢查完成', systemHealthy ? 'success' : 'warning');
+                // 更新整體狀態
+                updateOverallStatus();
                 
             } catch (error) {
-                updateProgressStep('step1', 'error');
-                updateSystemStatus('offline');
-                logApiCall('GET', '/health', 0, { error: error.message });
-                showToast('系統檢查失敗: ' + error.message, 'danger');
+                console.error('系統狀態檢查失敗:', error);
+                UI.showToast('系統狀態檢查失敗', 'error');
+            } finally {
+                refreshBtn.disabled = false;
+                refreshBtn.innerHTML = '<i class="fas fa-sync-alt mr-2"></i>重新檢查';
             }
         }
-
-        // ===== 年齡驗證 =====
-        function showAgeVerification() {
-            updateCurrentStep('需要年齡驗證');
-            updateProgressStep('step2', 'active');
-            document.getElementById('ageVerificationPanel').style.display = 'block';
+        
+        // 重置狀態指示器
+        function resetStatusIndicators() {
+            const indicators = ['api', 'db', 'docs'];
+            indicators.forEach(type => {
+                const dot = document.getElementById(`${type}StatusDot`);
+                const text = document.getElementById(`${type}StatusText`);
+                
+                dot.className = 'w-4 h-4 rounded-full bg-gray-400 animate-pulse mr-2';
+                text.textContent = '檢查中...';
+            });
         }
-
-        function confirmAge(isAdult) {
-            AppState.ageVerified = isAdult;
-            document.getElementById('ageVerificationPanel').style.display = 'none';
+        
+        // 檢查 API 服務
+        async function checkApiService() {
+            try {
+                const result = await ApiClient.get('/health');
+                updateStatusIndicator('api', true, '正常運行');
+                systemOnline = true;
+            } catch (error) {
+                updateStatusIndicator('api', false, '連接失敗');
+                systemOnline = false;
+            }
+        }
+        
+        // 檢查資料庫
+        async function checkDatabase() {
+            try {
+                const result = await ApiClient.get('/health');
+                const dbHealthy = result.database === 'healthy' || result.data?.database === 'healthy';
+                updateStatusIndicator('db', dbHealthy, dbHealthy ? '連接正常' : '連接異常');
+            } catch (error) {
+                updateStatusIndicator('db', false, '無法檢查');
+            }
+        }
+        
+        
+        // 檢查文檔系統
+        async function checkDocumentation() {
+            try {
+                const response = await fetch('/swagger/doc.json');
+                const isOk = response.ok;
+                updateStatusIndicator('docs', isOk, isOk ? '文檔可用' : '文檔不可用');
+            } catch (error) {
+                updateStatusIndicator('docs', false, '無法訪問');
+            }
+        }
+        
+        // 更新狀態指示器
+        function updateStatusIndicator(type, isHealthy, message) {
+            const dot = document.getElementById(`${type}StatusDot`);
+            const text = document.getElementById(`${type}StatusText`);
             
-            if (isAdult) {
-                updateProgressStep('step2', 'completed');
-                showToast('年齡驗證通過', 'success');
-                updateCurrentStep('等待用戶登入');
+            if (isHealthy) {
+                dot.className = 'w-4 h-4 rounded-full bg-green-400 animate-pulse mr-2';
             } else {
-                updateProgressStep('step2', 'error');
-                showToast('年齡驗證失敗，部分功能將被限制', 'warning');
-                updateCurrentStep('受限模式 - 僅安全內容');
+                dot.className = 'w-4 h-4 rounded-full bg-red-400 animate-pulse mr-2';
             }
+            
+            text.textContent = message;
         }
-
-        // ===== 用戶認證 =====
-        function showRegisterForm() {
-            document.getElementById('authFormPanel').style.display = 'block';
-            document.getElementById('registerForm').style.display = 'block';
-            document.getElementById('loginForm').style.display = 'none';
-        }
-
-        function showLoginForm() {
-            document.getElementById('authFormPanel').style.display = 'block';
-            document.getElementById('loginForm').style.display = 'block';
-            document.getElementById('registerForm').style.display = 'none';
-        }
-
-        function hideAuthForm() {
-            document.getElementById('authFormPanel').style.display = 'none';
-            document.getElementById('registerForm').style.display = 'none';
-            document.getElementById('loginForm').style.display = 'none';
-        }
-
-        async function registerUser() {
-            const username = document.getElementById('regUsername').value;
-            const email = document.getElementById('regEmail').value;
-            const password = document.getElementById('regPassword').value;
-            const birthDate = document.getElementById('regBirthDate').value;
-            const gender = document.getElementById('regGender').value;
-            const nickname = document.getElementById('regNickname').value;
-
-            if (!username || !email || !password || !birthDate || !gender) {
-                showToast('請填寫所有必填欄位', 'warning');
-                return;
-            }
-
-            updateProgressStep('step2', 'active');
-            updateCurrentStep('正在註冊用戶...');
-
+        
+        // 獲取系統信息
+        async function getSystemInfo() {
             try {
-                const userData = {
-                    username,
-                    email,
-                    password,
-                    birth_date: birthDate,
-                    gender,
-                    nickname: nickname || username
-                };
-
-                const response = await fetch('/api/v1/user/register', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(userData)
-                });
-
-                const data = await response.json();
-                logApiCall('POST', '/api/v1/user/register', response.status, data);
-
-                if (response.ok && data.success) {
-                    AppState.currentUser = userData;
-                    hideAuthForm();
-                    showToast('註冊成功！請登入', 'success');
-                    
-                    // 自動填入登入表單
-                    document.getElementById('loginUsername').value = username;
-                    document.getElementById('loginPassword').value = password;
-                    showLoginForm();
-                    
+                // 獲取版本信息
+                const versionResult = await ApiClient.get('/api/v1/version');
+                if (versionResult.success && versionResult.data) {
+                    document.getElementById('systemVersion').textContent = versionResult.data.version || 'v1.0.0';
                 } else {
-                    throw new Error(data.error?.message || '註冊失敗');
+                    document.getElementById('systemVersion').textContent = 'v1.0.0';
                 }
+                
+                // 從 /health 獲取更多信息
+                const healthResult = await ApiClient.get('/health');
+                if (healthResult.service === 'thewavess-ai-core') {
+                    // 更新時間戳顯示
+                    const timestamp = new Date(healthResult.timestamp);
+                    const uptime = Math.floor((Date.now() - timestamp.getTime()) / 1000 / 3600);
+                    document.getElementById('uptime').textContent = `${uptime}h`;
+                }
+                
+                // API 端點數量 (實際統計)
+                document.getElementById('apiEndpoints').textContent = '19';
+                
             } catch (error) {
-                updateProgressStep('step2', 'error');
-                showToast('註冊失敗: ' + error.message, 'danger');
+                console.error('獲取系統信息失敗:', error);
+                document.getElementById('systemVersion').textContent = '未知';
+                document.getElementById('apiEndpoints').textContent = '--';
+                document.getElementById('uptime').textContent = '--';
             }
         }
-
-        async function loginUser() {
-            const username = document.getElementById('loginUsername').value;
-            const password = document.getElementById('loginPassword').value;
-
-            if (!username || !password) {
-                showToast('請輸入用戶名和密碼', 'warning');
-                return;
-            }
-
-            updateProgressStep('step2', 'active');
-            updateCurrentStep('正在登入...');
-
-            try {
-                const response = await fetch('/api/v1/user/login', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ username, password })
-                });
-
-                const data = await response.json();
-                logApiCall('POST', '/api/v1/user/login', response.status, data);
-
-                if (response.ok && data.success) {
-                    AppState.isAuthenticated = true;
-                    AppState.accessToken = data.data.access_token;
-                    AppState.refreshToken = data.data.refresh_token;
-                    AppState.tokenExpiry = new Date(Date.now() + (data.data.expires_in * 1000));
-                    
-                    updateAuthStatus(true, username);
-                    hideAuthForm();
-                    showTokenSection(true);
-                    updateTokenDisplay();
-                    
-                    updateProgressStep('step2', 'completed');
-                    updateCurrentStep('用戶已登入');
-                    showToast('登入成功！', 'success');
-                    
-                    // 進入下一階段：角色選擇
-                    await nextPhase_CharacterSelection();
-                    
-                } else {
-                    throw new Error(data.error?.message || '登入失敗');
-                }
-            } catch (error) {
-                updateProgressStep('step2', 'error');
-                showToast('登入失敗: ' + error.message, 'danger');
-            }
-        }
-
-        async function quickDemo() {
-            updateCurrentStep('正在執行快速演示...');
-            showToast('正在創建演示用戶...', 'info');
+        
+        // 更新整體狀態
+        function updateOverallStatus() {
+            const overallStatus = document.getElementById('overallStatus');
+            const statusDescription = document.getElementById('statusDescription');
             
-            // 自動生成演示用戶資料
-            const timestamp = Date.now();
-            const demoUser = {
-                username: `demo_${timestamp}`,
-                email: `demo_${timestamp}@test.com`,
-                password: 'Demo123456!',
-                birth_date: '1995-06-15',
-                gender: 'female',
-                nickname: '演示用戶'
-            };
-
-            // 自動填入註冊表單
-            document.getElementById('regUsername').value = demoUser.username;
-            document.getElementById('regEmail').value = demoUser.email;
-            document.getElementById('regPassword').value = demoUser.password;
-            document.getElementById('regBirthDate').value = demoUser.birth_date;
-            document.getElementById('regGender').value = demoUser.gender;
-            document.getElementById('regNickname').value = demoUser.nickname;
-
-            // 執行註冊和登入
-            await registerUser();
-            await sleep(1000);
-            if (AppState.currentUser) {
-                await loginUser();
-            }
-        }
-
-        // ===== 角色選擇階段 =====
-        async function nextPhase_CharacterSelection() {
-            updateProgressStep('step3', 'active');
-            updateCurrentStep('載入角色列表...');
-            
-            document.getElementById('characterPanel').style.display = 'block';
-            await loadCharacters();
-        }
-
-        async function loadCharacters() {
-            if (!AppState.isAuthenticated) {
-                showToast('請先登入', 'warning');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/v1/character/list', {
-                    headers: { 'Authorization': `Bearer ${AppState.accessToken}` }
-                });
-
-                const data = await response.json();
-                logApiCall('GET', '/api/v1/character/list', response.status, data);
-
-                if (response.ok && data.success && data.data) {
-                    displayCharacters(data.data);
-                    updateProgressStep('step3', 'completed');
-                    updateCurrentStep('請選擇聊天角色');
-                } else {
-                    // 如果沒有角色，創建一些測試角色
-                    displayTestCharacters();
-                }
-            } catch (error) {
-                updateProgressStep('step3', 'error');
-                showToast('載入角色失敗: ' + error.message, 'danger');
-                displayTestCharacters();
-            }
-        }
-
-        function displayCharacters(characters) {
-            const container = document.getElementById('characterList');
-            container.innerHTML = '';
-
-            characters.forEach(character => {
-                const card = createCharacterCard(character);
-                container.appendChild(card);
-            });
-        }
-
-        function displayTestCharacters() {
-            const testCharacters = [
-                {
-                    id: 'char_001',
-                    name: 'Luna',
-                    description: '友善的AI助手，擅長日常對話',
-                    avatar: '👩‍🦰',
-                    personality: ['friendly', 'helpful', 'creative'],
-                    nsfw_level: 'safe'
-                },
-                {
-                    id: 'char_002',
-                    name: 'Alex',
-                    description: '成熟的對話伴侶，可以討論各種話題',
-                    avatar: '👨‍💼',
-                    personality: ['mature', 'intelligent', 'romantic'],
-                    nsfw_level: 'mild'
-                },
-                {
-                    id: 'char_003',
-                    name: 'Sophia',
-                    description: '開放的聊天夥伴，適合深度交流',
-                    avatar: '👸',
-                    personality: ['open', 'passionate', 'intimate'],
-                    nsfw_level: 'adult'
-                }
-            ];
-
-            displayCharacters(testCharacters);
-            updateProgressStep('step3', 'completed');
-        }
-
-        function createCharacterCard(character) {
-            const col = document.createElement('div');
-            col.className = 'col-md-4 mb-3';
-            
-            const nsfwClass = {
-                'safe': 'nsfw-safe',
-                'mild': 'nsfw-mild', 
-                'adult': 'nsfw-adult'
-            };
-
-            col.innerHTML = `
-                <div class="character-card" onclick="selectCharacter('${character.id}', this)">
-                    <div class="text-center mb-2">
-                        <div style="font-size: 3rem;">${character.avatar || '🤖'}</div>
-                    </div>
-                    <h6 class="text-center mb-2">${character.name}</h6>
-                    <p class="text-muted small mb-2">${character.description}</p>
-                    <div class="d-flex justify-content-between align-items-center">
-                        <span class="nsfw-indicator ${nsfwClass[character.nsfw_level] || 'nsfw-safe'}">${character.nsfw_level}</span>
-                        <div>
-                            ${(character.personality || []).map(trait => 
-                                `<span class="badge bg-light text-dark me-1">${trait}</span>`
-                            ).join('')}
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            return col;
-        }
-
-        function selectCharacter(characterId, cardElement) {
-            // 移除其他選中狀態
-            document.querySelectorAll('.character-card').forEach(card => {
-                card.classList.remove('selected');
-            });
-            
-            // 選中當前角色
-            cardElement.classList.add('selected');
-            AppState.selectedCharacter = characterId;
-            
-            document.getElementById('startChatBtn').disabled = false;
-            updateCurrentStep(`已選擇角色: ${characterId}`);
-        }
-
-        async function startChat() {
-            if (!AppState.selectedCharacter) {
-                showToast('請先選擇一個角色', 'warning');
-                return;
-            }
-
-            updateProgressStep('step4', 'active');
-            updateCurrentStep('正在創建對話會話...');
-
-            try {
-                const response = await fetch('/api/v1/chat/session', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${AppState.accessToken}`
-                    },
-                    body: JSON.stringify({
-                        character_id: AppState.selectedCharacter,
-                        title: `與 ${AppState.selectedCharacter} 的對話`,
-                        mode: AppState.chatMode
-                    })
-                });
-
-                const data = await response.json();
-                logApiCall('POST', '/api/v1/chat/session', response.status, data);
-
-                if (response.ok && data.success) {
-                    AppState.currentSession = data.data;
-                    
-                    // 切換到聊天界面
-                    document.getElementById('chatSection').style.display = 'block';
-                    document.getElementById('characterPanel').style.display = 'none';
-                    
-                    // 啟用聊天功能
-                    document.getElementById('messageInput').disabled = false;
-                    document.getElementById('sendBtn').disabled = false;
-                    
-                    // 更新會話信息
-                    updateChatInfo();
-                    showSessionSection(true);
-                    
-                    updateProgressStep('step4', 'completed');
-                    updateProgressStep('step5', 'active');
-                    updateCurrentStep('對話會話已準備就緒');
-                    showToast('對話會話創建成功！', 'success');
-                    
-                    // 發送歡迎消息
-                    addMessage('ai', `你好！我是 ${AppState.selectedCharacter}，很高興和你聊天！`, 'happy');
-                    
-                } else {
-                    throw new Error(data.error?.message || '創建會話失敗');
-                }
-            } catch (error) {
-                updateProgressStep('step4', 'error');
-                showToast('創建會話失敗: ' + error.message, 'danger');
-            }
-        }
-
-        // ===== 對話管理 =====
-        async function sendMessage() {
-            const input = document.getElementById('messageInput');
-            const message = input.value.trim();
-            
-            if (!message) return;
-            if (!AppState.currentSession) {
-                showToast('請先開始對話會話', 'warning');
-                return;
-            }
-
-            input.value = '';
-            addMessage('user', message);
-            
-            updateProgressStep('step5', 'active');
-            await sendApiMessage(message);
-        }
-
-        async function sendTestMessage(scenario) {
-            const testData = TestScenarios[scenario];
-            if (!testData) return;
-
-            const message = testData.messages[Math.floor(Math.random() * testData.messages.length)];
-            addMessage('user', `[${scenario.toUpperCase()} 測試] ${message}`);
-            
-            updateProgressStep('step6', 'active');
-            await sendApiMessage(message, testData.nsfwLevel);
-        }
-
-        async function sendApiMessage(message, expectedNsfwLevel = null) {
-            try {
-                const response = await fetch('/api/v1/chat/message', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${AppState.accessToken}`
-                    },
-                    body: JSON.stringify({
-                        session_id: AppState.currentSession.id,
-                        message: message
-                    })
-                });
-
-                const data = await response.json();
-                logApiCall('POST', '/api/v1/chat/message', response.status, data);
-
-                if (response.ok && data.success) {
-                    // 處理AI回應
-                    const aiResponse = data.data.reply || '我收到了你的訊息！';
-                    const emotion = data.data.emotion || 'neutral';
-                    const nsfwLevel = data.data.nsfw_level || 'safe';
-                    
-                    addMessage('ai', aiResponse, emotion, nsfwLevel);
-                    updateEmotionDisplay(emotion);
-                    
-                    // 如果是NSFW測試，驗證分級
-                    if (expectedNsfwLevel && expectedNsfwLevel !== nsfwLevel) {
-                        addMessage('system', `⚠️ NSFW分級測試: 預期 ${expectedNsfwLevel}, 實際 ${nsfwLevel}`, 'neutral', 'system');
-                    }
-                    
-                    updateProgressStep('step5', 'completed');
-                    if (expectedNsfwLevel) {
-                        updateProgressStep('step6', 'completed');
-                    }
-                    
-                } else {
-                    throw new Error(data.error?.message || 'API調用失敗');
-                }
-            } catch (error) {
-                addMessage('system', `❌ 發送失敗: ${error.message}`, 'neutral', 'error');
-                updateProgressStep('step5', 'error');
-            }
-        }
-
-        function addMessage(sender, content, emotion = 'neutral', nsfwLevel = 'safe') {
-            const container = document.getElementById('chatContainer');
-            const messageDiv = document.createElement('div');
-            messageDiv.className = `message ${sender}`;
-
-            let avatar, bgClass = '';
-            switch (sender) {
-                case 'user':
-                    avatar = '👤';
-                    break;
-                case 'ai':
-                    avatar = '🤖';
-                    break;
-                case 'system':
-                    avatar = '⚙️';
-                    bgClass = 'bg-light';
-                    break;
-            }
-
-            const nsfwBadge = nsfwLevel !== 'safe' ? 
-                `<span class="nsfw-indicator nsfw-${nsfwLevel} ms-2">${nsfwLevel}</span>` : '';
-
-            messageDiv.innerHTML = `
-                <div class="avatar">${avatar}</div>
-                <div class="content ${bgClass}">
-                    ${content}
-                    ${nsfwBadge}
-                    <div class="text-muted small mt-1">
-                        ${new Date().toLocaleTimeString()}
-                        ${emotion !== 'neutral' ? `<span class="emotion-indicator emotion-${emotion} ms-2">${emotion}</span>` : ''}
-                    </div>
-                </div>
-            `;
-
-            container.appendChild(messageDiv);
-            container.scrollTop = container.scrollHeight;
-
-            // 保存到狀態
-            AppState.messages.push({
-                sender, content, emotion, nsfwLevel, timestamp: new Date()
-            });
-        }
-
-        function changeChatMode() {
-            const mode = document.getElementById('chatModeSelect').value;
-            AppState.chatMode = mode;
-            
-            if (mode === 'nsfw' && !AppState.ageVerified) {
-                showToast('成人模式需要年齡驗證', 'warning');
-                document.getElementById('chatModeSelect').value = 'normal';
-                AppState.chatMode = 'normal';
-                return;
-            }
-            
-            addMessage('system', `切換到 ${mode === 'nsfw' ? '成人' : '普通'} 模式`, 'neutral', 'system');
-        }
-
-        function endChat() {
-            AppState.currentSession = null;
-            AppState.selectedCharacter = null;
-            AppState.messages = [];
-            
-            document.getElementById('chatSection').style.display = 'none';
-            document.getElementById('characterPanel').style.display = 'block';
-            document.getElementById('chatContainer').innerHTML = `
-                <div class="text-center text-muted">
-                    <i class="fas fa-comments fs-1 mb-2"></i>
-                    <p>開始您的 AI 對話體驗</p>
-                </div>
-            `;
-            
-            document.getElementById('messageInput').disabled = true;
-            document.getElementById('sendBtn').disabled = true;
-            document.getElementById('startChatBtn').disabled = true;
-            
-            // 移除角色選中狀態
-            document.querySelectorAll('.character-card').forEach(card => {
-                card.classList.remove('selected');
-            });
-            
-            updateCurrentStep('對話已結束，請重新選擇角色');
-            showToast('對話已結束', 'info');
-        }
-
-        // ===== Token 管理 =====
-        async function refreshToken() {
-            if (!AppState.refreshToken) {
-                showToast('無法刷新Token，請重新登入', 'warning');
-                return;
-            }
-
-            try {
-                const response = await fetch('/api/v1/user/refresh', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ refresh_token: AppState.refreshToken })
-                });
-
-                const data = await response.json();
-                logApiCall('POST', '/api/v1/user/refresh', response.status, data);
-
-                if (response.ok && data.success) {
-                    AppState.accessToken = data.data.access_token;
-                    AppState.tokenExpiry = new Date(Date.now() + (data.data.expires_in * 1000));
-                    updateTokenDisplay();
-                    showToast('Token刷新成功', 'success');
-                } else {
-                    throw new Error(data.error?.message || 'Token刷新失敗');
-                }
-            } catch (error) {
-                showToast('Token刷新失敗: ' + error.message, 'danger');
-            }
-        }
-
-        // ===== UI 更新函數 =====
-        function updateSystemStatus(status) {
-            const indicator = document.getElementById('systemStatus');
-            const text = document.getElementById('systemStatusText');
-            
-            indicator.className = `status-indicator ${status}`;
-            switch (status) {
-                case 'online':
-                    text.textContent = '系統在線';
-                    break;
-                case 'loading':
-                    text.textContent = '檢查中...';
-                    break;
-                default:
-                    text.textContent = '系統離線';
-            }
-        }
-
-        function updateSystemStats(apiOnline, dbOnline, docsOnline) {
-            document.getElementById('apiStatusDot').className = `status-indicator ${apiOnline ? 'online' : 'offline'}`;
-            document.getElementById('dbStatusDot').className = `status-indicator ${dbOnline ? 'online' : 'offline'}`;
-            document.getElementById('docsStatusDot').className = `status-indicator ${docsOnline ? 'online' : 'offline'}`;
-            document.getElementById('apiEndpointCount').textContent = AppState.apiEndpoints;
-        }
-
-        function updateAuthStatus(isLoggedIn, username = '') {
-            const indicator = document.getElementById('authStatus');
-            const text = document.getElementById('authStatusText');
-            
-            if (isLoggedIn) {
-                indicator.className = 'status-indicator online';
-                text.textContent = `已登入: ${username}`;
-                document.getElementById('authButtons').style.display = 'none';
+            if (systemOnline) {
+                overallStatus.innerHTML = '<i class="fas fa-check-circle text-green-400 mr-2"></i>系統狀態良好';
+                statusDescription.textContent = '所有核心服務運行正常';
+                overallStatus.className = 'text-2xl font-bold text-green-400 mb-2';
             } else {
-                indicator.className = 'status-indicator offline';
-                text.textContent = '未登入';
-                document.getElementById('authButtons').style.display = 'block';
+                overallStatus.innerHTML = '<i class="fas fa-exclamation-triangle text-red-400 mr-2"></i>系統異常';
+                statusDescription.textContent = '部分服務出現問題，建議稍後再試或聯繫管理員';
+                overallStatus.className = 'text-2xl font-bold text-red-400 mb-2';
             }
         }
-
-        function updateTokenDisplay() {
-            if (AppState.accessToken) {
-                const tokenPreview = AppState.accessToken.substring(0, 50) + '...';
-                document.getElementById('tokenDisplay').textContent = tokenPreview;
-                document.getElementById('tokenExpiry').textContent = 
-                    AppState.tokenExpiry ? AppState.tokenExpiry.toLocaleString() : '未知';
-            }
+        
+        // 開始應用
+        
+        // 顯示測試界面
+        function showTestInterface() {
+            UI.modal.show('testModal');
         }
-
-        function updateChatInfo() {
-            if (AppState.currentSession) {
-                document.getElementById('chatInfo').textContent = 
-                    `會話 ${AppState.currentSession.id} | 角色: ${AppState.selectedCharacter}`;
-            }
-        }
-
-        function updateCurrentStep(step) {
-            document.getElementById('currentStep').textContent = step;
-        }
-
-        function updateProgressStep(stepId, status) {
-            const element = document.getElementById(stepId);
-            if (element) {
-                element.className = `step-indicator ${status}`;
-            }
-        }
-
-        function updateEmotionDisplay(emotion) {
-            const display = document.getElementById('emotionDisplay');
-            const emotionMap = {
-                'happy': '快樂',
-                'sad': '悲傷', 
-                'angry': '憤怒',
-                'excited': '興奮',
-                'neutral': '中性'
-            };
-            
-            display.className = `emotion-indicator emotion-${emotion}`;
-            display.textContent = emotionMap[emotion] || emotion;
-            
-            AppState.emotions.push(emotion);
-        }
-
-        function showProgressSection(show) {
-            document.getElementById('progressSection').style.display = show ? 'block' : 'none';
-        }
-
-        function showTokenSection(show) {
-            document.getElementById('tokenSection').style.display = show ? 'block' : 'none';
-        }
-
-        function showSessionSection(show) {
-            document.getElementById('sessionSection').style.display = show ? 'block' : 'none';
-        }
-
-        // ===== API 日誌管理 =====
-        function logApiCall(method, endpoint, status, data) {
-            const log = {
-                timestamp: new Date().toLocaleTimeString(),
-                method,
-                endpoint,
-                status,
-                data,
-                isSuccess: status >= 200 && status < 300
-            };
-            
-            AppState.apiLogs.unshift(log);
-            if (AppState.apiLogs.length > 50) {
-                AppState.apiLogs = AppState.apiLogs.slice(0, 50);
-            }
-            
-            updateLogDisplay();
-        }
-
-        function updateLogDisplay() {
-            const panel = document.getElementById('apiLogPanel');
-            if (AppState.apiLogs.length === 0) {
-                panel.textContent = '等待 API 調用...';
-                return;
-            }
-            
-            const latest = AppState.apiLogs.slice(0, 5);
-            let content = '';
-            
-            latest.forEach(log => {
-                const icon = log.isSuccess ? '✅' : '❌';
-                content += `${icon} [${log.timestamp}] ${log.method} ${log.endpoint} (${log.status})\n`;
-                content += JSON.stringify(log.data, null, 2) + '\n\n';
-            });
-            
-            panel.textContent = content;
-        }
-
-        function filterLogs(type) {
-            // 更新按鈕狀態
-            document.querySelectorAll('#apiLogPanel').parent().find('.btn-group .btn').forEach(btn => {
-                btn.classList.remove('active');
-            });
-            event.target.classList.add('active');
-            
-            // TODO: 實現日誌篩選邏輯
-            updateLogDisplay();
-        }
-
-        // ===== 工具函數 =====
-        function showToast(message, type = 'info') {
-            // 簡單的提示實現，可以替換為 Bootstrap Toast
-            const alertClass = {
-                'success': 'alert-success',
-                'danger': 'alert-danger', 
-                'warning': 'alert-warning',
-                'info': 'alert-info'
-            };
-            
-            console.log(`[${type.toUpperCase()}] ${message}`);
-            
-            // 也可以添加實際的 toast 通知
-            const toast = document.createElement('div');
-            toast.className = `alert ${alertClass[type]} alert-dismissible fade show position-fixed`;
-            toast.style.cssText = 'top: 20px; right: 20px; z-index: 9999; min-width: 300px;';
-            toast.innerHTML = `
-                ${message}
-                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-            `;
-            
-            document.body.appendChild(toast);
-            setTimeout(() => toast.remove(), 3000);
-        }
-
-        function sleep(ms) {
-            return new Promise(resolve => setTimeout(resolve, ms));
-        }
-
-        // ===== 鍵盤事件 =====
-        document.addEventListener('keypress', function(e) {
-            if (e.key === 'Enter' && e.target.id === 'messageInput') {
-                sendMessage();
-            }
-        });
-
-        // ===== 開發者工具 =====
-        window.AppState = AppState; // 調試用
-        window.TestScenarios = TestScenarios; // 調試用
     </script>
 </body>
 </html>

@@ -6,8 +6,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
-	"github.com/swaggo/files"
-	"github.com/swaggo/gin-swagger"
+	swaggerFiles "github.com/swaggo/files"
+	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/clarencetw/thewavess-ai-core/database"
 	_ "github.com/clarencetw/thewavess-ai-core/docs"
@@ -45,28 +45,37 @@ func main() {
 
 	// Initialize logger
 	utils.InitLogger()
-	
-	// Initialize database
-	if err := database.InitDatabase(); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+
+	// Initialize database (non-fatal for development/testing)
+	dbInitialized := false
+	if err := database.InitDB(); err != nil {
+		utils.Logger.WithError(err).Warn("Failed to initialize database, running in database-free mode")
+	} else {
+		dbInitialized = true
+		defer database.CloseDB()
+		
+		// Initialize migrations if database is available
+		if err := database.InitMigrations(); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to initialize migrations")
+		} else {
+			utils.Logger.Info("Database and migrations initialized successfully")
+		}
 	}
-	defer database.CloseDatabase()
-	
-	// Run database migrations
-	if err := database.RunMigrations(); err != nil {
-		log.Fatalf("Failed to run database migrations: %v", err)
-	}
-	
+
 	// Initialize Gin router
 	router := gin.Default()
-	
+
 	// Add middleware
 	router.Use(utils.RequestIDMiddleware())
 	router.Use(utils.RecoverMiddleware())
 
+	// Root path redirect to web interface
+	router.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusMovedPermanently, "/public/")
+	})
+	
 	// Static files for web interface
 	router.Static("/public", "./public")
-	router.StaticFile("/", "./public/index.html")
 
 	// Swagger documentation
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -81,16 +90,20 @@ func main() {
 	// Start server
 	utils.LogServiceEvent("server_starting", map[string]interface{}{
 		"port": 8080,
+		"database_available": dbInitialized,
 		"endpoints": map[string]string{
 			"web_interface": "http://localhost:8080",
 			"swagger_ui":    "http://localhost:8080/swagger/index.html",
 			"health_check":  "http://localhost:8080/health",
 		},
 	})
-	
+
 	log.Println("Starting Thewavess AI Core API server on :8080")
 	log.Println("Web interface: http://localhost:8080")
 	log.Println("Swagger UI: http://localhost:8080/swagger/index.html")
+	if !dbInitialized {
+		log.Println("⚠️  Warning: Running in database-free mode - some endpoints may not work")
+	}
 	log.Fatal(http.ListenAndServe(":8080", router))
 }
 
@@ -104,19 +117,27 @@ func main() {
 // @Router       /health [get]
 func healthCheck(c *gin.Context) {
 	response := gin.H{
-		"status":  "ok",
-		"service": "thewavess-ai-core",
-		"version": "1.0.0",
+		"status":    "ok",
+		"service":   "thewavess-ai-core",
+		"version":   "1.0.0",
+		"timestamp": utils.GetCurrentTimestampString(),
 	}
-	
+
 	// Check database health
-	if err := database.HealthCheck(); err != nil {
-		response["database"] = "unhealthy"
-		response["database_error"] = err.Error()
-		c.JSON(http.StatusServiceUnavailable, response)
-		return
+	if database.DB == nil {
+		response["database"] = "unavailable"
+		response["database_message"] = "running in database-free mode"
+		response["note"] = "some endpoints may not work without database"
+	} else {
+		// Try to ping database
+		if err := database.DB.Ping(); err != nil {
+			response["database"] = "unhealthy"
+			response["database_error"] = err.Error()
+		} else {
+			response["database"] = "healthy"
+		}
 	}
-	
-	response["database"] = "healthy"
+
+	// Always return 200 for health check - service is running
 	c.JSON(http.StatusOK, response)
 }

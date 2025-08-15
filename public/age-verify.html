@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>年齡驗證 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+</head>
+<body class="h-full flex items-center justify-center p-4 bg-gray-50 text-gray-900">
+    <!-- 主容器 -->
+    <div class="w-full max-w-md mx-auto opacity-100">
+        <!-- 年齡驗證卡片 -->
+        <div class="bg-white border rounded-lg p-6 text-center">
+            <!-- 警告圖標 -->
+            <div class="text-6xl text-red-400 mb-6">
+                <i class="fas fa-exclamation-triangle"></i>
+            </div>
+            
+            <!-- 標題 -->
+            <h1 class="text-3xl font-bold mb-4">
+                年齡驗證
+            </h1>
+            
+            <!-- 說明文字 -->
+            <div class="mb-6 space-y-3 text-left">
+                <p class="flex items-start">
+                    <i class="fas fa-shield-alt text-blue-400 mr-3 mt-1 flex-shrink-0"></i>
+                    <span>本服務包含成人內容，僅限 <strong>18 歲以上</strong> 成年用戶使用</span>
+                </p>
+                <p class="flex items-start">
+                    <i class="fas fa-gavel text-yellow-400 mr-3 mt-1 flex-shrink-0"></i>
+                    <span>使用本服務即表示您同意遵守當地法律法規</span>
+                </p>
+                <p class="flex items-start">
+                    <i class="fas fa-user-secret text-green-400 mr-3 mt-1 flex-shrink-0"></i>
+                    <span>我們重視您的隱私，年齡信息僅用於內容分級</span>
+                </p>
+            </div>
+            
+            <!-- 年齡選擇 -->
+            <div class="mb-8">
+                <h3 class="text-lg font-semibold mb-4">請確認您的年齡：</h3>
+                
+                <div class="space-y-4">
+                    <button 
+                        id="over18Btn"
+                        class="w-full bg-green-500 hover:bg-green-600 text-white py-3 px-6 rounded font-semibold"
+                        onclick="confirmAge(true)"
+                    >
+                        <i class="fas fa-check-circle mr-2"></i>
+                        我已年滿 18 歲
+                    </button>
+                    
+                    <button 
+                        id="under18Btn"
+                        class="w-full bg-red-500 hover:bg-red-600 text-white py-3 px-6 rounded font-semibold"
+                        onclick="confirmAge(false)"
+                    >
+                        <i class="fas fa-times-circle mr-2"></i>
+                        我未滿 18 歲
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 返回按鈕 -->
+            <button 
+                class="hover:opacity-80 text-sm"
+                onclick="Router.navigate('/')"
+            >
+                <i class="fas fa-arrow-left mr-2"></i>
+                返回首頁
+            </button>
+        </div>
+        
+        <!-- 法律聲明 -->
+        <div class="mt-6 text-xs text-center leading-relaxed">
+            <p class="mb-2">
+                <i class="fas fa-info-circle mr-1"></i>
+                繼續使用即表示您確認：
+            </p>
+            <ul class="space-y-1 text-left max-w-sm mx-auto">
+                <li>• 您已達到當地法定成年年齡</li>
+                <li>• 您同意接收成人導向的內容</li>
+                <li>• 您理解並接受服務條款</li>
+                <li>• 您將負責任地使用本服務</li>
+            </ul>
+        </div>
+    </div>
+    
+    <!-- 未成年用戶模態框 -->
+    <div id="underageModal" class="hidden fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+        <div class="bg-white border rounded-lg p-6 max-w-md w-full mx-4 text-center">
+            <div class="text-5xl text-red-400 mb-4">
+                <i class="fas fa-ban"></i>
+            </div>
+            <h3 class="text-2xl font-bold mb-4">
+                訊息通知
+            </h3>
+            <p class="mb-6">
+                很抱歉，本服務僅限 18 歲以上成年用戶使用。
+                <br><br>
+                為了保護未成年人，我們必須限制您的訪問。
+            </p>
+            <div class="space-y-3">
+                <button 
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded"
+                    onclick="Router.navigate('/')"
+                >
+                    <i class="fas fa-home mr-2"></i>
+                    返回首頁
+                </button>
+                <button 
+                    class="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-6 rounded"
+                    onclick="window.close()"
+                >
+                    <i class="fas fa-times mr-2"></i>
+                    關閉頁面
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 確認模態框 -->
+    <div id="confirmModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white border rounded-lg p-6 max-w-md w-full mx-4 text-center">
+            <div class="text-4xl text-green-400 mb-4">
+                <i class="fas fa-check-circle"></i>
+            </div>
+            <h3 class="text-2xl font-bold mb-4">
+                年齡驗證完成
+            </h3>
+            <p class="mb-6">
+                感謝您的確認。現在您可以使用我們的智能聊天服務了。
+                <br><br>
+                請記住負責任地使用本服務。
+            </p>
+            <button 
+                class="w-full bg-green-500 hover:bg-green-600 text-white py-3 px-6 rounded"
+                onclick="proceedToAuth()"
+            >
+                <i class="fas fa-arrow-right mr-2"></i>
+                繼續註冊/登入
+            </button>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        // 頁面初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await App.init();
+            
+            // 移除自動跳過邏輯，確保用戶每次都能看到年齡驗證頁面
+            // 這是重要的法律保護機制，不應該被跳過
+        });
+        
+        // 確認年齡
+        function confirmAge(isOver18) {
+            const over18Btn = document.getElementById('over18Btn');
+            const under18Btn = document.getElementById('under18Btn');
+            
+            // 顯示載入狀態
+            if (isOver18) {
+                UI.showLoading(over18Btn);
+            } else {
+                UI.showLoading(under18Btn);
+            }
+            
+            // 延遲一點，讓用戶看到載入狀態
+            setTimeout(() => {
+                if (isOver18) {
+                    // 年滿 18 歲
+                    handleAdultUser();
+                } else {
+                    // 未滿 18 歲
+                    handleMinorUser();
+                }
+            }, 1000);
+        }
+        
+        // 處理成年用戶
+        function handleAdultUser() {
+            // 保存年齡驗證狀態
+            Utils.storage.set('ageVerified', true);
+            Utils.storage.set('ageVerificationDate', new Date().toISOString());
+            
+            // 更新應用狀態
+            AppState.ageVerified = true;
+            
+            // 顯示確認模態框
+            UI.modal.show('confirmModal');
+            
+            // 記錄日誌
+            console.log('用戶完成年齡驗證: 18+');
+            
+            // 顯示成功提示
+            UI.showToast('年齡驗證完成', 'success');
+        }
+        
+        // 處理未成年用戶
+        function handleMinorUser() {
+            // 清除任何可能的驗證狀態
+            Utils.storage.remove('ageVerified');
+            Utils.storage.remove('ageVerificationDate');
+            
+            // 更新應用狀態
+            AppState.ageVerified = false;
+            
+            // 顯示未成年用戶模態框
+            UI.modal.show('underageModal');
+            
+            // 記錄日誌
+            console.log('用戶年齡驗證失敗: 未滿 18 歲');
+            
+            // 顯示警告提示
+            UI.showToast('年齡限制：僅限成年用戶', 'warning');
+        }
+        
+        // 進入認證頁面
+        function proceedToAuth() {
+            // 檢查是否已經登入
+            if (AppState.isAuthenticated) {
+                Router.navigate('/character');
+            } else {
+                Router.navigate('/auth');
+            }
+        }
+        
+        // 鍵盤事件處理
+        document.addEventListener('keydown', function(e) {
+            // 按 Enter 鍵確認成年
+            if (e.key === 'Enter') {
+                confirmAge(true);
+            }
+            // 按 Escape 鍵返回首頁
+            else if (e.key === 'Escape') {
+                Router.navigate('/');
+            }
+        });
+        
+        // 頁面可見性變化處理
+        document.addEventListener('visibilitychange', function() {
+            if (!document.hidden) {
+                // 頁面重新獲得焦點時，檢查年齡驗證狀態
+                const ageVerified = Utils.storage.get('ageVerified');
+                if (ageVerified && !AppState.ageVerified) {
+                    AppState.ageVerified = true;
+                    UI.showToast('歡迎回來！', 'info');
+                }
+            }
+        });
+    </script>
+</body>
+</html>

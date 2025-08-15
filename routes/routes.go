@@ -15,37 +15,50 @@ func SetupRoutes(router *gin.RouterGroup) {
 	// 測試路由（無需認證） - 用於開發測試
 	router.POST("/test/message", handlers.SendMessage)
 
-	// 用戶認證路由（無需認證）
-	userAuth := router.Group("/user")
+	// 認證路由（無需認證）
+	auth := router.Group("/auth")
 	{
-		userAuth.POST("/register", handlers.RegisterUserReal)  // 使用真實版本
-		userAuth.POST("/login", handlers.LoginUserReal)        // 使用真實版本
+		auth.POST("/register", handlers.RegisterUser)
+		auth.POST("/login", handlers.LoginUser)
+		auth.POST("/refresh", handlers.RefreshToken)
 	}
 
 	// 需要認證的路由
 	authenticated := router.Group("")
 	authenticated.Use(middleware.AuthMiddleware())
 
+	// 認證路由（需要認證）
+	authAuthenticated := authenticated.Group("/auth")
+	{
+		authAuthenticated.POST("/logout", handlers.LogoutUser)
+	}
+
 	// 用戶管理路由
 	user := authenticated.Group("/user")
 	{
-		user.POST("/logout", handlers.LogoutUser)
-		user.POST("/refresh", handlers.RefreshToken)
-		user.GET("/profile", handlers.GetProfileReal)  // 使用真實版本
-		user.PUT("/profile", handlers.UpdateProfile)
-		user.PUT("/preferences", handlers.UpdatePreferences)
-		// 角色選擇功能暫時移除（未實現）
-		// user.GET("/character", handlers.GetCurrentCharacter)
-		// user.PUT("/character", handlers.SelectCharacter)
+		user.GET("/profile", handlers.GetUserProfile)
+		user.PUT("/profile", handlers.UpdateUserProfile)
+		user.PUT("/preferences", handlers.UpdateUserPreferences)
+		user.POST("/avatar", handlers.UploadAvatar)
+		user.DELETE("/account", handlers.DeleteAccount)
+		user.POST("/verify", handlers.VerifyAge)
+		user.GET("/character", handlers.GetCurrentCharacter)
+		user.PUT("/character", handlers.SelectCharacter)
 	}
 
 	// 角色管理路由
 	character := authenticated.Group("/character")
 	{
-		character.GET("/list", handlers.GetCharacterList)
-		// 詳細功能暫時移除（未實現）
-		// character.GET("/:character_id", handlers.GetCharacterDetails)
-		// character.GET("/:character_id/stats", handlers.GetCharacterStats)
+		character.POST("", handlers.CreateCharacter)
+		character.PUT("/:id", handlers.UpdateCharacter)
+	}
+
+	// 公開的角色端點
+	publicCharacter := router.Group("/character")
+	{
+		publicCharacter.GET("/list", handlers.GetCharacterList)
+		publicCharacter.GET("/:id", handlers.GetCharacterByID)
+		publicCharacter.GET("/:id/stats", handlers.GetCharacterStats)
 	}
 
 	// 對話管理路由
@@ -55,18 +68,81 @@ func SetupRoutes(router *gin.RouterGroup) {
 		chat.GET("/session/:session_id", handlers.GetChatSession)
 		chat.GET("/sessions", handlers.GetChatSessions)
 		chat.POST("/message", handlers.SendMessage)
-		chat.POST("/regenerate", handlers.RegenerateMessage)
-		chat.PUT("/session/:session_id/mode", handlers.UpdateSessionMode)
 		chat.GET("/session/:session_id/history", handlers.GetMessageHistory)
-		chat.POST("/session/:session_id/tag", handlers.AddSessionTags)
-		chat.GET("/session/:session_id/export", handlers.ExportChatHistory)
 		chat.DELETE("/session/:session_id", handlers.DeleteChatSession)
+		chat.PUT("/session/:session_id/mode", handlers.UpdateSessionMode)
+		chat.POST("/session/:session_id/tag", handlers.AddSessionTag)
+		chat.GET("/session/:session_id/export", handlers.ExportChatSession)
+		chat.POST("/regenerate", handlers.RegenerateResponse)
+	}
+
+	// 標籤系統路由（公開）
+	tags := router.Group("/tags")
+	{
+		tags.GET("", handlers.GetAllTags)
+		tags.GET("/popular", handlers.GetPopularTags)
+	}
+
+	// 情感系統路由
+	emotion := authenticated.Group("/emotion")
+	{
+		emotion.GET("/status", handlers.GetEmotionStatus)
+		emotion.GET("/affection", handlers.GetAffectionLevel)
+		emotion.POST("/event", handlers.TriggerEmotionEvent)
+		emotion.GET("/affection/history", handlers.GetAffectionHistory)
+		emotion.GET("/milestones", handlers.GetRelationshipMilestones)
+	}
+
+	// 記憶系統路由
+	memory := authenticated.Group("/memory")
+	{
+		memory.GET("/timeline", handlers.GetMemoryTimeline)
+		memory.POST("/save", handlers.SaveMemory)
+		memory.GET("/search", handlers.SearchMemory)
+		memory.GET("/user/:id", handlers.GetUserMemory)
+		memory.DELETE("/forget", handlers.ForgetMemory)
+		memory.GET("/stats", handlers.GetMemoryStats)
+		memory.POST("/backup", handlers.BackupMemory)
+		memory.POST("/restore", handlers.RestoreMemory)
+	}
+
+	// 小說模式路由
+	novel := authenticated.Group("/novel")
+	{
+		novel.POST("/start", handlers.StartNovel)
+		novel.POST("/choice", handlers.MakeNovelChoice)
+		novel.GET("/progress/:novel_id", handlers.GetNovelProgress)
+		novel.GET("/list", handlers.GetNovelList)
+		novel.POST("/progress/save", handlers.SaveNovelProgress)
+		novel.GET("/progress/list", handlers.GetNovelSaveList)
+		novel.GET("/:id/stats", handlers.GetNovelStats)
+		novel.DELETE("/progress/:id", handlers.DeleteNovelSave)
+	}
+
+	// 搜尋功能路由
+	search := authenticated.Group("/search")
+	{
+		search.GET("/chats", handlers.SearchChats)
+		search.GET("/global", handlers.GlobalSearch)
+	}
+
+	// TTS 語音系統路由
+	tts := authenticated.Group("/tts")
+	{
+		tts.POST("/generate", handlers.GenerateTTS)
+		tts.POST("/batch", handlers.BatchGenerateTTS)
+		tts.POST("/preview", handlers.PreviewTTS)
+		tts.GET("/history", handlers.GetTTSHistory)
+		tts.GET("/config", handlers.GetTTSConfig)
+	}
+
+	// TTS 公開路由（語音列表）
+	publicTTS := router.Group("/tts")
+	{
+		publicTTS.GET("/voices", handlers.GetVoiceList)
 	}
 
 	// TODO: 添加其他模組路由
-	// - 小說模式路由
-	// - 情感系統路由
-	// - TTS 語音路由
-	// - 記憶系統路由
-	// - 標籤系統路由
+	// - 通知系統路由
+	// - 資料分析路由
 }

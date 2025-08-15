@@ -1,0 +1,539 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>用戶認證 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+</head>
+<body class="h-full flex items-center justify-center p-4 bg-gray-50 text-gray-900">
+    <!-- 主容器 -->
+    <div class="w-full max-w-lg mx-auto opacity-100">
+        <!-- 認證卡片 -->
+        <div class="bg-white border rounded-lg p-6">
+            <!-- 標題區域 -->
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold mb-2">
+                    <i class="fas fa-user-circle text-blue-400 mr-3"></i>
+                    用戶認證
+                </h1>
+                <p>
+                    註冊或登入以開始您的 AI 對話體驗
+                </p>
+            </div>
+            
+            <!-- 切換選項卡 -->
+            <div class="flex mb-6">
+                <button 
+                    id="loginTab"
+                    class="flex-1 py-3 px-4 text-center font-semibold rounded-l-lg transition-all"
+                    onclick="switchTab('login')"
+                >
+                    <i class="fas fa-sign-in-alt mr-2"></i>
+                    登入
+                </button>
+                <button 
+                    id="registerTab"
+                    class="flex-1 py-3 px-4 text-center font-semibold rounded-r-lg transition-all"
+                    onclick="switchTab('register')"
+                >
+                    <i class="fas fa-user-plus mr-2"></i>
+                    註冊
+                </button>
+            </div>
+            
+            <!-- 登入表單 -->
+            <form id="loginForm" class="space-y-4">
+                <div>
+                    <label class="block font-medium mb-2">
+                        <i class="fas fa-user mr-2"></i>
+                        用戶名或信箱
+                    </label>
+                    <input 
+                        type="text" 
+                        id="loginUsername"
+                        class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
+                        placeholder="請輸入用戶名或信箱"
+                        required
+                    >
+                </div>
+                
+                <div>
+                    <label class="block font-medium mb-2">
+                        <i class="fas fa-lock mr-2"></i>
+                        密碼
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="password" 
+                            id="loginPassword"
+                            class="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all pr-12"
+                            placeholder="請輸入密碼"
+                            required
+                        >
+                        <button 
+                            type="button"
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2"
+                            onclick="togglePasswordVisibility('loginPassword')"
+                        >
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                </div>
+                
+                <button 
+                    type="submit"
+                    id="loginBtn"
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-6 rounded font-semibold"
+                >
+                    <i class="fas fa-sign-in-alt mr-2"></i>
+                    登入
+                </button>
+            </form>
+            
+            <!-- 註冊表單 -->
+            <form id="registerForm" class="space-y-4 hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-medium mb-2">
+                            <i class="fas fa-user mr-2"></i>
+                            用戶名
+                        </label>
+                        <input 
+                            type="text" 
+                            id="registerUsername"
+                            class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
+                            placeholder="請輸入用戶名"
+                            required
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">
+                            <i class="fas fa-user-tag mr-2"></i>
+                            暱稱
+                        </label>
+                        <input 
+                            type="text" 
+                            id="registerNickname"
+                            class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
+                            placeholder="請輸入暱稱"
+                            required
+                        >
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block font-medium mb-2">
+                        <i class="fas fa-envelope mr-2"></i>
+                        信箱
+                    </label>
+                    <input 
+                        type="email" 
+                        id="registerEmail"
+                        class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
+                        placeholder="請輸入信箱地址"
+                        required
+                    >
+                </div>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-medium mb-2">
+                            <i class="fas fa-birthday-cake mr-2"></i>
+                            生日
+                        </label>
+                        <input 
+                            type="date" 
+                            id="registerBirthDate"
+                            class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
+                            required
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">
+                            <i class="fas fa-venus-mars mr-2"></i>
+                            性別
+                        </label>
+                        <select 
+                            id="registerGender"
+                            class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
+                            required
+                        >
+                            <option value="">請選擇性別</option>
+                            <option value="female">女性</option>
+                            <option value="male">男性</option>
+                            <option value="other">其他</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block font-medium mb-2">
+                        <i class="fas fa-lock mr-2"></i>
+                        密碼
+                    </label>
+                    <div class="relative">
+                        <input 
+                            type="password" 
+                            id="registerPassword"
+                            class="w-full px-4 py-3 rounded-lg bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all pr-12"
+                            placeholder="至少8位，包含大小寫字母和數字"
+                            required
+                        >
+                        <button 
+                            type="button"
+                            class="absolute right-3 top-1/2 transform -translate-y-1/2"
+                            onclick="togglePasswordVisibility('registerPassword')"
+                        >
+                            <i class="fas fa-eye"></i>
+                        </button>
+                    </div>
+                    <div class="mt-2 text-sm">
+                        <div id="passwordStrength" class="hidden">
+                            <div class="w-full bg-opacity-30 bg-black rounded-full h-2">
+                                <div id="strengthBar" class="h-2 rounded-full transition-all"></div>
+                            </div>
+                            <p id="strengthText" class="mt-1"></p>
+                        </div>
+                    </div>
+                </div>
+                
+                <div>
+                    <label class="block font-medium mb-2">
+                        <i class="fas fa-lock mr-2"></i>
+                        確認密碼
+                    </label>
+                    <input 
+                        type="password" 
+                        id="registerConfirmPassword"
+                        class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 focus:ring-2 focus:ring-blue-500"
+                        placeholder="請再次輸入密碼"
+                        required
+                    >
+                </div>
+                
+                <div class="flex items-start space-x-3">
+                    <input 
+                        type="checkbox" 
+                        id="agreeTerms"
+                        class="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+                        required
+                    >
+                    <label for="agreeTerms" class="text-sm">
+                        我已閱讀並同意
+                        <a href="#" class="text-blue-400 hover:opacity-80 underline">服務條款</a>
+                        和
+                        <a href="#" class="text-blue-400 hover:opacity-80 underline">隱私政策</a>
+                    </label>
+                </div>
+                
+                <button 
+                    type="submit"
+                    id="registerBtn"
+                    class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-6 rounded font-semibold"
+                >
+                    <i class="fas fa-user-plus mr-2"></i>
+                    註冊帳號
+                </button>
+            </form>
+            
+            <!-- 返回按鈕 -->
+            <div class="mt-6 text-center">
+                <button 
+                    class="hover:opacity-80 text-sm"
+                    onclick="Router.navigate('/')"
+                >
+                    <i class="fas fa-arrow-left mr-2"></i>
+                    返回首頁
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        let currentTab = 'login';
+        
+        // 頁面初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await App.init();
+            
+            // 檢查年齡驗證
+            const ageVerified = Utils.storage.get('ageVerified');
+            if (!ageVerified) {
+                Router.navigate('/age-verify');
+                return;
+            }
+            
+            // 檢查是否已經登入
+            if (AppState.isAuthenticated) {
+                Router.navigate('/character');
+                return;
+            }
+            
+            // 初始化表單
+            initializeForms();
+            switchTab('login');
+        });
+        
+        // 初始化表單
+        function initializeForms() {
+            // 登入表單提交
+            document.getElementById('loginForm').addEventListener('submit', handleLogin);
+            
+            // 註冊表單提交
+            document.getElementById('registerForm').addEventListener('submit', handleRegister);
+            
+            // 密碼強度檢查
+            document.getElementById('registerPassword').addEventListener('input', checkPasswordStrength);
+            
+            // 確認密碼檢查
+            document.getElementById('registerConfirmPassword').addEventListener('input', checkPasswordMatch);
+        }
+        
+        // 切換選項卡
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            const loginTab = document.getElementById('loginTab');
+            const registerTab = document.getElementById('registerTab');
+            const loginForm = document.getElementById('loginForm');
+            const registerForm = document.getElementById('registerForm');
+            
+            if (tab === 'login') {
+                loginTab.className = 'flex-1 py-3 px-4 text-center font-semibold rounded-l-lg bg-blue-600 text-white';
+                registerTab.className = 'flex-1 py-3 px-4 text-center font-semibold rounded-r-lg bg-gray-600 text-gray-300 hover:bg-gray-700';
+                loginForm.classList.remove('hidden');
+                registerForm.classList.add('hidden');
+            } else {
+                loginTab.className = 'flex-1 py-3 px-4 text-center font-semibold rounded-l-lg bg-gray-600 text-gray-300 hover:bg-gray-700';
+                registerTab.className = 'flex-1 py-3 px-4 text-center font-semibold rounded-r-lg bg-green-600 text-white';
+                loginForm.classList.add('hidden');
+                registerForm.classList.remove('hidden');
+            }
+        }
+        
+        // 切換密碼可見性
+        function togglePasswordVisibility(inputId) {
+            const input = document.getElementById(inputId);
+            const icon = input.nextElementSibling.querySelector('i');
+            
+            if (input.type === 'password') {
+                input.type = 'text';
+                icon.className = 'fas fa-eye-slash';
+            } else {
+                input.type = 'password';
+                icon.className = 'fas fa-eye';
+            }
+        }
+        
+        // 檢查密碼強度
+        function checkPasswordStrength() {
+            const password = document.getElementById('registerPassword').value;
+            const strengthDiv = document.getElementById('passwordStrength');
+            const strengthBar = document.getElementById('strengthBar');
+            const strengthText = document.getElementById('strengthText');
+            
+            if (password.length === 0) {
+                strengthDiv.classList.add('hidden');
+                return;
+            }
+            
+            strengthDiv.classList.remove('hidden');
+            
+            let strength = 0;
+            let feedback = [];
+            
+            // 長度檢查
+            if (password.length >= 8) strength++;
+            else feedback.push('至少8個字符');
+            
+            // 大寫字母
+            if (/[A-Z]/.test(password)) strength++;
+            else feedback.push('包含大寫字母');
+            
+            // 小寫字母
+            if (/[a-z]/.test(password)) strength++;
+            else feedback.push('包含小寫字母');
+            
+            // 數字
+            if (/\d/.test(password)) strength++;
+            else feedback.push('包含數字');
+            
+            // 特殊字符
+            if (/[!@#$%^&*(),.?":{}|<>]/.test(password)) strength++;
+            
+            // 更新進度條
+            const percentage = (strength / 5) * 100;
+            strengthBar.style.width = percentage + '%';
+            
+            let color, text;
+            if (strength < 2) {
+                color = '#ef4444';
+                text = '弱';
+            } else if (strength < 4) {
+                color = '#f59e0b';
+                text = '中等';
+            } else {
+                color = '#10b981';
+                text = '強';
+            }
+            
+            strengthBar.style.backgroundColor = color;
+            
+            if (feedback.length > 0) {
+                strengthText.textContent = `密碼強度: ${text} - 建議${feedback.join('、')}`;
+            } else {
+                strengthText.textContent = `密碼強度: ${text} - 很好！`;
+            }
+        }
+        
+        // 檢查密碼匹配
+        function checkPasswordMatch() {
+            const password = document.getElementById('registerPassword').value;
+            const confirmPassword = document.getElementById('registerConfirmPassword').value;
+            const confirmInput = document.getElementById('registerConfirmPassword');
+            
+            if (confirmPassword.length === 0) {
+                confirmInput.style.borderColor = '#6b7280';
+                return;
+            }
+            
+            if (password === confirmPassword) {
+                confirmInput.style.borderColor = '#10b981';
+            } else {
+                confirmInput.style.borderColor = '#ef4444';
+            }
+        }
+        
+        // 處理登入
+        async function handleLogin(e) {
+            e.preventDefault();
+            
+            const loginBtn = document.getElementById('loginBtn');
+            const username = document.getElementById('loginUsername').value;
+            const password = document.getElementById('loginPassword').value;
+            
+            UI.showLoading(loginBtn);
+            
+            try {
+                const result = await ApiClient.post('/api/v1/auth/login', {
+                    username: username,
+                    password: password
+                });
+                
+                if (result.success) {
+                    // 保存認證信息
+                    AppState.isAuthenticated = true;
+                    AppState.accessToken = result.data.access_token;
+                    AppState.refreshToken = result.data.refresh_token;
+                    AppState.currentUser = { username: username };
+                    
+                    // 保存到本地存儲
+                    Utils.storage.set('tokens', {
+                        access: AppState.accessToken,
+                        refresh: AppState.refreshToken
+                    });
+                    Utils.storage.set('user', AppState.currentUser);
+                    
+                    UI.showToast('登入成功！', 'success');
+                    
+                    // 跳轉到角色選擇頁面
+                    setTimeout(() => {
+                        Router.navigate('/character');
+                    }, 1000);
+                } else {
+                    throw new Error(result.error?.message || '登入失敗');
+                }
+            } catch (error) {
+                UI.showToast('登入失敗: ' + error.message, 'error');
+            } finally {
+                loginBtn.disabled = false;
+                loginBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>登入';
+            }
+        }
+        
+        // 處理註冊
+        async function handleRegister(e) {
+            e.preventDefault();
+            
+            const registerBtn = document.getElementById('registerBtn');
+            const username = document.getElementById('registerUsername').value;
+            const nickname = document.getElementById('registerNickname').value;
+            const email = document.getElementById('registerEmail').value;
+            const birthDate = document.getElementById('registerBirthDate').value;
+            const gender = document.getElementById('registerGender').value;
+            const password = document.getElementById('registerPassword').value;
+            const confirmPassword = document.getElementById('registerConfirmPassword').value;
+            
+            // 驗證密碼匹配
+            if (password !== confirmPassword) {
+                UI.showToast('密碼確認不匹配', 'error');
+                return;
+            }
+            
+            // 驗證年齡
+            const age = Utils.validation.age(birthDate);
+            if (age < 18) {
+                UI.showToast('年齡必須滿18歲', 'error');
+                return;
+            }
+            
+            UI.showLoading(registerBtn);
+            
+            try {
+                const result = await ApiClient.post('/api/v1/auth/register', {
+                    username: username,
+                    nickname: nickname,
+                    email: email,
+                    birth_date: birthDate,
+                    gender: gender,
+                    password: password
+                });
+                
+                if (result.success) {
+                    // 保存認證信息
+                    AppState.isAuthenticated = true;
+                    AppState.accessToken = result.data.access_token;
+                    AppState.refreshToken = result.data.refresh_token;
+                    AppState.currentUser = {
+                        username: username,
+                        nickname: nickname,
+                        email: email
+                    };
+                    
+                    // 保存到本地存儲
+                    Utils.storage.set('tokens', {
+                        access: AppState.accessToken,
+                        refresh: AppState.refreshToken
+                    });
+                    Utils.storage.set('user', AppState.currentUser);
+                    
+                    UI.showToast('註冊成功！', 'success');
+                    
+                    // 跳轉到角色選擇頁面
+                    setTimeout(() => {
+                        Router.navigate('/character');
+                    }, 1000);
+                } else {
+                    throw new Error(result.error?.message || '註冊失敗');
+                }
+            } catch (error) {
+                UI.showToast('註冊失敗: ' + error.message, 'error');
+            } finally {
+                registerBtn.disabled = false;
+                registerBtn.innerHTML = '<i class="fas fa-user-plus mr-2"></i>註冊帳號';
+            }
+        }
+    </script>
+</body>
+</html>

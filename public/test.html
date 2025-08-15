@@ -1,0 +1,1026 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>開發測試模式 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+</head>
+<body class="h-full p-4 bg-gray-50 text-gray-900">
+    <!-- 頂部導航 -->
+    <nav class="bg-white border rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <button 
+                    class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded"
+                    onclick="Router.navigate('/')"
+                >
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                
+                <h1 class="text-2xl font-bold">
+                    <i class="fas fa-flask text-green-400 mr-2"></i>
+                    開發測試模式
+                </h1>
+                
+                <div class="text-sm">
+                    完整的 API 測試和監控工具
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <button 
+                    class="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded"
+                    onclick="clearAllLogs()"
+                >
+                    <i class="fas fa-trash mr-2"></i>
+                    清空日誌
+                </button>
+                
+                <button 
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                    onclick="runFullTest()"
+                >
+                    <i class="fas fa-play mr-2"></i>
+                    運行完整測試
+                </button>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主內容區域 -->
+    <div class="flex space-x-4 h-[calc(100vh-7rem)]">
+        <!-- 左側 - API 測試面板 -->
+        <div class="w-1/2 flex flex-col">
+            <!-- API 端點測試 -->
+            <div class="bg-white border rounded-lg p-4 mb-4 flex-shrink-0">
+                <h2 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-code text-blue-400 mr-2"></i>
+                    API 端點測試
+                </h2>
+                
+                <div class="grid grid-cols-2 gap-3">
+                    <!-- 系統 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium">系統 API</h3>
+                        <button class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/health')">
+                            <i class="fas fa-heartbeat mr-1"></i>健康檢查
+                        </button>
+                        <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/version')">
+                            <i class="fas fa-info-circle mr-1"></i>版本信息
+                        </button>
+                    </div>
+                    
+                    <!-- 用戶 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium text-gray-600">用戶 API</h3>
+                        
+                        <!-- 用戶名輸入 -->
+                        <input 
+                            type="text" 
+                            id="testUsername"
+                            class="w-full px-2 py-1 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 text-sm"
+                            placeholder="用戶名"
+                            value="testuser"
+                        >
+                        
+                        <!-- 密碼輸入 -->
+                        <input 
+                            type="password" 
+                            id="testPassword"
+                            class="w-full px-2 py-1 rounded bg-white border border-gray-300 text-gray-900 placeholder-gray-500 text-sm"
+                            placeholder="密碼"
+                            value="Test123456!"
+                        >
+                        
+                        <button class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testUserRegister()">
+                            <i class="fas fa-user-plus mr-1"></i>用戶註冊
+                        </button>
+                        <button class="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testUserLogin()">
+                            <i class="fas fa-sign-in-alt mr-1"></i>用戶登入
+                        </button>
+                        <button class="w-full bg-cyan-600 hover:bg-cyan-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testUserProfile()">
+                            <i class="fas fa-user mr-1"></i>用戶資料
+                        </button>
+                        <button class="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAuthRefresh()">
+                            <i class="fas fa-sync mr-1"></i>刷新令牌
+                        </button>
+                        <button class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAuthLogout()">
+                            <i class="fas fa-sign-out-alt mr-1"></i>用戶登出
+                        </button>
+                    </div>
+                    
+                    <!-- 角色 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium text-gray-600">角色 API</h3>
+                        <button class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/character/list')">
+                            <i class="fas fa-list mr-1"></i>角色列表
+                        </button>
+                    </div>
+                    
+                    <!-- 對話 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium text-gray-600">對話 API</h3>
+                        <button class="w-full bg-pink-600 hover:bg-pink-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testCreateSession()">
+                            <i class="fas fa-plus mr-1"></i>創建會話
+                        </button>
+                        <button class="w-full bg-rose-600 hover:bg-rose-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testSendMessage()">
+                            <i class="fas fa-paper-plane mr-1"></i>發送消息
+                        </button>
+                        <button class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/chat/sessions')">
+                            <i class="fas fa-history mr-1"></i>會話列表
+                        </button>
+                        <button class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testChatRegenerate()">
+                            <i class="fas fa-redo mr-1"></i>重新生成
+                        </button>
+                    </div>
+                    
+                    <!-- 情感系統 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium text-gray-600">情感系統</h3>
+                        <button class="w-full bg-red-500 hover:bg-red-600 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/emotion/status')">
+                            <i class="fas fa-heart mr-1"></i>情感狀態
+                        </button>
+                        <button class="w-full bg-pink-500 hover:bg-pink-600 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/emotion/affection?character_id=char_001')">
+                            <i class="fas fa-heartbeat mr-1"></i>好感度
+                        </button>
+                        <button class="w-full bg-rose-500 hover:bg-rose-600 text-white py-2 px-3 rounded text-sm transition-all" onclick="testEmotionEvent()">
+                            <i class="fas fa-bolt mr-1"></i>觸發事件
+                        </button>
+                        <button class="w-full bg-red-400 hover:bg-red-500 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/emotion/milestones?character_id=char_001')">
+                            <i class="fas fa-trophy mr-1"></i>里程碑
+                        </button>
+                    </div>
+                    
+                    <!-- 記憶系統 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium text-gray-600">記憶系統</h3>
+                        <button class="w-full bg-indigo-500 hover:bg-indigo-600 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/memory/timeline')">
+                            <i class="fas fa-clock mr-1"></i>記憶時間軸
+                        </button>
+                        <button class="w-full bg-blue-500 hover:bg-blue-600 text-white py-2 px-3 rounded text-sm transition-all" onclick="testSaveMemory()">
+                            <i class="fas fa-save mr-1"></i>保存記憶
+                        </button>
+                        <button class="w-full bg-cyan-500 hover:bg-cyan-600 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/memory/search?query=咖啡')">
+                            <i class="fas fa-search mr-1"></i>搜尋記憶
+                        </button>
+                        <button class="w-full bg-teal-500 hover:bg-teal-600 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/memory/stats')">
+                            <i class="fas fa-chart-bar mr-1"></i>記憶統計
+                        </button>
+                    </div>
+                    
+                    <!-- 小說模式 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium text-gray-600">小說模式</h3>
+                        <button class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testStartNovel()">
+                            <i class="fas fa-book mr-1"></i>開始小說
+                        </button>
+                        <button class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testNovelChoice()">
+                            <i class="fas fa-path mr-1"></i>做出選擇
+                        </button>
+                        <button class="w-full bg-lime-600 hover:bg-lime-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/novel/list')">
+                            <i class="fas fa-list mr-1"></i>小說列表
+                        </button>
+                        <button class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/novel/progress/list')">
+                            <i class="fas fa-archive mr-1"></i>存檔列表
+                        </button>
+                    </div>
+                    
+                    <!-- TTS 語音系統 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium text-gray-600">TTS 語音</h3>
+                        <button class="w-full bg-violet-600 hover:bg-violet-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/tts/voices')">
+                            <i class="fas fa-microphone mr-1"></i>語音列表
+                        </button>
+                        <button class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testTTSGenerate()">
+                            <i class="fas fa-volume-up mr-1"></i>生成語音
+                        </button>
+                        <button class="w-full bg-fuchsia-600 hover:bg-fuchsia-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testTTSPreview()">
+                            <i class="fas fa-play mr-1"></i>預覽語音
+                        </button>
+                        <button class="w-full bg-pink-600 hover:bg-pink-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/tts/history')">
+                            <i class="fas fa-history mr-1"></i>語音歷史
+                        </button>
+                    </div>
+                    
+                    <!-- 搜尋系統 API -->
+                    <div class="space-y-2">
+                        <h3 class="text-sm font-medium text-gray-600">搜尋系統</h3>
+                        <button class="w-full bg-gray-600 hover:bg-gray-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/search/chats?q=你好')">
+                            <i class="fas fa-search mr-1"></i>搜尋對話
+                        </button>
+                        <button class="w-full bg-slate-600 hover:bg-slate-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/search/global?q=陸燁銘')">
+                            <i class="fas fa-globe mr-1"></i>全局搜尋
+                        </button>
+                        <button class="w-full bg-zinc-600 hover:bg-zinc-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/tags')">
+                            <i class="fas fa-tags mr-1"></i>標籤列表
+                        </button>
+                        <button class="w-full bg-neutral-600 hover:bg-neutral-700 text-white py-2 px-3 rounded text-sm transition-all" onclick="testAPI('GET', '/api/v1/tags/popular')">
+                            <i class="fas fa-fire mr-1"></i>熱門標籤
+                        </button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 測試場景 -->
+            <div class="bg-white border rounded-lg p-4 mb-4 flex-shrink-0">
+                <h2 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-vial text-blue-600 mr-2"></i>
+                    測試場景
+                </h2>
+                
+                <div class="grid grid-cols-3 gap-3">
+                    <button class="bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg transition-all text-sm" onclick="runScenarioTest('normal')">
+                        <i class="fas fa-comment mr-2"></i>
+                        <div class="font-medium">普通對話</div>
+                        <div class="text-xs opacity-75">Level 1 內容</div>
+                    </button>
+                    
+                    <button class="bg-yellow-600 hover:bg-yellow-700 text-white py-3 px-4 rounded-lg transition-all text-sm" onclick="runScenarioTest('romantic')">
+                        <i class="fas fa-heart mr-2"></i>
+                        <div class="font-medium">浪漫對話</div>
+                        <div class="text-xs opacity-75">Level 2-3 內容</div>
+                    </button>
+                    
+                    <button class="bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg transition-all text-sm" onclick="runScenarioTest('nsfw')">
+                        <i class="fas fa-fire mr-2"></i>
+                        <div class="font-medium">成人對話</div>
+                        <div class="text-xs opacity-75">Level 4-5 內容</div>
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 自定義測試 -->
+            <div class="bg-white border rounded-lg p-4 flex-1 min-h-0">
+                <h2 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-tools text-orange-500 mr-2"></i>
+                    自定義 API 測試
+                </h2>
+                
+                <div class="h-full flex flex-col space-y-3">
+                    <!-- HTTP 方法和端點 - 固定高度 -->
+                    <div class="flex-shrink-0 space-y-2">
+                        <label class="block text-sm font-medium text-gray-700">HTTP 方法 & API 端點</label>
+                        <div class="flex gap-2">
+                            <select id="customMethod" class="px-3 py-2 rounded-lg bg-gray-50 border border-gray-300 text-gray-900 text-sm font-medium focus:ring-2 focus:ring-orange-500 focus:border-orange-500">
+                                <option value="GET" class="font-mono">GET</option>
+                                <option value="POST" class="font-mono">POST</option>
+                                <option value="PUT" class="font-mono">PUT</option>
+                                <option value="DELETE" class="font-mono">DELETE</option>
+                            </select>
+                            
+                            <input 
+                                type="text" 
+                                id="customEndpoint"
+                                class="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
+                                placeholder="例如: /api/v1/user/profile"
+                                value="/api/v1/"
+                            >
+                        </div>
+                    </div>
+                    
+                    <!-- 常用端點快捷選擇 - 固定高度 -->
+                    <div class="flex-shrink-0 space-y-2">
+                        <label class="block text-sm font-medium text-gray-700">常用端點</label>
+                        <div class="grid grid-cols-2 gap-2 text-xs">
+                            <button onclick="setCustomEndpoint('GET', '/health')" class="text-left px-2 py-1.5 bg-gray-100 hover:bg-orange-100 rounded-md text-gray-700 hover:text-orange-700 transition-colors border border-gray-200">
+                                <i class="fas fa-heartbeat mr-1 text-green-500"></i>健康檢查
+                            </button>
+                            <button onclick="setCustomEndpoint('GET', '/api/v1/character/list')" class="text-left px-2 py-1.5 bg-gray-100 hover:bg-orange-100 rounded-md text-gray-700 hover:text-orange-700 transition-colors border border-gray-200">
+                                <i class="fas fa-users mr-1 text-blue-500"></i>角色列表
+                            </button>
+                            <button onclick="setCustomEndpoint('GET', '/api/v1/user/profile')" class="text-left px-2 py-1.5 bg-gray-100 hover:bg-orange-100 rounded-md text-gray-700 hover:text-orange-700 transition-colors border border-gray-200">
+                                <i class="fas fa-user mr-1 text-purple-500"></i>用戶資料
+                            </button>
+                            <button onclick="setCustomEndpoint('GET', '/api/v1/chat/sessions')" class="text-left px-2 py-1.5 bg-gray-100 hover:bg-orange-100 rounded-md text-gray-700 hover:text-orange-700 transition-colors border border-gray-200">
+                                <i class="fas fa-comments mr-1 text-indigo-500"></i>會話列表
+                            </button>
+                            <button onclick="setCustomEndpoint('POST', '/api/v1/chat/message')" class="text-left px-2 py-1.5 bg-gray-100 hover:bg-orange-100 rounded-md text-gray-700 hover:text-orange-700 transition-colors border border-gray-200">
+                                <i class="fas fa-paper-plane mr-1 text-yellow-600"></i>發送訊息
+                            </button>
+                            <button onclick="setCustomEndpoint('GET', '/api/v1/emotion/status')" class="text-left px-2 py-1.5 bg-gray-100 hover:bg-orange-100 rounded-md text-gray-700 hover:text-orange-700 transition-colors border border-gray-200">
+                                <i class="fas fa-heart mr-1 text-pink-500"></i>情感狀態
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- JSON 請求體 - 彈性區域 -->
+                    <div class="flex-1 flex flex-col space-y-2 min-h-0">
+                        <div class="flex items-center justify-between">
+                            <label class="block text-sm font-medium text-gray-700">JSON 請求體</label>
+                            <div class="flex gap-1">
+                                <button onclick="formatJSON()" class="text-xs px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded">格式化</button>
+                                <button onclick="clearPayload()" class="text-xs px-2 py-1 bg-red-100 hover:bg-red-200 text-red-700 rounded">清空</button>
+                            </div>
+                        </div>
+                        <textarea 
+                            id="customPayload"
+                            class="flex-1 px-3 py-2 rounded-lg border border-gray-300 text-gray-900 text-sm font-mono resize-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 min-h-0"
+                            placeholder="{ 
+  &quot;key&quot;: &quot;value&quot;,
+  &quot;example&quot;: true
+}"
+                        ></textarea>
+                    </div>
+                    
+                    <!-- 執行按鈕 - 固定高度 -->
+                    <div class="flex-shrink-0">
+                        <button 
+                            class="w-full bg-gradient-to-r from-orange-500 to-red-500 hover:from-orange-600 hover:to-red-600 text-white py-3 px-4 rounded-lg font-medium transition-all duration-200 transform hover:scale-[1.01] shadow-lg hover:shadow-xl"
+                            onclick="runCustomTest()"
+                        >
+                            <i class="fas fa-rocket mr-2"></i>
+                            執行測試
+                            <i class="fas fa-play ml-2"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右側 - 監控面板 -->
+        <div class="w-1/2 flex flex-col">
+            <!-- 實時監控 -->
+            <div class="bg-white border rounded-lg p-4 mb-4 flex-shrink-0">
+                <h2 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-chart-line text-green-400 mr-2"></i>
+                    實時監控
+                </h2>
+                
+                <div class="grid grid-cols-4 gap-3">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-400" id="successCount">0</div>
+                        <div class="text-xs">成功請求</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-red-400" id="errorCount">0</div>
+                        <div class="text-xs">失敗請求</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-400" id="avgResponseTime">0ms</div>
+                        <div class="text-xs">平均響應</div>
+                    </div>
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-600" id="totalRequests">0</div>
+                        <div class="text-xs">總請求數</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- API 日誌 -->
+            <div class="bg-white border rounded-lg p-4 flex-1 min-h-0">
+                <div class="flex items-center justify-between mb-4">
+                    <h2 class="text-lg font-semibold">
+                        <i class="fas fa-terminal text-blue-400 mr-2"></i>
+                        API 日誌
+                    </h2>
+                    
+                    <div class="flex space-x-2">
+                        <button 
+                            id="filterAll"
+                            class="px-3 py-1 rounded text-sm bg-blue-600"
+                            onclick="filterLogs('all')"
+                        >
+                            全部
+                        </button>
+                        <button 
+                            id="filterSuccess"
+                            class="px-3 py-1 rounded text-sm bg-gray-600"
+                            onclick="filterLogs('success')"
+                        >
+                            成功
+                        </button>
+                        <button 
+                            id="filterError"
+                            class="px-3 py-1 rounded text-sm bg-gray-600"
+                            onclick="filterLogs('error')"
+                        >
+                            錯誤
+                        </button>
+                    </div>
+                </div>
+                
+                <div class="overflow-y-auto overflow-y-auto h-full">
+                    <div id="apiLogs" class="space-y-2 text-sm font-mono">
+                        <div class="text-center py-8">
+                            開始測試 API 以查看日誌...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        let testStats = {
+            successCount: 0,
+            errorCount: 0,
+            totalResponseTime: 0,
+            totalRequests: 0
+        };
+        
+        let currentFilter = 'all';
+        let currentSessionId = null;
+        
+        // 頁面初始化 - 測試頁面不需要處理登出跳轉
+        document.addEventListener('DOMContentLoaded', async function() {
+            // 覆蓋登出事件處理，避免自動跳轉
+            const originalLogout = ApiClient.logout;
+            ApiClient.logout = function() {
+                // 在測試頁面，只清除狀態但不跳轉
+                AppState.isAuthenticated = false;
+                AppState.currentUser = null;
+                AppState.accessToken = null;
+                AppState.refreshToken = null;
+                Utils.storage.remove('tokens');
+                Utils.storage.remove('user');
+                // 不觸發 userLoggedOut 事件，避免跳轉
+            };
+            
+            // 監聽 API 調用事件
+            ApiClient.addEventListener('apiLogUpdated', updateLogDisplay);
+            
+            // 定期更新統計
+            setInterval(updateStats, 1000);
+        });
+        
+        // 通用 API 測試
+        async function testAPI(method, endpoint, data = null) {
+            const startTime = Date.now();
+            
+            try {
+                let result;
+                switch (method) {
+                    case 'GET':
+                        result = await ApiClient.get(endpoint);
+                        break;
+                    case 'POST':
+                        result = await ApiClient.post(endpoint, data);
+                        break;
+                    case 'PUT':
+                        result = await ApiClient.put(endpoint, data);
+                        break;
+                    case 'DELETE':
+                        result = await ApiClient.delete(endpoint);
+                        break;
+                }
+                
+                // 處理登入成功的回應
+                if (endpoint === '/api/v1/auth/login' && result.success && result.data) {
+                    AppState.isAuthenticated = true;
+                    AppState.accessToken = result.data.access_token;
+                    AppState.refreshToken = result.data.refresh_token;
+                    AppState.currentUser = { username: data.username };
+                    
+                    Utils.storage.set('tokens', {
+                        access: AppState.accessToken,
+                        refresh: AppState.refreshToken
+                    });
+                    Utils.storage.set('user', AppState.currentUser);
+                    
+                    UI.showToast('登入成功！現在可以測試需要認證的 API', 'success');
+                }
+                
+                // 處理註冊成功的回應
+                if (endpoint === '/api/v1/auth/register' && result.success && result.data) {
+                    AppState.isAuthenticated = true;
+                    AppState.accessToken = result.data.access_token;
+                    AppState.refreshToken = result.data.refresh_token;
+                    AppState.currentUser = { username: data.username };
+                    
+                    Utils.storage.set('tokens', {
+                        access: AppState.accessToken,
+                        refresh: AppState.refreshToken
+                    });
+                    Utils.storage.set('user', AppState.currentUser);
+                    
+                    UI.showToast('註冊成功！已自動登入', 'success');
+                }
+                
+                const responseTime = Date.now() - startTime;
+                testStats.successCount++;
+                testStats.totalResponseTime += responseTime;
+                testStats.totalRequests++;
+                
+                if (!endpoint.includes('/auth/login') && !endpoint.includes('/auth/register')) {
+                    UI.showToast(`${method} ${endpoint} 成功 (${responseTime}ms)`, 'success');
+                }
+                
+            } catch (error) {
+                const responseTime = Date.now() - startTime;
+                testStats.errorCount++;
+                testStats.totalResponseTime += responseTime;
+                testStats.totalRequests++;
+                
+                UI.showToast(`${method} ${endpoint} 失敗: ${error.message}`, 'error');
+            }
+        }
+        
+        // 用戶註冊測試
+        async function testUserRegister() {
+            const username = document.getElementById('testUsername').value;
+            const password = document.getElementById('testPassword').value;
+            
+            if (!username || !password) {
+                UI.showToast('請輸入用戶名和密碼', 'warning');
+                return;
+            }
+            
+            const userData = {
+                username: username,
+                nickname: `${username}_測試`,
+                email: `${username}@example.com`,
+                password: password,
+                birth_date: '1995-01-01',
+                gender: 'female'
+            };
+            
+            await testAPI('POST', '/api/v1/auth/register', userData);
+        }
+        
+        // 用戶登入測試
+        async function testUserLogin() {
+            const username = document.getElementById('testUsername').value;
+            const password = document.getElementById('testPassword').value;
+            
+            if (!username || !password) {
+                UI.showToast('請輸入用戶名和密碼', 'warning');
+                return;
+            }
+            
+            const loginData = {
+                username: username,
+                password: password
+            };
+            
+            await testAPI('POST', '/api/v1/auth/login', loginData);
+        }
+        
+        // 用戶資料測試 - 需要先登入
+        async function testUserProfile() {
+            if (!AppState.isAuthenticated) {
+                UI.showToast('請先登入', 'warning');
+                return;
+            }
+            
+            await testAPI('GET', '/api/v1/user/profile');
+        }
+        
+        // 刷新令牌測試
+        async function testAuthRefresh() {
+            if (!AppState.refreshToken) {
+                UI.showToast('請先登入以獲取刷新令牌', 'warning');
+                return;
+            }
+            
+            const refreshData = {
+                refresh_token: AppState.refreshToken
+            };
+            
+            await testAPI('POST', '/api/v1/auth/refresh', refreshData);
+        }
+        
+        // 用戶登出測試
+        async function testAuthLogout() {
+            if (!AppState.isAuthenticated) {
+                UI.showToast('請先登入', 'warning');
+                return;
+            }
+            
+            const logoutData = {};
+            await testAPI('POST', '/api/v1/auth/logout', logoutData);
+            
+            // 清除本地狀態
+            AppState.isAuthenticated = false;
+            AppState.currentUser = null;
+            AppState.accessToken = null;
+            AppState.refreshToken = null;
+            Utils.storage.remove('tokens');
+            Utils.storage.remove('user');
+            
+            UI.showToast('已登出', 'info');
+        }
+        
+        // 創建會話測試
+        async function testCreateSession() {
+            const sessionData = {
+                character_id: 'char_001',
+                title: '測試會話',
+                mode: 'normal'
+            };
+            
+            try {
+                const result = await ApiClient.post('/api/v1/chat/session', sessionData);
+                if (result.success && result.data) {
+                    currentSessionId = result.data.id;
+                    UI.showToast(`會話創建成功: ${currentSessionId}`, 'success');
+                }
+            } catch (error) {
+                console.error('創建會話失敗:', error);
+            }
+        }
+        
+        // 發送消息測試
+        async function testSendMessage() {
+            if (!currentSessionId) {
+                await testCreateSession();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            const messageData = {
+                session_id: currentSessionId || 'test_session',
+                message: '這是一個 API 測試消息'
+            };
+            
+            await testAPI('POST', '/api/v1/chat/message', messageData);
+        }
+        
+        // 場景測試
+        async function runScenarioTest(scenario) {
+            UI.showToast(`開始 ${scenario} 場景測試`, 'info');
+            
+            const scenarios = {
+                normal: [
+                    '你好',
+                    '今天天氣怎麼樣？',
+                    '我想聊聊工作的事'
+                ],
+                romantic: [
+                    '我很想你',
+                    '你今天特別美',
+                    '想要擁抱你'
+                ],
+                nsfw: [
+                    '我想要親吻你',
+                    '感受你的溫暖',
+                    '想要更親密的接觸'
+                ]
+            };
+            
+            const messages = scenarios[scenario] || scenarios.normal;
+            
+            for (const message of messages) {
+                if (!currentSessionId) {
+                    await testCreateSession();
+                    await new Promise(resolve => setTimeout(resolve, 1000));
+                }
+                
+                const messageData = {
+                    session_id: currentSessionId || 'test_session',
+                    message: message
+                };
+                
+                await testAPI('POST', '/api/v1/chat/message', messageData);
+                await new Promise(resolve => setTimeout(resolve, 2000)); // 等待2秒
+            }
+            
+            UI.showToast(`${scenario} 場景測試完成`, 'success');
+        }
+        
+        // 自定義測試
+        async function runCustomTest() {
+            const method = document.getElementById('customMethod').value;
+            const endpoint = document.getElementById('customEndpoint').value;
+            const payloadText = document.getElementById('customPayload').value;
+            
+            if (!endpoint) {
+                UI.showToast('請輸入 API 端點', 'warning');
+                return;
+            }
+            
+            let payload = null;
+            if (payloadText.trim()) {
+                try {
+                    payload = JSON.parse(payloadText);
+                } catch (error) {
+                    UI.showToast('JSON 格式錯誤', 'error');
+                    return;
+                }
+            }
+            
+            await testAPI(method, endpoint, payload);
+        }
+        
+        // 運行完整測試
+        async function runFullTest() {
+            UI.showToast('開始運行完整測試套件', 'info');
+            
+            // 系統測試
+            await testAPI('GET', '/health');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            await testAPI('GET', '/api/v1/version');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 用戶流程測試
+            await testUserRegister();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testUserLogin();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testAPI('GET', '/api/v1/user/profile');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 角色測試
+            await testAPI('GET', '/api/v1/character/list');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            // 對話測試
+            await testCreateSession();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testSendMessage();
+            await new Promise(resolve => setTimeout(resolve, 2000));
+            
+            await testAPI('GET', '/api/v1/chat/sessions');
+            await new Promise(resolve => setTimeout(resolve, 500));
+            
+            UI.showToast('完整測試套件執行完成', 'success');
+        }
+        
+        // 更新日誌顯示
+        function updateLogDisplay(log) {
+            const logsContainer = document.getElementById('apiLogs');
+            
+            // 清空提示文字
+            if (logsContainer.children.length === 1 && logsContainer.children[0].textContent.includes('開始測試')) {
+                logsContainer.innerHTML = '';
+            }
+            
+            const logElement = document.createElement('div');
+            logElement.className = `p-3 rounded-lg border-l-4 ${log.isSuccess ? 'border-green-400 bg-green-900 bg-opacity-20' : 'border-red-400 bg-red-900 bg-opacity-20'}`;
+            logElement.dataset.type = log.isSuccess ? 'success' : 'error';
+            
+            const statusIcon = log.isSuccess ? '✅' : '❌';
+            const statusColor = log.isSuccess ? 'text-green-400' : 'text-red-400';
+            
+            logElement.innerHTML = `
+                <div class="flex items-center justify-between mb-1">
+                    <span class="${statusColor} font-bold">${statusIcon} ${log.method} ${log.endpoint}</span>
+                    <span class="text-gray-400 text-xs">${log.timestamp.split('T')[1].split('.')[0]}</span>
+                </div>
+                <div class="text-xs text-gray-300 mb-1">狀態: ${log.status}</div>
+                <details class="text-xs">
+                    <summary class="cursor-pointer text-blue-400 hover:text-blue-300">查看回應</summary>
+                    <pre class="mt-2 p-2 bg-opacity-30 bg-black rounded overflow-x-auto">${JSON.stringify(log.data, null, 2)}</pre>
+                </details>
+            `;
+            
+            logsContainer.insertBefore(logElement, logsContainer.firstChild);
+            
+            // 限制日誌數量
+            while (logsContainer.children.length > 50) {
+                logsContainer.removeChild(logsContainer.lastChild);
+            }
+            
+            // 應用當前篩選
+            applyLogFilter();
+        }
+        
+        // 篩選日誌
+        function filterLogs(type) {
+            currentFilter = type;
+            
+            // 更新按鈕狀態
+            document.querySelectorAll('[id^="filter"]').forEach(btn => {
+                btn.className = 'px-3 py-1 rounded text-sm bg-gray-600 text-gray-300';
+            });
+            
+            document.getElementById(`filter${type.charAt(0).toUpperCase() + type.slice(1)}`).className = 'px-3 py-1 rounded text-sm bg-blue-600 text-white';
+            
+            applyLogFilter();
+        }
+        
+        // 應用日誌篩選
+        function applyLogFilter() {
+            const logs = document.querySelectorAll('#apiLogs > div[data-type]');
+            
+            logs.forEach(log => {
+                const logType = log.dataset.type;
+                
+                if (currentFilter === 'all' || currentFilter === logType) {
+                    log.style.display = 'block';
+                } else {
+                    log.style.display = 'none';
+                }
+            });
+        }
+        
+        // 更新統計
+        function updateStats() {
+            document.getElementById('successCount').textContent = testStats.successCount;
+            document.getElementById('errorCount').textContent = testStats.errorCount;
+            document.getElementById('totalRequests').textContent = testStats.totalRequests;
+            
+            if (testStats.totalRequests > 0) {
+                const avgTime = Math.round(testStats.totalResponseTime / testStats.totalRequests);
+                document.getElementById('avgResponseTime').textContent = avgTime + 'ms';
+            }
+        }
+        
+        // 清空所有日誌
+        function clearAllLogs() {
+            if (confirm('確定要清空所有日誌嗎？')) {
+                document.getElementById('apiLogs').innerHTML = `
+                    <div class="text-gray-400 text-center py-8">
+                        開始測試 API 以查看日誌...
+                    </div>
+                `;
+                
+                // 重置統計
+                testStats = {
+                    successCount: 0,
+                    errorCount: 0,
+                    totalResponseTime: 0,
+                    totalRequests: 0
+                };
+                
+                AppState.apiLogs = [];
+                updateStats();
+                
+                UI.showToast('日誌已清空', 'info');
+            }
+        }
+
+        // 新增的API測試函數
+
+        // 重新生成回應測試
+        async function testChatRegenerate() {
+            if (!currentSessionId) {
+                await testCreateSession();
+                await new Promise(resolve => setTimeout(resolve, 1000));
+            }
+            
+            const regenerateData = {
+                session_id: currentSessionId || 'test_session',
+                message_id: 'msg_test_001',
+                reason: 'improve_quality'
+            };
+            
+            await testAPI('POST', '/api/v1/chat/regenerate', regenerateData);
+        }
+
+        // 觸發情感事件測試
+        async function testEmotionEvent() {
+            const eventData = {
+                character_id: 'char_001',
+                event_type: 'praise',
+                intensity: 0.8,
+                context: '用戶讚美了角色的回應'
+            };
+            
+            await testAPI('POST', '/api/v1/emotion/event', eventData);
+        }
+
+        // 保存記憶測試
+        async function testSaveMemory() {
+            const memoryData = {
+                content: '用戶提到他們喜歡聽古典音樂',
+                type: 'preference',
+                importance: 0.7,
+                context: '日常對話中的偏好發現',
+                tags: ['音樂', '偏好']
+            };
+            
+            await testAPI('POST', '/api/v1/memory/save', memoryData);
+        }
+
+        // 開始小說測試
+        async function testStartNovel() {
+            const novelData = {
+                character_id: 'char_001',
+                genre: 'romance',
+                theme: '校園戀愛',
+                setting: '現代都市大學',
+                difficulty: 'normal'
+            };
+            
+            await testAPI('POST', '/api/v1/novel/start', novelData);
+        }
+
+        // 小說選擇測試
+        async function testNovelChoice() {
+            const choiceData = {
+                novel_id: 'novel_test_001',
+                choice_id: 'choice_001',
+                choice_text: '主動向她表白',
+                chapter: 1,
+                scene: 3
+            };
+            
+            await testAPI('POST', '/api/v1/novel/choice', choiceData);
+        }
+
+        // TTS 生成測試
+        async function testTTSGenerate() {
+            const ttsData = {
+                text: '你好，這是語音合成測試',
+                voice_id: 'voice_001',
+                character_id: 'char_001',
+                speed: 1.0,
+                pitch: 1.0,
+                emotion: 'happy'
+            };
+            
+            await testAPI('POST', '/api/v1/tts/generate', ttsData);
+        }
+
+        // TTS 預覽測試
+        async function testTTSPreview() {
+            const previewData = {
+                text: '預覽語音效果',
+                voice_id: 'voice_002',
+                duration_limit: 10
+            };
+            
+            await testAPI('POST', '/api/v1/tts/preview', previewData);
+        }
+
+        // 自定義測試區域支援函數
+
+        // 設置自定義端點
+        function setCustomEndpoint(method, endpoint) {
+            document.getElementById('customMethod').value = method;
+            document.getElementById('customEndpoint').value = endpoint;
+            
+            // 根據端點提供示例 JSON
+            const payloadElement = document.getElementById('customPayload');
+            const examples = {
+                '/api/v1/chat/message': `{
+  "session_id": "session_001",
+  "message": "你好，這是測試訊息"
+}`,
+                '/api/v1/auth/login': `{
+  "username": "testuser",
+  "password": "password123"
+}`,
+                '/api/v1/chat/session': `{
+  "character_id": "char_001",
+  "title": "測試會話",
+  "mode": "normal"
+}`,
+                '/api/v1/emotion/event': `{
+  "character_id": "char_001",
+  "event_type": "praise",
+  "intensity": 0.8
+}`,
+                '/api/v1/memory/save': `{
+  "content": "用戶喜歡聽音樂",
+  "type": "preference",
+  "importance": 0.7
+}`,
+                '/api/v1/novel/start': `{
+  "character_id": "char_001",
+  "genre": "romance",
+  "theme": "校園戀愛"
+}`,
+                '/api/v1/tts/generate': `{
+  "text": "這是語音合成測試",
+  "voice_id": "voice_001",
+  "character_id": "char_001"
+}`
+            };
+            
+            if (examples[endpoint] && method === 'POST') {
+                payloadElement.value = examples[endpoint];
+            } else if (method === 'GET') {
+                payloadElement.value = '';
+            }
+        }
+
+        // 格式化 JSON
+        function formatJSON() {
+            const payloadElement = document.getElementById('customPayload');
+            const text = payloadElement.value.trim();
+            
+            if (!text) {
+                UI.showToast('沒有內容需要格式化', 'warning');
+                return;
+            }
+            
+            try {
+                const parsed = JSON.parse(text);
+                payloadElement.value = JSON.stringify(parsed, null, 2);
+                UI.showToast('JSON 格式化成功', 'success');
+            } catch (error) {
+                UI.showToast('JSON 格式錯誤: ' + error.message, 'error');
+            }
+        }
+
+        // 清空 Payload
+        function clearPayload() {
+            document.getElementById('customPayload').value = '';
+            UI.showToast('已清空請求體', 'info');
+        }
+    </script>
+</body>
+</html>

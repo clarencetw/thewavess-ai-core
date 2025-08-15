@@ -2,9 +2,13 @@ package handlers
 
 import (
 	"net/http"
+	"os"
+	"runtime"
 
 	"github.com/gin-gonic/gin"
+	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
 // GetVersion godoc
@@ -16,15 +20,24 @@ import (
 // @Success      200 {object} models.APIResponse
 // @Router       /version [get]
 func GetVersion(c *gin.Context) {
+	// 獲取環境變數或使用默認值
+	version := "1.0.0"
+	buildTime := "2025-08-16T00:00:00Z"
+	gitCommit := "latest"
+	environment := os.Getenv("ENVIRONMENT")
+	if environment == "" {
+		environment = "development"
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "獲取版本資訊成功",
 		Data: gin.H{
-			"version":     "1.0.0",
-			"build_time":  "2023-12-01T00:00:00Z",
-			"git_commit":  "abc123",
-			"go_version":  "go1.22",
-			"environment": "development",
+			"version":     version,
+			"build_time":  buildTime,
+			"git_commit":  gitCommit,
+			"go_version":  runtime.Version(),
+			"environment": environment,
 		},
 	})
 }
@@ -38,21 +51,47 @@ func GetVersion(c *gin.Context) {
 // @Success      200 {object} models.APIResponse
 // @Router       /status [get]
 func GetStatus(c *gin.Context) {
-	// TODO: 實作系統狀態檢查邏輯
+	// 系統內存統計
+	var m runtime.MemStats
+	runtime.ReadMemStats(&m)
+
+	// 檢查數據庫狀態
+	dbStatus := "disconnected"
+	if database.DB != nil {
+		if err := database.DB.Ping(); err == nil {
+			dbStatus = "connected"
+		} else {
+			dbStatus = "error"
+		}
+	}
+
+	// 檢查環境變數
+	openaiStatus := "not_configured"
+	if os.Getenv("OPENAI_API_KEY") != "" {
+		openaiStatus = "configured"
+	}
+
+	grokStatus := "not_configured"
+	if os.Getenv("GROK_API_KEY") != "" {
+		grokStatus = "configured"
+	}
+
+	// 計算內存使用率 (簡化)
+	memUsageMB := float64(m.Alloc) / 1024 / 1024
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "系統狀態正常",
 		Data: gin.H{
-			"status":         "healthy",
-			"uptime":         "24h30m15s",
-			"database":       "connected",
-			"redis":          "connected",
-			"qdrant":         "connected",
-			"openai_api":     "available",
-			"grok_api":       "available",
-			"memory_usage":   "45.2%",
-			"cpu_usage":      "12.8%",
-			"active_sessions": 156,
+			"status":          "healthy",
+			"timestamp":       utils.GetCurrentTimestampString(),
+			"database":        dbStatus,
+			"openai_api":      openaiStatus,
+			"grok_api":        grokStatus,
+			"memory_usage_mb": memUsageMB,
+			"goroutines":      runtime.NumGoroutine(),
+			"go_version":      runtime.Version(),
+			"environment":     os.Getenv("ENVIRONMENT"),
 		},
 	})
 }

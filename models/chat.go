@@ -1,130 +1,199 @@
 package models
 
-import "time"
+import (
+	"context"
+	"time"
 
-// ChatSession 對話會話模型
+	"github.com/uptrace/bun"
+)
+
+// ChatSession 聊天會話模型
 type ChatSession struct {
-	BaseModel
-	UserID      string `json:"user_id" example:"550e8400-e29b-41d4-a716-446655440000"`
-	CharacterID string `json:"character_id" example:"char_001"`
-	Title       string `json:"title" example:"與陸寒淵的對話"`
-	Mode        string `json:"mode" example:"normal" enums:"normal,novel,nsfw"`
-	Status      string `json:"status" example:"active" enums:"active,ended,paused"`
-	Tags        []string `json:"tags" example:"浪漫,日常"`
-	MessageCount int `json:"message_count" example:"25"`
-	LastMessageAt time.Time `json:"last_message_at" example:"2023-12-01T12:00:00Z"`
+	bun.BaseModel `bun:"table:chat_sessions,alias:cs"`
+
+	ID              string     `bun:"id,pk" json:"id"`
+	UserID          string     `bun:"user_id,notnull" json:"user_id"`
+	CharacterID     string     `bun:"character_id,notnull" json:"character_id"`
+	Title           string     `bun:"title" json:"title,omitempty"`
+	Mode            string     `bun:"mode,default:'normal'" json:"mode"`
+	Status          string     `bun:"status,default:'active'" json:"status"`
+	Tags            []string   `bun:"tags,array" json:"tags,omitempty"`
+	MessageCount    int        `bun:"message_count,default:0" json:"message_count"`
+	TotalCharacters int        `bun:"total_characters,default:0" json:"total_characters"`
+	LastMessageAt   *time.Time `bun:"last_message_at" json:"last_message_at,omitempty"`
+	CreatedAt       time.Time  `bun:"created_at,nullzero,default:now()" json:"created_at"`
+	UpdatedAt       time.Time  `bun:"updated_at,nullzero,default:now()" json:"updated_at"`
+
+	// 關聯
+	User      *User       `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
+	Character *Character  `bun:"rel:belongs-to,join:character_id=id" json:"character,omitempty"`
+	Messages  []*Message  `bun:"rel:has-many,join:id=session_id" json:"messages,omitempty"`
+}
+
+// Message 消息模型
+type Message struct {
+	bun.BaseModel `bun:"table:messages,alias:m"`
+
+	ID                  string                 `bun:"id,pk" json:"id"`
+	SessionID           string                 `bun:"session_id,notnull" json:"session_id"`
+	Role                string                 `bun:"role,notnull" json:"role"`
+	Content             string                 `bun:"content,notnull" json:"content"`
+	SceneDescription    string                 `bun:"scene_description" json:"scene_description,omitempty"`
+	CharacterAction     string                 `bun:"character_action" json:"character_action,omitempty"`
+	EmotionalState      map[string]interface{} `bun:"emotional_state,type:jsonb" json:"emotional_state,omitempty"`
+	AIEngine            string                 `bun:"ai_engine" json:"ai_engine,omitempty"`
+	ResponseTimeMs      int                    `bun:"response_time_ms" json:"response_time_ms,omitempty"`
+	NSFWLevel           int                    `bun:"nsfw_level,default:0" json:"nsfw_level"`
+	IsRegenerated       bool                   `bun:"is_regenerated,default:false" json:"is_regenerated"`
+	RegenerationReason  string                 `bun:"regeneration_reason" json:"regeneration_reason,omitempty"`
+	CreatedAt           time.Time              `bun:"created_at,nullzero,default:now()" json:"created_at"`
+
+	// 關聯
+	Session *ChatSession `bun:"rel:belongs-to,join:session_id=id" json:"session,omitempty"`
+}
+
+// UserSession 用戶會話關聯模型
+type UserSession struct {
+	bun.BaseModel `bun:"table:user_sessions,alias:us"`
+
+	UserID    string    `bun:"user_id,pk" json:"user_id"`
+	SessionID string    `bun:"session_id,pk" json:"session_id"`
+	Role      string    `bun:"role,default:'owner'" json:"role"`
+	JoinedAt  time.Time `bun:"joined_at,nullzero,default:now()" json:"joined_at"`
+
+	// 關聯
+	User    *User        `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
+	Session *ChatSession `bun:"rel:belongs-to,join:session_id=id" json:"session,omitempty"`
+}
+
+// TableName 返回數據庫表名
+func (cs *ChatSession) TableName() string {
+	return "chat_sessions"
+}
+
+func (m *Message) TableName() string {
+	return "messages"
+}
+
+func (us *UserSession) TableName() string {
+	return "user_sessions"
+}
+
+// BeforeAppendModel 在模型操作前執行
+func (cs *ChatSession) BeforeAppendModel(ctx context.Context, query bun.Query) error {
+	switch query.(type) {
+	case *bun.UpdateQuery:
+		cs.UpdatedAt = time.Now()
+	}
+	return nil
+}
+
+// ChatSessionResponse 會話響應格式
+type ChatSessionResponse struct {
+	ID              string                 `json:"id"`
+	UserID          string                 `json:"user_id"`
+	CharacterID     string                 `json:"character_id"`
+	Title           string                 `json:"title,omitempty"`
+	Mode            string                 `json:"mode"`
+	Status          string                 `json:"status"`
+	Tags            []string               `json:"tags,omitempty"`
+	MessageCount    int                    `json:"message_count"`
+	TotalCharacters int                    `json:"total_characters"`
+	LastMessageAt   *time.Time             `json:"last_message_at,omitempty"`
+	CreatedAt       time.Time              `json:"created_at"`
+	UpdatedAt       time.Time              `json:"updated_at"`
+	Character       *CharacterResponse     `json:"character,omitempty"`
+	LastMessage     *MessageResponse       `json:"last_message,omitempty"`
+}
+
+// MessageResponse 消息響應格式
+type MessageResponse struct {
+	ID                  string                 `json:"id"`
+	SessionID           string                 `json:"session_id"`
+	Role                string                 `json:"role"`
+	Content             string                 `json:"content"`
+	SceneDescription    string                 `json:"scene_description,omitempty"`
+	CharacterAction     string                 `json:"character_action,omitempty"`
+	EmotionalState      map[string]interface{} `json:"emotional_state,omitempty"`
+	AIEngine            string                 `json:"ai_engine,omitempty"`
+	ResponseTimeMs      int                    `json:"response_time_ms,omitempty"`
+	NSFWLevel           int                    `json:"nsfw_level"`
+	IsRegenerated       bool                   `json:"is_regenerated"`
+	RegenerationReason  string                 `json:"regeneration_reason,omitempty"`
+	CreatedAt           time.Time              `json:"created_at"`
+}
+
+// ToResponse 轉換為響應格式
+func (cs *ChatSession) ToResponse() *ChatSessionResponse {
+	response := &ChatSessionResponse{
+		ID:              cs.ID,
+		UserID:          cs.UserID,
+		CharacterID:     cs.CharacterID,
+		Title:           cs.Title,
+		Mode:            cs.Mode,
+		Status:          cs.Status,
+		Tags:            cs.Tags,
+		MessageCount:    cs.MessageCount,
+		TotalCharacters: cs.TotalCharacters,
+		LastMessageAt:   cs.LastMessageAt,
+		CreatedAt:       cs.CreatedAt,
+		UpdatedAt:       cs.UpdatedAt,
+	}
+
+	// 添加角色信息
+	if cs.Character != nil {
+		response.Character = cs.Character.ToResponse()
+	}
+
+	// 添加最後一條消息
+	if len(cs.Messages) > 0 {
+		lastMessage := cs.Messages[len(cs.Messages)-1]
+		response.LastMessage = lastMessage.ToResponse()
+	}
+
+	return response
+}
+
+func (m *Message) ToResponse() *MessageResponse {
+	return &MessageResponse{
+		ID:                  m.ID,
+		SessionID:           m.SessionID,
+		Role:                m.Role,
+		Content:             m.Content,
+		SceneDescription:    m.SceneDescription,
+		CharacterAction:     m.CharacterAction,
+		EmotionalState:      m.EmotionalState,
+		AIEngine:            m.AIEngine,
+		ResponseTimeMs:      m.ResponseTimeMs,
+		NSFWLevel:           m.NSFWLevel,
+		IsRegenerated:       m.IsRegenerated,
+		RegenerationReason:  m.RegenerationReason,
+		CreatedAt:           m.CreatedAt,
+	}
 }
 
 // CreateSessionRequest 創建會話請求
 type CreateSessionRequest struct {
-	CharacterID string   `json:"character_id" binding:"required" example:"char_001"`
-	Title       string   `json:"title,omitempty" example:"新的對話"`
-	Mode        string   `json:"mode,omitempty" example:"normal" enums:"normal,novel,nsfw"`
-	Tags        []string `json:"tags,omitempty" example:"浪漫,日常"`
+	CharacterID string   `json:"character_id" binding:"required"`
+	Title       string   `json:"title,omitempty"`
+	Mode        string   `json:"mode,omitempty" binding:"omitempty,oneof=normal novel nsfw"`
+	Tags        []string `json:"tags,omitempty"`
 }
 
-// ChatMessage 對話訊息模型
-type ChatMessage struct {
-	BaseModel
-	SessionID   string                 `json:"session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
-	Role        string                 `json:"role" example:"user" enums:"user,assistant"`
-	Content     string                 `json:"content" example:"你好"`
-	MessageType string                 `json:"message_type" example:"text" enums:"text,image,audio"`
-	Metadata    map[string]interface{} `json:"metadata,omitempty"`
-}
-
-// SendMessageRequest 發送訊息請求
+// SendMessageRequest 發送消息請求
 type SendMessageRequest struct {
-	SessionID string   `json:"session_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440000"`
-	Message   string   `json:"message" binding:"required" example:"你好"`
-	Tags      []string `json:"tags,omitempty" example:"問候"`
-	Context   MessageContext `json:"context,omitempty"`
+	SessionID string `json:"session_id" binding:"required"`
+	Message   string `json:"message" binding:"required,max=2000"`
 }
 
-// MessageContext 訊息上下文
-type MessageContext struct {
-	Affection    int    `json:"affection,omitempty" example:"75"`
-	Relationship string `json:"relationship,omitempty" example:"friend" enums:"stranger,friend,ambiguous,lover"`
-	Scene        string `json:"scene,omitempty" example:"辦公室"`
+// 聊天相關響應結構
+type ChatSessionListResponse struct {
+	Sessions   []*ChatSessionResponse `json:"sessions"`
+	Pagination PaginationResponse     `json:"pagination"`
 }
 
-// MessageHistoryItem 歷史訊息項目
-type MessageHistoryItem struct {
-	BaseModel
-	SessionID        string                 `json:"session_id" example:"session_001"`
-	Role             string                 `json:"role" example:"user" enums:"user,assistant"`
-	Content          string                 `json:"content" example:"你好"`
-	SceneDescription string                 `json:"scene_description,omitempty" example:"辦公室裡燈光微暖..."`
-	CharacterAction  string                 `json:"character_action,omitempty" example:"他溫和地笑著"`
-	EmotionalState   map[string]interface{} `json:"emotional_state,omitempty"`
-	NSFWLevel        int                    `json:"nsfw_level" example:"1"`
-	AIEngine         string                 `json:"ai_engine" example:"openai"`
-	ResponseTime     int                    `json:"response_time,omitempty" example:"1250"`
-}
-
-// MessageHistoryResponse 歷史訊息回應
 type MessageHistoryResponse struct {
-	SessionID  string               `json:"session_id" example:"session_001"`
-	Messages   []MessageHistoryItem `json:"messages"`
-	Pagination PaginationInfo       `json:"pagination"`
-}
-
-// PaginationInfo 分頁資訊
-type PaginationInfo struct {
-	CurrentPage int  `json:"current_page" example:"1"`
-	TotalPages  int  `json:"total_pages" example:"5"`
-	TotalCount  int  `json:"total_count" example:"50"`
-	HasNext     bool `json:"has_next" example:"true"`
-	HasPrev     bool `json:"has_prev" example:"false"`
-}
-
-// ChatResponse 對話回應
-type ChatResponse struct {
-	SessionID       string        `json:"session_id" example:"550e8400-e29b-41d4-a716-446655440000"`
-	MessageID       string        `json:"message_id" example:"550e8400-e29b-41d4-a716-446655440001"`
-	CharacterID     string        `json:"character_id" example:"char_001"`
-	Response        string        `json:"response" example:"你好，很高興見到你"`
-	Emotion         string        `json:"emotion" example:"happy" enums:"happy,sad,angry,shy,excited"`
-	AffectionChange int           `json:"affection_change" example:"5"`
-	EngineUsed      string        `json:"engine_used" example:"openai" enums:"openai,grok"`
-	NovelChoices    []NovelChoice `json:"novel_choices,omitempty"`
-	SpecialEvent    *SpecialEvent `json:"special_event,omitempty"`
-}
-
-// NovelChoice 小說選項
-type NovelChoice struct {
-	ID          string `json:"id" example:"choice_001"`
-	Text        string `json:"text" example:"選擇A：主動握住他的手"`
-	Consequence string `json:"consequence" example:"好感度+10"`
-}
-
-// SpecialEvent 特殊事件
-type SpecialEvent struct {
-	Triggered   bool   `json:"triggered" example:"true"`
-	Type        string `json:"type" example:"confession"`
-	Description string `json:"description" example:"陸寒淵向你表白了"`
-}
-
-// SessionListResponse 會話列表回應
-type SessionListResponse struct {
-	Sessions   []ChatSession      `json:"sessions"`
-	Pagination PaginationResponse `json:"pagination"`
-}
-
-
-// UpdateModeRequest 切換模式請求
-type UpdateModeRequest struct {
-	Mode              string `json:"mode" binding:"required" example:"novel" enums:"normal,novel,nsfw"`
-	TransitionMessage string `json:"transition_message,omitempty" example:"我們來玩個遊戲吧"`
-}
-
-// AddTagsRequest 添加標籤請求
-type AddTagsRequest struct {
-	Tags []string `json:"tags" binding:"required" example:"浪漫,甜蜜,日常"`
-}
-
-// RegenerateRequest 重新生成請求
-type RegenerateRequest struct {
-	MessageID           string `json:"message_id" binding:"required" example:"550e8400-e29b-41d4-a716-446655440001"`
-	RegenerationReason  string `json:"regeneration_reason,omitempty" example:"tone" enums:"tone,content,length"`
+	SessionID  string               `json:"session_id"`
+	Messages   []*MessageResponse   `json:"messages"`
+	Pagination PaginationResponse   `json:"pagination"`
 }

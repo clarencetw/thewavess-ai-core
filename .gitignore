@@ -11,11 +11,23 @@
 # Test binary, built with `go test -c`
 *.test
 
+# Built executables (main binary)
+thewavess-ai-core
+/thewavess-ai-core
+
+# Build directory (but keep structure)
+bin/*
+!bin/.gitkeep
+
 # Code coverage profiles and other test artifacts
 *.out
 coverage.*
 *.coverprofile
 profile.cov
+
+# Log files and runtime artifacts
+*.log
+.server.pid
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
@@ -24,11 +36,19 @@ profile.cov
 go.work
 go.work.sum
 
-# env file
+# Environment files
 .env
+.env.*
 
 # Editor/IDE
-# .idea/
-# .vscode/
+.idea/
+.vscode/
 .claude/
+
+# Generated documentation (auto-regenerated)
 docs/
+
+# Temporary files
+*.tmp
+*.temp
+.DS_Store

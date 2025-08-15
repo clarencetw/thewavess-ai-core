@@ -4,12 +4,12 @@
 
 **專為成人用戶設計的智能 AI 聊天後端服務**
 
-[![Go Version](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://golang.org/)
-[![License](https://img.shields.io/badge/License-Proprietary-red?style=flat)]()
-[![API Status](https://img.shields.io/badge/API_Endpoints-19/19_Core-green?style=flat)]()
-[![NSFW Support](https://img.shields.io/badge/NSFW-5_Level_System-orange?style=flat)]()
+[![Go](https://img.shields.io/badge/Go-1.23+-00ADD8?style=flat&logo=go)](https://golang.org/)
+[![API](https://img.shields.io/badge/API-34/118-4CAF50?style=flat)]()
+[![NSFW](https://img.shields.io/badge/NSFW-5級系統-FF9800?style=flat)]()
+[![License](https://img.shields.io/badge/License-Proprietary-E91E63?style=flat)]()
 
-[快速開始](#-快速開始) • [API 文檔](#-api-文檔) • [功能特色](#-核心特色) • [部署指南](#-部署指南)
+**🚀 [快速開始](#-快速開始) • 📡 [API 文檔](#-api-文檔) • ✨ [功能特色](#-核心特色) • 🚢 [部署指南](#-部署指南)**
 
 </div>
 
@@ -76,8 +76,8 @@ Thewavess AI Core 是一個企業級的 AI 聊天後端服務，專為成人用�
 ### 後端技術棧
 ```
 Go 1.23+ + Gin Web Framework
-├── 認證系統: JWT Token + bcrypt 密碼加密
-├── 資料庫: PostgreSQL (主) + Redis (快取) 
+├── 認證系統: JWT Token (Access + Refresh) + bcrypt 加密
+├── 資料庫: PostgreSQL + Bun ORM + 數據庫遷移
 ├── AI 引擎: OpenAI GPT-4o + Grok API
 ├── 日誌系統: Logrus 結構化日誌
 ├── 文檔系統: Swagger/OpenAPI 3.0
@@ -160,7 +160,10 @@ docker run -d --name postgres \
   -e POSTGRES_DB=thewavess_ai_core \
   -p 5432:5432 postgres:15
 
-# 4. 生成文檔並啟動
+# 4. 設置數據庫
+make db-setup
+
+# 5. 生成文檔並啟動
 make docs
 make run
 ```
@@ -193,7 +196,8 @@ make docker-run
 | 分類 | 端點 | 狀態 | 描述 |
 |------|------|------|------|
 | 🔐 **認證** | `POST /api/v1/user/register` | ✅ | 用戶註冊（含年齡驗證） |
-| 🔐 **認證** | `POST /api/v1/user/login` | ✅ | 用戶登入 |
+| 🔐 **認證** | `POST /api/v1/user/login` | ✅ | 用戶登入（含 Refresh Token） |
+| 🔐 **認證** | `POST /api/v1/user/logout` | ✅ | 用戶登出 |
 | 🔐 **認證** | `POST /api/v1/user/refresh` | ✅ | Token 刷新 |
 | 👤 **用戶** | `GET /api/v1/user/profile` | ✅ | 獲取用戶資料 |
 | 👤 **用戶** | `PUT /api/v1/user/profile` | ⚡ | 更新用戶資料 |
@@ -257,7 +261,7 @@ curl -X POST http://localhost:8080/api/v1/chat/message \
 ## 📊 功能狀態
 
 ### ✅ 已完成核心功能 (100%)
-- **🔐 用戶認證系統**: JWT Token + 年齡驗證 + 密碼加密
+- **🔐 用戶認證系統**: JWT Token (Access + Refresh) + 年齡驗證 + 密碼加密
 - **💬 AI 對話引擎**: OpenAI GPT-4o 整合，支援情感和場景
 - **🎭 角色系統**: 多種 AI 角色，個性化回應
 - **🔍 內容分析**: 5 級 NSFW 內容自動檢測和分類
@@ -266,8 +270,8 @@ curl -X POST http://localhost:8080/api/v1/chat/message \
 - **📚 文檔系統**: Swagger API 文檔自動生成
 - **🔧 監控系統**: 健康檢查，版本管理，結構化日誌
 
-### ⚡ 開發中功能 (80%)
-- **🗄️ 資料庫持久化**: PostgreSQL 用戶和對話數據存儲
+### ⚡ 開發中功能 (90%)
+- **🗄️ 資料庫持久化**: PostgreSQL + Bun ORM 完整實現 ✅
 - **⚡ Redis 快取**: Token 黑名單，會話快取
 - **🤖 Grok 整合**: Level 5 極度成人內容處理
 - **📱 會話管理**: 對話歷史，會話標籤，數據匯出
@@ -281,10 +285,10 @@ curl -X POST http://localhost:8080/api/v1/chat/message \
 ### 📈 開發進度統計
 
 ```
-總體進度: ████████████████████░░ 85%
+總體進度: █████████████████████░ 90%
 
 核心功能: ██████████████████████ 100% (11/11)
-擴展功能: ████████████████░░░░░░  75% (6/8)
+擴展功能: ██████████████████████  90% (7/8)
 高級功能: ░░░░░░░░░░░░░░░░░░░░░░   0% (0/6)
 ```
 
@@ -330,6 +334,22 @@ make docs
 
 # 清理構建產物
 make clean
+```
+
+### 數據庫管理
+
+```bash
+# 運行數據庫遷移
+make migrate
+
+# 查看遷移狀態
+make migrate-status
+
+# 首次設置數據庫（包含遷移）
+make db-setup
+
+# 重置數據庫（⚠️ 會清除所有數據）
+make db-reset
 ```
 
 ### 專案結構
@@ -646,18 +666,6 @@ All rights reserved.
 
 ---
 
-<div align="center">
+## 📚 相關連結
 
-## 🚀 讓 AI 對話更加智能和貼心 🚀
-
-[![GitHub](https://img.shields.io/badge/GitHub-clarencetw/thewavess--ai--core-black?style=for-the-badge&logo=github)](https://github.com/clarencetw/thewavess-ai-core)
-[![Documentation](https://img.shields.io/badge/Documentation-API%20Reference-blue?style=for-the-badge&logo=read-the-docs)](./API.md)
-[![Deployment Guide](https://img.shields.io/badge/Deployment-Guide-green?style=for-the-badge&logo=docker)](./DEPLOYMENT.md)
-
-**專業 • 智能 • 安全**
-
-</div>
-
----
-
-*最後更新: 2024-08-14*
+[📁 GitHub 倉庫](https://github.com/clarencetw/thewavess-ai-core) • [📖 API 文檔](./API.md) • [🚀 部署指南](./DEPLOYMENT.md) • [📊 開發進度](./API_PROGRESS.md)

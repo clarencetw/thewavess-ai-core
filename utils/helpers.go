@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"strconv"
+	"time"
 )
 
 // ParseInt 安全地將字符串轉換為整數
@@ -49,4 +50,9 @@ func GenerateID(length int) string {
 		return ""
 	}
 	return hex.EncodeToString(bytes)
+}
+
+// GetCurrentTimestampString 獲取當前時間戳字串
+func GetCurrentTimestampString() string {
+	return time.Now().UTC().Format(time.RFC3339)
 }

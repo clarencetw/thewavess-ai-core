@@ -1,0 +1,786 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 對話 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+</head>
+<body class="h-full flex flex-col bg-gray-50 text-gray-900">
+    <!-- 頂部導航 -->
+    <nav class="bg-white border rounded-lg m-4 mb-0 p-4 flex-shrink-0">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <button 
+                    class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded"
+                    onclick="Router.navigate('/character')"
+                >
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                
+                <div class="flex items-center space-x-3">
+                    <img 
+                        id="characterAvatar"
+                        class="w-10 h-10 rounded-full border-2 border-purple-400"
+                        src=""
+                        alt="角色頭像"
+                    >
+                    <div>
+                        <h1 class="text-lg font-bold" id="characterName">--</h1>
+                        <div class="text-sm" id="characterStatus">正在輸入...</div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <!-- 情感狀態 -->
+                <div class="bg-gray-100 border rounded px-3 py-2 text-sm">
+                    <i class="fas fa-heart text-red-400 mr-1"></i>
+                    <span id="affectionLevel">50</span>
+                </div>
+                
+                <!-- 模式切換 -->
+                <select 
+                    id="chatMode"
+                    class="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm"
+                    onchange="changeChatMode()"
+                >
+                    <option value="normal">普通模式</option>
+                    <option value="novel">小說模式</option>
+                    <option value="nsfw">成人模式</option>
+                </select>
+                
+                <!-- 功能菜單 -->
+                <div class="relative">
+                    <button 
+                        id="menuToggle"
+                        class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded"
+                        onclick="toggleMenu()"
+                    >
+                        <i class="fas fa-ellipsis-v"></i>
+                    </button>
+                    
+                    <div id="menuDropdown" class="hidden absolute right-0 top-12 bg-white border rounded p-2 min-w-[150px] z-10">
+                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="newSession()">
+                            <i class="fas fa-plus mr-2"></i>新對話
+                        </button>
+                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="exportChat()">
+                            <i class="fas fa-download mr-2"></i>匯出對話
+                        </button>
+                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="clearChat()">
+                            <i class="fas fa-trash mr-2"></i>清空對話
+                        </button>
+                        <hr class="my-2 border-gray-600">
+                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="Router.navigate('/profile')">
+                            <i class="fas fa-user mr-2"></i>個人資料
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 聊天區域 -->
+    <div class="flex-1 flex mx-4 mb-4 space-x-4 min-h-0">
+        <!-- 主聊天區 -->
+        <div class="flex-1 flex flex-col bg-white border rounded-lg overflow-hidden">
+            <!-- 場景描述 -->
+            <div id="sceneDescription" class="bg-blue-50 border-b border-gray-200 p-4 text-sm italic text-gray-700">
+                <i class="fas fa-image mr-2"></i>
+                <span id="sceneText">準備開始對話...</span>
+            </div>
+            
+            <!-- 消息區域 -->
+            <div class="flex-1 p-4 overflow-y-auto overflow-y-auto" id="messagesArea">
+                <div class="space-y-4" id="messagesList">
+                    <!-- 歡迎消息 -->
+                    <div class="flex items-start space-x-3">
+                        <img 
+                            id="welcomeAvatar"
+                            class="w-8 h-8 rounded-full"
+                            src=""
+                            alt="AI"
+                        >
+                        <div class="bg-white border rounded p-3 max-w-[80%]">
+                            <p id="welcomeMessage">歡迎來到 AI 對話！正在為您創建專屬會話...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 輸入區域 -->
+            <div class="border-t border-gray-600 p-4">
+                <div class="flex space-x-3">
+                    <div class="flex-1 relative">
+                        <textarea 
+                            id="messageInput"
+                            class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 resize-none"
+                            placeholder="輸入您的訊息..."
+                            rows="1"
+                            disabled
+                        ></textarea>
+                        
+                        <!-- 輸入增強功能 -->
+                        <div class="absolute right-2 top-2 flex space-x-1">
+                            <button 
+                                class="hover:opacity-80 p-1 transition-colors"
+                                onclick="insertEmoji()"
+                                title="表情符號"
+                            >
+                                <i class="fas fa-smile"></i>
+                            </button>
+                            <button 
+                                class="hover:opacity-80 p-1 transition-colors"
+                                onclick="clearInput()"
+                                title="清空輸入"
+                            >
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <button 
+                        id="sendButton"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        onclick="sendMessage()"
+                        disabled
+                    >
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                
+                <!-- 快速回復 -->
+                <div class="mt-3 flex flex-wrap gap-2" id="quickReplies">
+                    <!-- 快速回復按鈕會動態生成 -->
+                </div>
+            </div>
+        </div>
+        
+        <!-- 側邊欄 -->
+        <div class="w-80 flex flex-col space-y-4">
+            <!-- 情感狀態卡片 -->
+            <div class="bg-white border rounded-lg p-4">
+                <h3 class="text-lg font-semibold mb-3">
+                    <i class="fas fa-heart text-red-400 mr-2"></i>
+                    情感狀態
+                </h3>
+                
+                <div class="space-y-3">
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>好感度</span>
+                            <span id="affectionDisplay">50/100</span>
+                        </div>
+                        <div class="w-full bg-gray-600 rounded-full h-2">
+                            <div id="affectionBar" class="bg-gradient-to-r from-green-400 to-green-500 h-2 rounded-full" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div class="text-center">
+                            <div class="text-blue-400 font-medium" id="currentMood">中性</div>
+                            <div>心情</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-green-400 font-medium" id="relationshipStatus">陌生人</div>
+                            <div>關係</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- NSFW 檢測 -->
+            <div class="bg-white border rounded-lg p-4">
+                <h3 class="text-lg font-semibold mb-3">
+                    <i class="fas fa-shield-alt text-green-400 mr-2"></i>
+                    內容分析
+                </h3>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm">當前級別</span>
+                        <span id="currentNsfwLevel" class="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">Level 1</span>
+                    </div>
+                    
+                    <div class="text-xs" id="nsfwDescription">
+                        日常對話內容，安全適宜
+                    </div>
+                    
+                    <div class="text-xs">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        AI 引擎: <span id="currentEngine">OpenAI</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 對話歷史 -->
+            <div class="bg-white border border-gray-200 shadow-lg rounded-xl p-4 flex-1 min-h-0">
+                <h3 class="text-lg font-semibold mb-3">
+                    <i class="fas fa-history text-yellow-400 mr-2"></i>
+                    對話記錄
+                </h3>
+                
+                <div class="space-y-2 overflow-y-auto overflow-y-auto max-h-40" id="chatHistory">
+                    <div class="text-sm text-center py-4">
+                        暫無歷史記錄
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- 表情符號面板 -->
+    <div id="emojiPanel" class="hidden fixed bottom-20 right-4 bg-white border rounded-lg p-4 z-50">
+        <div class="grid grid-cols-6 gap-2 text-2xl">
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('😊')">😊</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('😍')">😍</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('🥰')">🥰</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('😘')">😘</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('😢')">😢</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('😡')">😡</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('🤔')">🤔</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('😉')">😉</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('❤️')">❤️</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('💕')">💕</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('🔥')">🔥</span>
+            <span class="cursor-pointer hover:bg-white hover:bg-opacity-10 p-2 rounded" onclick="insertEmojiText('💔')">💔</span>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        let currentSession = null;
+        let currentCharacter = null;
+        let isAIResponding = false;
+        let messageHistory = [];
+        let emotionState = {
+            affection: 50,
+            mood: 'neutral',
+            relationship: 'stranger',
+            intimacyLevel: 'friendly'
+        };
+        
+        // 頁面初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await App.init();
+            
+            // 檢查認證狀態
+            if (!AppState.isAuthenticated) {
+                Router.navigate('/auth');
+                return;
+            }
+            
+            // 載入選中的角色
+            currentCharacter = AppState.selectedCharacter || Utils.storage.get('selectedCharacter');
+            if (!currentCharacter) {
+                Router.navigate('/character');
+                return;
+            }
+            
+            // 初始化頁面
+            initializePage();
+            
+            // 創建聊天會話
+            await createChatSession();
+            
+            // 設置事件監聽器
+            setupEventListeners();
+        });
+        
+        // 初始化頁面
+        function initializePage() {
+            // 設置角色信息
+            document.getElementById('characterAvatar').src = currentCharacter.avatar;
+            document.getElementById('welcomeAvatar').src = currentCharacter.avatar;
+            document.getElementById('characterName').textContent = currentCharacter.name;
+            document.getElementById('characterStatus').textContent = '在線';
+            
+            // 設置歡迎消息
+            const welcomeMessages = {
+                'char_001': '你好，我是陸寒淵。很高興認識你...有什麼需要我幫助的嗎？',
+                'char_002': '你好呀，我是沈言墨。今天過得怎麼樣？需要聊聊嗎？',
+                'char_003': '歡迎來到知識的世界，我是林夜白。有什麼想了解的嗎？'
+            };
+            
+            document.getElementById('welcomeMessage').textContent = 
+                welcomeMessages[currentCharacter.id] || '你好！很高興與你對話。';
+            
+            // 設置快速回復
+            setupQuickReplies();
+        }
+        
+        // 設置快速回復
+        function setupQuickReplies() {
+            const quickReplies = [
+                { text: '你好', value: '你好' },
+                { text: '今天過得如何？', value: '今天過得如何？' },
+                { text: '想聊聊', value: '我想和你聊聊' },
+                { text: '工作話題', value: '聊聊工作的事' }
+            ];
+            
+            const container = document.getElementById('quickReplies');
+            container.innerHTML = quickReplies.map(reply => 
+                `<button class="bg-gray-600 bg-opacity-70 border border-gray-500 px-3 py-1 rounded-full text-sm transition-all hover:bg-opacity-90" onclick="sendQuickReply('${reply.value}')">${reply.text}</button>`
+            ).join('');
+        }
+        
+        // 創建聊天會話
+        async function createChatSession() {
+            try {
+                const result = await ApiClient.post('/api/v1/chat/session', {
+                    character_id: currentCharacter.id,
+                    title: `與 ${currentCharacter.name} 的對話`,
+                    mode: 'normal'
+                });
+                
+                if (result.success) {
+                    currentSession = result.data;
+                    AppState.currentSession = currentSession;
+                    
+                    // 啟用輸入
+                    enableChatInput();
+                    
+                    // 更新場景描述
+                    updateSceneDescription();
+                    
+                    UI.showToast('會話創建成功', 'success');
+                } else {
+                    throw new Error(result.error?.message || '創建會話失敗');
+                }
+            } catch (error) {
+                console.error('創建會話失敗:', error);
+                UI.showToast('創建會話失敗: ' + error.message, 'error');
+                
+                // 創建本地會話
+                createLocalSession();
+            }
+        }
+        
+        // 創建本地會話
+        function createLocalSession() {
+            currentSession = {
+                id: 'local_' + Date.now(),
+                character_id: currentCharacter.id,
+                title: `與 ${currentCharacter.name} 的對話`,
+                mode: 'normal',
+                created_at: new Date().toISOString()
+            };
+            
+            enableChatInput();
+            updateSceneDescription();
+            
+            UI.showToast('已切換到離線模式', 'warning');
+        }
+        
+        // 啟用聊天輸入
+        function enableChatInput() {
+            const messageInput = document.getElementById('messageInput');
+            const sendButton = document.getElementById('sendButton');
+            
+            messageInput.disabled = false;
+            sendButton.disabled = false;
+            messageInput.placeholder = '輸入您的訊息...';
+            
+            // 聚焦到輸入框
+            messageInput.focus();
+        }
+        
+        // 更新場景描述
+        function updateSceneDescription() {
+            const scenes = {
+                'char_001': '辦公室裡燈光微暖，陸寒淵放下手中的文件，深邃的眼眸望向你...',
+                'char_002': '醫院的走廊裡人來人往，沈言墨溫和地朝你微笑，白大褂在燈光下顯得格外乾淨...',
+                'char_003': '午後的陽光灑在圖書館裡，林夜白靜靜地坐在你對面，專注地翻閱著古籍...'
+            };
+            
+            const sceneText = scenes[currentCharacter.id] || '你們在一個安靜舒適的環境中開始對話...';
+            document.getElementById('sceneText').textContent = sceneText;
+        }
+        
+        // 設置事件監聽器
+        function setupEventListeners() {
+            // 輸入框事件
+            const messageInput = document.getElementById('messageInput');
+            
+            // 自動調整高度
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = Math.min(this.scrollHeight, 120) + 'px';
+            });
+            
+            // 鍵盤事件
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            // 點擊外部關閉菜單
+            document.addEventListener('click', function(e) {
+                const menu = document.getElementById('menuDropdown');
+                const toggle = document.getElementById('menuToggle');
+                
+                if (!menu.contains(e.target) && !toggle.contains(e.target)) {
+                    menu.classList.add('hidden');
+                }
+                
+                const emojiPanel = document.getElementById('emojiPanel');
+                if (!emojiPanel.contains(e.target) && !e.target.closest('[onclick="insertEmoji()"]')) {
+                    emojiPanel.classList.add('hidden');
+                }
+            });
+        }
+        
+        // 發送消息
+        async function sendMessage() {
+            const messageInput = document.getElementById('messageInput');
+            const message = messageInput.value.trim();
+            
+            if (!message || isAIResponding) return;
+            
+            // 清空輸入框
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            
+            // 添加用戶消息到聊天區
+            addMessageToChat('user', message);
+            
+            // 設置 AI 正在回應狀態
+            setAIResponding(true);
+            
+            try {
+                // 發送到 API
+                const result = await ApiClient.post('/api/v1/chat/message', {
+                    session_id: currentSession.id,
+                    message: message
+                });
+                
+                if (result.success && result.data) {
+                    // 處理 AI 回應
+                    handleAIResponse(result.data);
+                } else {
+                    throw new Error(result.error?.message || 'AI 回應失敗');
+                }
+            } catch (error) {
+                console.error('發送消息失敗:', error);
+                
+                // 生成本地回應
+                generateLocalResponse(message);
+                
+                UI.showToast('已切換到離線模式', 'warning');
+            } finally {
+                setAIResponding(false);
+            }
+        }
+        
+        // 發送快速回復
+        function sendQuickReply(message) {
+            const messageInput = document.getElementById('messageInput');
+            messageInput.value = message;
+            sendMessage();
+        }
+        
+        // 添加消息到聊天區
+        function addMessageToChat(sender, content, metadata = {}) {
+            const messagesList = document.getElementById('messagesList');
+            const messageDiv = document.createElement('div');
+            
+            if (sender === 'user') {
+                messageDiv.className = 'flex items-start space-x-3 justify-end';
+                messageDiv.innerHTML = `
+                    <div class="bg-blue-600 text-white rounded p-3 max-w-[80%]">
+                        <p>${content}</p>
+                        <div class="text-xs opacity-75 mt-1">${new Date().toLocaleTimeString()}</div>
+                    </div>
+                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+                        U
+                    </div>
+                `;
+            } else {
+                messageDiv.className = 'flex items-start space-x-3';
+                
+                const sceneHtml = metadata.scene_description ? 
+                    `<div class="text-xs italic text-gray-400 mb-2">${metadata.scene_description}</div>` : '';
+                
+                const actionHtml = metadata.character_action ? 
+                    `<div class="text-xs italic text-gray-600 mt-2">${metadata.character_action}</div>` : '';
+                
+                messageDiv.innerHTML = `
+                    <img class="w-8 h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                    <div class="bg-white border border-gray-200 shadow-xl rounded-lg p-3 max-w-[80%]">
+                        ${sceneHtml}
+                        <p>${content}</p>
+                        ${actionHtml}
+                        <div class="text-xs opacity-75 mt-1 flex items-center justify-between">
+                            <span>${new Date().toLocaleTimeString()}</span>
+                            ${metadata.nsfw_level ? `<span class="bg-gray-600 text-white px-1 py-0.5 rounded text-xs">L${metadata.nsfw_level}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            messagesList.appendChild(messageDiv);
+            
+            // 滾動到底部
+            const messagesArea = document.getElementById('messagesArea');
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+            
+            // 保存到歷史記錄
+            messageHistory.push({
+                sender,
+                content,
+                metadata,
+                timestamp: new Date().toISOString()
+            });
+        }
+        
+        // 處理 AI 回應
+        function handleAIResponse(responseData) {
+            // 添加 AI 消息 - 使用實際的API響應字段
+            addMessageToChat('ai', responseData.content || responseData.character_dialogue, {
+                scene_description: responseData.scene_description,
+                character_action: responseData.character_action,
+                nsfw_level: responseData.nsfw_level || 0,
+                ai_engine: responseData.ai_engine
+            });
+            
+            // 更新情感狀態
+            if (responseData.emotion_state) {
+                updateEmotionState(responseData.emotion_state);
+            }
+            
+            // 更新 NSFW 檢測信息
+            updateNSFWDisplay(responseData.nsfw_level || 0, responseData.ai_engine);
+            
+            // 更新場景描述
+            if (responseData.scene_description) {
+                document.getElementById('sceneText').textContent = responseData.scene_description;
+            }
+            
+            // 保存到聊天歷史
+            if (currentSession && responseData.id) {
+                currentSession.messages.push({
+                    id: responseData.id,
+                    role: responseData.role || 'assistant',
+                    content: responseData.content,
+                    timestamp: responseData.created_at || new Date().toISOString()
+                });
+            }
+        }
+        
+        // 生成本地回應
+        function generateLocalResponse(userMessage) {
+            const responses = {
+                'char_001': [
+                    '嗯，我明白你的意思。作為一個商業領袖，我認為...',
+                    '這確實是個有趣的觀點。讓我們來討論一下...',
+                    '你的想法很有道理。不過，從我的經驗來看...'
+                ],
+                'char_002': [
+                    '你說得對呢。作為醫生，我經常遇到類似的情況...',
+                    '這聽起來很重要。讓我們一起想想解決方案...',
+                    '我很理解你的感受。要不要跟我詳細說說？'
+                ],
+                'char_003': [
+                    '從學術的角度來看，這個問題很值得深入探討...',
+                    '根據我的研究，這種現象有著深層的原因...',
+                    '這讓我想到了一個古老的哲學問題...'
+                ]
+            };
+            
+            const characterResponses = responses[currentCharacter.id] || [
+                '這是一個很有趣的話題，讓我們繼續聊聊吧。',
+                '我很喜歡和你的對話，請告訴我更多吧。',
+                '你的想法總是讓我印象深刻。'
+            ];
+            
+            const randomResponse = characterResponses[Math.floor(Math.random() * characterResponses.length)];
+            
+            // 模擬延遲
+            setTimeout(() => {
+                addMessageToChat('ai', randomResponse, {
+                    scene_description: null,
+                    character_action: '他溫和地看著你，等待你的回應',
+                    nsfw_level: 1
+                });
+                
+                // 輕微增加好感度
+                emotionState.affection = Math.min(emotionState.affection + 1, 100);
+                updateEmotionDisplay();
+                updateNSFWDisplay(1, 'local');
+            }, 1000 + Math.random() * 2000);
+        }
+        
+        // 設置 AI 回應狀態
+        function setAIResponding(responding) {
+            isAIResponding = responding;
+            const statusElement = document.getElementById('characterStatus');
+            const sendButton = document.getElementById('sendButton');
+            const messageInput = document.getElementById('messageInput');
+            
+            if (responding) {
+                statusElement.textContent = '正在輸入...';
+                statusElement.className = 'text-sm text-yellow-400 animate-pulse';
+                sendButton.disabled = true;
+                messageInput.disabled = true;
+            } else {
+                statusElement.textContent = '在線';
+                statusElement.className = 'text-sm text-green-400';
+                sendButton.disabled = false;
+                messageInput.disabled = false;
+                messageInput.focus();
+            }
+        }
+        
+        // 更新情感狀態
+        function updateEmotionState(newState) {
+            emotionState = { ...emotionState, ...newState };
+            updateEmotionDisplay();
+        }
+        
+        // 更新情感顯示
+        function updateEmotionDisplay() {
+            document.getElementById('affectionLevel').textContent = emotionState.affection;
+            document.getElementById('affectionDisplay').textContent = `${emotionState.affection}/100`;
+            document.getElementById('affectionBar').style.width = `${emotionState.affection}%`;
+            document.getElementById('currentMood').textContent = getMoodText(emotionState.mood);
+            document.getElementById('relationshipStatus').textContent = getRelationshipText(emotionState.relationship);
+        }
+        
+        // 獲取心情文字
+        function getMoodText(mood) {
+            const moodMap = {
+                'happy': '開心',
+                'sad': '難過',
+                'excited': '興奮',
+                'shy': '害羞',
+                'neutral': '中性',
+                'concerned': '關心',
+                'pleased': '愉快'
+            };
+            return moodMap[mood] || '中性';
+        }
+        
+        // 獲取關係文字
+        function getRelationshipText(relationship) {
+            const relationshipMap = {
+                'stranger': '陌生人',
+                'friend': '朋友',
+                'close_friend': '好友',
+                'ambiguous': '曖昧',
+                'lover': '戀人'
+            };
+            return relationshipMap[relationship] || '陌生人';
+        }
+        
+        // 更新 NSFW 顯示
+        function updateNSFWDisplay(level, engine) {
+            const levelElement = document.getElementById('currentNsfwLevel');
+            const descriptionElement = document.getElementById('nsfwDescription');
+            const engineElement = document.getElementById('currentEngine');
+            
+            const levelInfo = NSFWSystem.getLevelInfo(level);
+            
+            levelElement.textContent = `Level ${level}`;
+            levelElement.className = `bg-gray-600 text-white px-2 py-1 rounded text-xs font-medium`;
+            descriptionElement.textContent = levelInfo.description;
+            engineElement.textContent = engine === 'grok' ? 'Grok' : 'OpenAI';
+        }
+        
+        // 切換聊天模式
+        function changeChatMode() {
+            const mode = document.getElementById('chatMode').value;
+            // TODO: 實現模式切換
+            UI.showToast(`切換到 ${mode} 模式`, 'info');
+        }
+        
+        // 切換菜單
+        function toggleMenu() {
+            const menu = document.getElementById('menuDropdown');
+            menu.classList.toggle('hidden');
+        }
+        
+        // 新建會話
+        function newSession() {
+            if (confirm('確定要開始新的對話嗎？當前對話將被保存。')) {
+                location.reload();
+            }
+        }
+        
+        // 匯出對話
+        function exportChat() {
+            if (messageHistory.length === 0) {
+                UI.showToast('沒有對話記錄可匯出', 'warning');
+                return;
+            }
+            
+            const chatData = {
+                character: currentCharacter.name,
+                session_id: currentSession.id,
+                created_at: currentSession.created_at,
+                messages: messageHistory
+            };
+            
+            const blob = new Blob([JSON.stringify(chatData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `chat_${currentCharacter.name}_${new Date().toISOString().split('T')[0]}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            UI.showToast('對話已匯出', 'success');
+        }
+        
+        // 清空對話
+        function clearChat() {
+            if (confirm('確定要清空所有對話記錄嗎？此操作無法撤銷。')) {
+                document.getElementById('messagesList').innerHTML = `
+                    <div class="flex items-start space-x-3">
+                        <img class="w-8 h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                        <div class="bg-white border rounded p-3 max-w-[80%]">
+                            <p>對話已清空，我們重新開始吧！</p>
+                        </div>
+                    </div>
+                `;
+                messageHistory = [];
+                UI.showToast('對話已清空', 'info');
+            }
+        }
+        
+        // 插入表情符號
+        function insertEmoji() {
+            const panel = document.getElementById('emojiPanel');
+            panel.classList.toggle('hidden');
+        }
+        
+        // 插入表情符號文字
+        function insertEmojiText(emoji) {
+            const messageInput = document.getElementById('messageInput');
+            messageInput.value += emoji;
+            messageInput.focus();
+            document.getElementById('emojiPanel').classList.add('hidden');
+        }
+        
+        // 清空輸入
+        function clearInput() {
+            const messageInput = document.getElementById('messageInput');
+            messageInput.value = '';
+            messageInput.style.height = 'auto';
+            messageInput.focus();
+        }
+        
+        // 初始化情感顯示
+        updateEmotionDisplay();
+        updateNSFWDisplay(1, 'OpenAI');
+    </script>
+</body>
+</html>

@@ -1,66 +1,86 @@
 package models
 
+import (
+	"context"
+	"time"
+
+	"github.com/uptrace/bun"
+)
+
 // Character 角色模型
 type Character struct {
-	BaseModel
-	Name        string                 `json:"name" example:"陸寒淵"`
-	Type        string                 `json:"type" example:"dominant" enums:"gentle,dominant,ascetic,sunny,cunning"`
-	Description string                 `json:"description" example:"霸道總裁，冷峻外表下隱藏深情"`
-	AvatarURL   string                 `json:"avatar_url" example:"https://example.com/character-avatar.jpg"`
-	VoiceID     string                 `json:"voice_id" example:"voice_001"`
-	Popularity  int                    `json:"popularity" example:"95"`
-	Tags        []string               `json:"tags" example:"霸道總裁,深情,禁慾系"`
-	Appearance  CharacterAppearance    `json:"appearance"`
-	Personality CharacterPersonality   `json:"personality"`
-	Background  string                 `json:"background" example:"商業帝國繼承人，年少成名的商界天才"`
-	IsActive    bool                   `json:"is_active" example:"true"`
-	Preferences map[string]interface{} `json:"preferences,omitempty"`
+	bun.BaseModel `bun:"table:characters,alias:c"`
+
+	ID          string                 `bun:"id,pk" json:"id"`
+	Name        string                 `bun:"name,notnull" json:"name"`
+	Type        string                 `bun:"type,notnull" json:"type"`
+	Description string                 `bun:"description" json:"description,omitempty"`
+	AvatarURL   string                 `bun:"avatar_url" json:"avatar_url,omitempty"`
+	Popularity  int                    `bun:"popularity,default:0" json:"popularity"`
+	Tags        []string               `bun:"tags,array" json:"tags,omitempty"`
+	Appearance  map[string]interface{} `bun:"appearance,type:jsonb" json:"appearance,omitempty"`
+	Personality map[string]interface{} `bun:"personality,type:jsonb" json:"personality,omitempty"`
+	Background  string                 `bun:"background" json:"background,omitempty"`
+	IsActive    bool                   `bun:"is_active,default:true" json:"is_active"`
+	CreatedAt   time.Time              `bun:"created_at,nullzero,default:now()" json:"created_at"`
+	UpdatedAt   time.Time              `bun:"updated_at,nullzero,default:now()" json:"updated_at"`
+
+	// 關聯
+	Sessions []*ChatSession `bun:"rel:has-many,join:id=character_id" json:"sessions,omitempty"`
 }
 
-// CharacterAppearance 角色外貌
-type CharacterAppearance struct {
-	Height      string `json:"height" example:"185cm"`
-	HairColor   string `json:"hair_color" example:"黑髮"`
-	EyeColor    string `json:"eye_color" example:"深邃黑眸"`
-	Description string `json:"description" example:"俊朗五官，總是穿著剪裁合身的西裝"`
+// TableName 返回數據庫表名
+func (c *Character) TableName() string {
+	return "characters"
 }
 
-// CharacterPersonality 角色性格
-type CharacterPersonality struct {
-	Traits   []string `json:"traits" example:"冷酷,強勢,專一"`
-	Likes    []string `json:"likes" example:"工作,掌控,用戶"`
-	Dislikes []string `json:"dislikes" example:"被違抗,失去控制"`
+// BeforeAppendModel 在模型操作前執行
+func (c *Character) BeforeAppendModel(ctx context.Context, query bun.Query) error {
+	switch query.(type) {
+	case *bun.UpdateQuery:
+		c.UpdatedAt = time.Now()
+	}
+	return nil
 }
 
-// CharacterListResponse 角色列表回應
+// CharacterResponse 角色響應格式
+type CharacterResponse struct {
+	ID          string                 `json:"id"`
+	Name        string                 `json:"name"`
+	Type        string                 `json:"type"`
+	Description string                 `json:"description,omitempty"`
+	AvatarURL   string                 `json:"avatar_url,omitempty"`
+	Popularity  int                    `json:"popularity"`
+	Tags        []string               `json:"tags,omitempty"`
+	Appearance  map[string]interface{} `json:"appearance,omitempty"`
+	Personality map[string]interface{} `json:"personality,omitempty"`
+	Background  string                 `json:"background,omitempty"`
+	IsActive    bool                   `json:"is_active"`
+	CreatedAt   time.Time              `json:"created_at"`
+	UpdatedAt   time.Time              `json:"updated_at"`
+}
+
+// ToResponse 轉換為響應格式
+func (c *Character) ToResponse() *CharacterResponse {
+	return &CharacterResponse{
+		ID:          c.ID,
+		Name:        c.Name,
+		Type:        c.Type,
+		Description: c.Description,
+		AvatarURL:   c.AvatarURL,
+		Popularity:  c.Popularity,
+		Tags:        c.Tags,
+		Appearance:  c.Appearance,
+		Personality: c.Personality,
+		Background:  c.Background,
+		IsActive:    c.IsActive,
+		CreatedAt:   c.CreatedAt,
+		UpdatedAt:   c.UpdatedAt,
+	}
+}
+
+// CharacterListResponse 角色列表響應 (Bun 版本)
 type CharacterListResponse struct {
-	Characters []CharacterSummary `json:"characters"`
-	Pagination PaginationResponse `json:"pagination"`
-}
-
-// CharacterSummary 角色摘要
-type CharacterSummary struct {
-	ID          string   `json:"id" example:"char_001"`
-	Name        string   `json:"name" example:"陸寒淵"`
-	Type        string   `json:"type" example:"dominant"`
-	Description string   `json:"description" example:"霸道總裁，冷峻外表下隱藏深情"`
-	AvatarURL   string   `json:"avatar_url" example:"https://example.com/avatar.jpg"`
-	VoiceID     string   `json:"voice_id" example:"voice_001"`
-	Popularity  int      `json:"popularity" example:"95"`
-	Tags        []string `json:"tags" example:"霸道總裁,深情"`
-}
-
-// CharacterStats 角色統計數據
-type CharacterStats struct {
-	TotalConversations int      `json:"total_conversations" example:"1523"`
-	AverageRating      float64  `json:"average_rating" example:"4.8"`
-	TotalUsers         int      `json:"total_users" example:"892"`
-	PopularTags        []string `json:"popular_tags" example:"溫柔,體貼,浪漫"`
-	MonthlyActiveUsers int      `json:"monthly_active_users" example:"456"`
-	AverageSessionTime int      `json:"average_session_time" example:"1800"`
-}
-
-// SelectCharacterRequest 選擇角色請求
-type SelectCharacterRequest struct {
-	CharacterID string `json:"character_id" binding:"required" example:"char_001"`
+	Characters []*CharacterResponse `json:"characters"`
+	Pagination PaginationResponse   `json:"pagination"`
 }

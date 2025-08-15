@@ -144,9 +144,14 @@ const ApiClient = {
             this.logApiCall(method, endpoint, response.status, result);
             
             // 處理認證失敗
-            if (response.status === 401) {
-                await this.handleUnauthorized();
-                throw new Error('認證失敗，請重新登入');
+            if (response.status === 401 && !endpoint.includes('/auth/refresh')) {
+                const refreshed = await this.handleUnauthorized();
+                if (refreshed) {
+                    // 重新嘗試原始請求
+                    return this.request(method, endpoint, data, options);
+                } else {
+                    throw new Error('認證失敗，請重新登入');
+                }
             }
             
             if (!response.ok) {
@@ -204,18 +209,25 @@ const ApiClient = {
     async handleUnauthorized() {
         if (AppState.refreshToken) {
             try {
-                const result = await this.post('/api/v1/user/refresh', {
-                    refresh_token: AppState.refreshToken
+                // 直接使用fetch，避免再次觸發401處理
+                const response = await fetch(API_CONFIG.baseURL + '/api/v1/auth/refresh', {
+                    method: 'POST',
+                    headers: API_CONFIG.headers,
+                    body: JSON.stringify({
+                        refresh_token: AppState.refreshToken
+                    })
                 });
                 
-                if (result.success) {
-                    AppState.accessToken = result.data.access_token;
+                const result = await response.json();
+                
+                if (response.ok && result.success) {
+                    AppState.accessToken = result.data.token;
                     AppState.refreshToken = result.data.refresh_token;
                     Utils.storage.set('tokens', {
                         access: AppState.accessToken,
                         refresh: AppState.refreshToken
                     });
-                    return;
+                    return true; // 成功刷新
                 }
             } catch (error) {
                 console.warn('Token 刷新失敗:', error);
@@ -224,6 +236,7 @@ const ApiClient = {
         
         // 清除認證狀態
         this.logout();
+        return false; // 刷新失敗
     },
     
     // 登出
@@ -459,8 +472,11 @@ const App = {
     
     onUserLoggedOut() {
         // 用戶登出後的處理
-        UI.showToast('已登出', 'info');
-        Router.navigate('/');
+        // 只在需要認證的頁面才跳轉
+        const currentPage = Router.getCurrentPage();
+        if (currentPage !== 'index' && currentPage !== 'age-verify') {
+            Router.navigate('/');
+        }
     },
     
     saveState() {
@@ -469,48 +485,9 @@ const App = {
     }
 };
 
-// 字符系統相關
+// 字符系統相關 - 移除硬編碼角色，完全依賴 API
 const CharacterSystem = {
-    characters: [
-        {
-            id: 'char_001',
-            name: '陸寒淵',
-            title: '霸道總裁',
-            description: '冷酷外表下隱藏著溫柔的心，商場上的王者',
-            avatar: 'https://placehold.co/150x150/6366f1/ffffff?text=陸',
-            personality: ['霸道', '冷酷', '專業', '隱藏溫柔'],
-            nsfw_level: 'adult',
-            popularity: 95
-        },
-        {
-            id: 'char_002',
-            name: '沈言墨',
-            title: '溫柔醫生',
-            description: '治癒系醫生，總是溫和地關心每一個人',
-            avatar: 'https://placehold.co/150x150/10b981/ffffff?text=沈',
-            personality: ['溫柔', '體貼', '專業', '治癒'],
-            nsfw_level: 'mild',
-            popularity: 88
-        },
-        {
-            id: 'char_003',
-            name: '林夜白',
-            title: '神秘學者',
-            description: '博學多才的神秘學者，總有意想不到的知識',
-            avatar: 'https://placehold.co/150x150/8b5cf6/ffffff?text=林',
-            personality: ['神秘', '博學', '理性', '深邃'],
-            nsfw_level: 'safe',
-            popularity: 92
-        }
-    ],
-    
-    getCharacter(id) {
-        return this.characters.find(char => char.id === id);
-    },
-    
-    getCharactersByLevel(nsfwLevel) {
-        return this.characters.filter(char => char.nsfw_level === nsfwLevel);
-    }
+    // 角色數據應該完全從 API 獲取，不再提供離線數據
 };
 
 // NSFW 內容系統
@@ -540,5 +517,4 @@ window.ApiClient = ApiClient;
 window.UI = UI;
 window.Router = Router;
 window.App = App;
-window.CharacterSystem = CharacterSystem;
 window.NSFWSystem = NSFWSystem;

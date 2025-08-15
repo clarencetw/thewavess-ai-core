@@ -1,201 +1,490 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"golang.org/x/crypto/bcrypt"
+	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
-// LogoutUser godoc
-// @Summary      用戶登出
-// @Description  註銷當前用戶會話
+// RegisterUser godoc
+// @Summary      用戶註冊
+// @Description  創建新用戶帳號
 // @Tags         User
 // @Accept       json
 // @Produce      json
-// @Security     BearerAuth
-// @Success      200 {object} models.APIResponse "登出成功"
-// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /user/logout [post]
-func LogoutUser(c *gin.Context) {
-	// 驗證認證
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || len(authHeader) < 20 {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: "缺少或無效的認證 Token",
-			},
-		})
-		return
-	}
+// @Param        user body models.RegisterRequest true "註冊信息"
+// @Success      201 {object} models.APIResponse{data=models.UserResponse} "註冊成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
+// @Failure      409 {object} models.APIResponse{error=models.APIError} "用戶已存在"
+// @Router       /user/register [post]
+func RegisterUser(c *gin.Context) {
+	ctx := context.Background()
 
-	// 模擬登出成功
-	// 在真實環境中，這裡會將 token 加入黑名單或從 Redis 中刪除
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Message: "登出成功",
-		Data: map[string]interface{}{
-			"logout_time": time.Now(),
-			"message":     "您已安全登出",
-		},
-	})
-}
-
-// RefreshToken godoc
-// @Summary      刷新存取令牌
-// @Description  使用 refresh token 獲取新的 access token
-// @Tags         User
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        request body object{refresh_token=string} true "刷新令牌請求"
-// @Success      200 {object} models.APIResponse{data=models.AuthResponse} "刷新成功"
-// @Failure      401 {object} models.APIResponse{error=models.APIError} "令牌無效或過期"
-// @Router       /user/refresh [post]
-func RefreshToken(c *gin.Context) {
-	var req struct {
-		RefreshToken string `json:"refresh_token" binding:"required"`
-	}
-
+	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "VALIDATION_ERROR",
-				Message: "請求參數驗證失敗",
-				Details: err.Error(),
+				Code:    "INVALID_INPUT",
+				Message: "輸入參數錯誤: " + err.Error(),
 			},
 		})
 		return
 	}
 
-	// 簡單驗證 refresh token（在真實環境中會驗證 JWT）
-	if len(req.RefreshToken) < 20 {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
+	// 檢查用戶是否已存在
+	var existingUser models.User
+	exists, err := database.DB.NewSelect().
+		Model(&existingUser).
+		Where("email = ? OR username = ?", req.Email, req.Username).
+		Exists(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to check existing user")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "INVALID_REFRESH_TOKEN",
-				Message: "無效的 refresh token",
+				Code:    "DATABASE_ERROR",
+				Message: "檢查用戶失敗",
 			},
 		})
 		return
 	}
 
-	// 生成新的 tokens
-	newAccessToken := "mock_new_access_token_" + time.Now().Format("20060102150405")
-	newRefreshToken := "mock_new_refresh_token_" + time.Now().Format("20060102150405")
+	if exists {
+		c.JSON(http.StatusConflict, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_EXISTS",
+				Message: "用戶名或郵箱已存在",
+			},
+		})
+		return
+	}
 
-	c.JSON(http.StatusOK, models.APIResponse{
+	// 加密密碼
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to hash password")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "ENCRYPTION_ERROR",
+				Message: "密碼加密失敗",
+			},
+		})
+		return
+	}
+
+	// 創建新用戶
+	user := &models.User{
+		ID:        utils.GenerateID(16),
+		Username:  req.Username,
+		Email:     req.Email,
+		Password:  string(hashedPassword),
+		Status:    "active",
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+
+	// 插入數據庫
+	_, err = database.DB.NewInsert().Model(user).Exec(ctx)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to create user")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "創建用戶失敗",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
-		Message: "令牌刷新成功",
-		Data: models.AuthResponse{
-			UserID:       "user_from_refresh_token",
-			AccessToken:  newAccessToken,
-			RefreshToken: newRefreshToken,
-			ExpiresIn:    3600,
-		},
+		Message: "用戶註冊成功",
+		Data:    user.ToResponse(),
 	})
 }
 
-// UpdateProfile godoc
-// @Summary      更新用戶個人資料
-// @Description  更新當前用戶的個人資料
+// LoginUser godoc
+// @Summary      用戶登入
+// @Description  驗證用戶並返回 JWT Token
+// @Tags         User
+// @Accept       json
+// @Produce      json
+// @Param        credentials body models.LoginRequest true "登入憑證 (username/password)"
+// @Success      200 {object} models.APIResponse{data=models.LoginResponse} "登入成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "認證失敗"
+// @Router       /user/login [post]
+func LoginUser(c *gin.Context) {
+	ctx := context.Background()
+
+	var req models.LoginRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_INPUT",
+				Message: "輸入參數錯誤: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 查找用戶
+	var user models.User
+	err := database.DB.NewSelect().
+		Model(&user).
+		Where("username = ? AND status = ?", req.Username, "active").
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("username", req.Username).Error("User not found")
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_CREDENTIALS",
+				Message: "用戶名或密碼錯誤",
+			},
+		})
+		return
+	}
+
+	// 驗證密碼
+	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", user.ID).Error("Password verification failed")
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_CREDENTIALS",
+				Message: "用戶名/郵箱或密碼錯誤",
+			},
+		})
+		return
+	}
+
+	// 生成 JWT Token
+	token, err := utils.GenerateAccessToken(user.ID, user.Username, user.Email)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to generate JWT token")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "TOKEN_GENERATION_ERROR",
+				Message: "生成認證令牌失敗",
+			},
+		})
+		return
+	}
+
+	// 生成 Refresh Token
+	refreshToken, err := utils.GenerateRefreshToken(user.ID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to generate refresh token")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "TOKEN_GENERATION_ERROR",
+				Message: "生成刷新令牌失敗",
+			},
+		})
+		return
+	}
+
+	// 更新最後登入時間
+	now := time.Now()
+	user.LastLoginAt = &now
+	user.UpdatedAt = now
+
+	_, err = database.DB.NewUpdate().
+		Model(&user).
+		Column("last_login_at", "updated_at").
+		Where("id = ?", user.ID).
+		Exec(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to update last login time")
+		// 不中斷登入流程，只記錄錯誤
+	}
+
+	response := &models.LoginResponse{
+		Token:        token,
+		RefreshToken: refreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    86400, // 24小時
+		User:         user.ToResponse(),
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "登入成功",
+		Data:    response,
+	})
+}
+
+// GetUserProfile godoc
+// @Summary      獲取用戶資料
+// @Description  獲取當前用戶的詳細資料
 // @Tags         User
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        request body models.UpdateProfileRequest true "更新資料"
-// @Success      200 {object} models.APIResponse{data=models.UserProfile} "更新成功"
+// @Success      200 {object} models.APIResponse{data=models.UserResponse} "獲取成功"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Failure      404 {object} models.APIResponse{error=models.APIError} "用戶不存在"
+// @Router       /user/profile [get]
+func GetUserProfile(c *gin.Context) {
+	ctx := context.Background()
+
+	// 從中間件獲取用戶ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	var user models.User
+	err := database.DB.NewSelect().
+		Model(&user).
+		Where("id = ? AND status = ?", userID, "active").
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("Failed to query user")
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: "用戶不存在",
+			},
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "獲取用戶資料成功",
+		Data:    user.ToResponse(),
+	})
+}
+
+// UpdateUserProfile godoc
+// @Summary      更新用戶資料
+// @Description  更新用戶基本資料
+// @Tags         User
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        profile body models.UpdateProfileRequest true "用戶資料"
+// @Success      200 {object} models.APIResponse{data=models.UserResponse} "更新成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Router       /user/profile [put]
-func UpdateProfile(c *gin.Context) {
+func UpdateUserProfile(c *gin.Context) {
+	ctx := context.Background()
+
+	// 從中間件獲取用戶ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
 	var req models.UpdateProfileRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "VALIDATION_ERROR",
-				Message: "請求參數驗證失敗",
-				Details: err.Error(),
+				Code:    "INVALID_INPUT",
+				Message: "輸入參數錯誤: " + err.Error(),
 			},
 		})
 		return
 	}
 
-	// 驗證認證
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || len(authHeader) < 20 {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
+	// 構建更新數據
+	updateData := models.User{
+		UpdatedAt: time.Now(),
+	}
+
+	// 只更新提供的字段
+	updateQuery := database.DB.NewUpdate().Model(&updateData)
+
+	if req.DisplayName != nil {
+		updateData.DisplayName = req.DisplayName
+		updateQuery = updateQuery.Column("display_name")
+	}
+	if req.Bio != nil {
+		updateData.Bio = req.Bio
+		updateQuery = updateQuery.Column("bio")
+	}
+	if req.AvatarURL != nil {
+		updateData.AvatarURL = *req.AvatarURL
+		updateQuery = updateQuery.Column("avatar_url")
+	}
+
+	// 執行更新
+	updateQuery = updateQuery.Column("updated_at").Where("id = ? AND status = ?", userID, "active")
+
+	result, err := updateQuery.Exec(ctx)
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("Failed to update user profile")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: "缺少或無效的認證 Token",
+				Code:    "DATABASE_ERROR",
+				Message: "更新用戶資料失敗",
 			},
 		})
 		return
 	}
 
-	// 模擬更新用戶資料
-	updatedProfile := models.UserProfile{
-		BaseModel: models.BaseModel{
-			ID:        "user_demo_001",
-			CreatedAt: time.Now().AddDate(0, -6, 0),
-			UpdatedAt: time.Now(),
-		},
-		Username:     "demo_user",
-		Email:        "demo@example.com",
-		Nickname:     req.Nickname,
-		AvatarURL:    req.AvatarURL,
-		JoinedAt:     time.Now().AddDate(0, -6, 0),
-		LastActiveAt: time.Now(),
-		TotalChats:   42,
+	// 檢查是否有行被更新
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: "用戶不存在",
+			},
+		})
+		return
+	}
+
+	// 獲取更新後的用戶信息
+	var user models.User
+	err = database.DB.NewSelect().
+		Model(&user).
+		Where("id = ?", userID).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to fetch updated user")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "獲取更新後用戶信息失敗",
+			},
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Message: "個人資料更新成功",
-		Data:    updatedProfile,
+		Message: "用戶資料更新成功",
+		Data:    user.ToResponse(),
 	})
 }
 
-// UpdatePreferences godoc
-// @Summary      更新用戶偏好設定
-// @Description  更新用戶的應用偏好設定
+// UpdateUserPreferences godoc
+// @Summary      更新用戶偏好設置
+// @Description  更新用戶偏好設置
 // @Tags         User
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        request body models.UpdatePreferencesRequest true "偏好設定"
-// @Success      200 {object} models.APIResponse "更新成功"
+// @Param        preferences body models.UpdatePreferencesRequest true "偏好設置"
+// @Success      200 {object} models.APIResponse{data=models.UserResponse} "更新成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Router       /user/preferences [put]
-func UpdatePreferences(c *gin.Context) {
+func UpdateUserPreferences(c *gin.Context) {
+	ctx := context.Background()
+
+	// 從中間件獲取用戶ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
 	var req models.UpdatePreferencesRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "VALIDATION_ERROR",
-				Message: "請求參數驗證失敗",
-				Details: err.Error(),
+				Code:    "INVALID_INPUT",
+				Message: "輸入參數錯誤: " + err.Error(),
 			},
 		})
 		return
 	}
 
-	// 驗證認證
-	authHeader := c.GetHeader("Authorization")
-	if authHeader == "" || len(authHeader) < 20 {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
+	// 獲取當前用戶
+	var user models.User
+	err := database.DB.NewSelect().
+		Model(&user).
+		Where("id = ? AND status = ?", userID, "active").
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("User not found")
+		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: "缺少或無效的認證 Token",
+				Code:    "USER_NOT_FOUND",
+				Message: "用戶不存在",
+			},
+		})
+		return
+	}
+
+	// 更新偏好設置
+	if user.Preferences == nil {
+		user.Preferences = make(map[string]interface{})
+	}
+
+	// 合併新的偏好設置
+	for key, value := range req.Preferences {
+		user.Preferences[key] = value
+	}
+
+	user.UpdatedAt = time.Now()
+
+	// 執行更新
+	_, err = database.DB.NewUpdate().
+		Model(&user).
+		Column("preferences", "updated_at").
+		Where("id = ?", userID).
+		Exec(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("Failed to update user preferences")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "更新偏好設置失敗",
 			},
 		})
 		return
@@ -203,10 +492,363 @@ func UpdatePreferences(c *gin.Context) {
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Message: "偏好設定更新成功",
-		Data: map[string]interface{}{
-			"preferences": req.Preferences,
-			"updated_at":  time.Now(),
+		Message: "偏好設置更新成功",
+		Data:    user.ToResponse(),
+	})
+}
+
+// LogoutUser godoc
+// @Summary      用戶登出
+// @Description  登出當前用戶，使 JWT Token 失效（客戶端處理）
+// @Tags         User
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        logout body models.LogoutRequest false "登出請求"
+// @Success      200 {object} models.APIResponse "登出成功"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Router       /user/logout [post]
+func LogoutUser(c *gin.Context) {
+	// 從中間件獲取用戶ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	// 解析請求體（可選）
+	var req models.LogoutRequest
+	c.ShouldBindJSON(&req)
+
+	// 記錄登出事件
+	utils.Logger.WithField("user_id", userID).Info("User logged out")
+
+	// 由於使用 JWT，實際的 token 失效需要客戶端處理
+	// 這裡主要是記錄登出事件和返回成功響應
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "登出成功",
+	})
+}
+
+// RefreshToken godoc
+// @Summary      刷新訪問令牌
+// @Description  使用 Refresh Token 獲取新的 Access Token
+// @Tags         User
+// @Accept       json
+// @Produce      json
+// @Param        refresh body models.RefreshTokenRequest true "刷新令牌請求"
+// @Success      200 {object} models.APIResponse{data=models.RefreshTokenResponse} "刷新成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "Token 無效"
+// @Router       /user/refresh [post]
+func RefreshToken(c *gin.Context) {
+	ctx := context.Background()
+
+	var req models.RefreshTokenRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_INPUT",
+				Message: "輸入參數錯誤: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 驗證 Refresh Token
+	userID, err := utils.ValidateRefreshToken(req.RefreshToken)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Invalid refresh token")
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_REFRESH_TOKEN",
+				Message: "刷新令牌無效或已過期",
+			},
+		})
+		return
+	}
+
+	// 查找用戶
+	var user models.User
+	err = database.DB.NewSelect().
+		Model(&user).
+		Where("id = ? AND status = ?", userID, "active").
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("User not found")
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: "用戶不存在或已停用",
+			},
+		})
+		return
+	}
+
+	// 生成新的 Access Token
+	newAccessToken, err := utils.GenerateAccessToken(user.ID, user.Username, user.Email)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to generate new access token")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "TOKEN_GENERATION_ERROR",
+				Message: "生成新訪問令牌失敗",
+			},
+		})
+		return
+	}
+
+	// 生成新的 Refresh Token
+	newRefreshToken, err := utils.GenerateRefreshToken(user.ID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to generate new refresh token")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "TOKEN_GENERATION_ERROR",
+				Message: "生成新刷新令牌失敗",
+			},
+		})
+		return
+	}
+
+	response := &models.RefreshTokenResponse{
+		Token:        newAccessToken,
+		RefreshToken: newRefreshToken,
+		TokenType:    "Bearer",
+		ExpiresIn:    86400, // 24小時
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "令牌刷新成功",
+		Data:    response,
+	})
+}
+
+// UploadAvatar godoc
+// @Summary      上傳用戶頭像
+// @Description  上傳用戶頭像圖片
+// @Tags         User
+// @Accept       multipart/form-data
+// @Produce      json
+// @Security     BearerAuth
+// @Param        avatar formData file true "頭像文件"
+// @Success      200 {object} models.APIResponse "上傳成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Router       /user/avatar [post]
+func UploadAvatar(c *gin.Context) {
+	// 檢查認證
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	// 靜態數據回應 - 模擬文件上傳
+	file, header, err := c.Request.FormFile("avatar")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "MISSING_FILE",
+				Message: "請選擇要上傳的頭像文件",
+			},
+		})
+		return
+	}
+	defer file.Close()
+
+	// 模擬文件驗證
+	if header.Size > 5*1024*1024 { // 5MB
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "FILE_TOO_LARGE",
+				Message: "文件大小不能超過 5MB",
+			},
+		})
+		return
+	}
+
+	// 靜態回應
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "頭像上傳成功",
+		Data: gin.H{
+			"user_id":    userID,
+			"filename":   header.Filename,
+			"size":       header.Size,
+			"avatar_url": "https://placehold.co/200x200/blue/white?text=Avatar",
+			"uploaded_at": time.Now(),
+		},
+	})
+}
+
+// DeleteAccount godoc
+// @Summary      刪除用戶帳號
+// @Description  永久刪除用戶帳號和相關數據
+// @Tags         User
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        confirm body object true "確認刪除"
+// @Success      200 {object} models.APIResponse "刪除成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Router       /user/account [delete]
+func DeleteAccount(c *gin.Context) {
+	// 檢查認證
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		Password    string `json:"password" binding:"required"`
+		Confirmation string `json:"confirmation" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_INPUT",
+				Message: "請提供密碼確認: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	if req.Confirmation != "DELETE_MY_ACCOUNT" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_CONFIRMATION",
+				Message: "請輸入 'DELETE_MY_ACCOUNT' 確認刪除",
+			},
+		})
+		return
+	}
+
+	// 靜態回應 - 模擬帳號刪除
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "帳號刪除成功",
+		Data: gin.H{
+			"user_id":     userID,
+			"deleted_at":  time.Now(),
+			"data_retention": "用戶數據將在 30 天後完全清除",
+			"recovery_period": "30天內可聯繫客服恢復帳號",
+		},
+	})
+}
+
+// VerifyAge godoc
+// @Summary      年齡驗證
+// @Description  驗證用戶年齡，允許訪問18+內容
+// @Tags         User
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        verification body object true "年齡驗證"
+// @Success      200 {object} models.APIResponse "驗證成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Router       /user/verify [post]
+func VerifyAge(c *gin.Context) {
+	// 檢查認證
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	var req struct {
+		BirthYear   int    `json:"birth_year" binding:"required"`
+		IDDocument  string `json:"id_document"`
+		Consent     bool   `json:"consent" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_INPUT",
+				Message: "請提供完整的驗證信息: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 計算年齡
+	currentYear := time.Now().Year()
+	age := currentYear - req.BirthYear
+
+	if age < 18 {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "AGE_INSUFFICIENT",
+				Message: "年齡不足18歲，無法訪問成人內容",
+			},
+		})
+		return
+	}
+
+	if !req.Consent {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "CONSENT_REQUIRED",
+				Message: "必須同意條款才能完成驗證",
+			},
+		})
+		return
+	}
+
+	// 靜態回應 - 模擬年齡驗證
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "年齡驗證成功",
+		Data: gin.H{
+			"user_id":         userID,
+			"verified_at":     time.Now(),
+			"age_verified":    true,
+			"adult_content":   true,
+			"verification_id": utils.GenerateID(16),
 		},
 	})
 }
