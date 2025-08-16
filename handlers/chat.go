@@ -479,7 +479,7 @@ func SendMessage(c *gin.Context) {
 
 	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
-		Message: "女性向AI對話成功",
+		Message: "對話回應生成成功",
 		Data:    response,
 	})
 }

@@ -84,3 +84,76 @@ type CharacterListResponse struct {
 	Characters []*CharacterResponse `json:"characters"`
 	Pagination PaginationResponse   `json:"pagination"`
 }
+
+// CharacterStatsResponse 角色統計響應
+type CharacterStatsResponse struct {
+	CharacterID    string                 `json:"character_id"`
+	BasicInfo      CharacterBasicInfo     `json:"basic_info"`
+	InteractionStats CharacterInteractionStats `json:"interaction_stats"`
+	RelationshipStats CharacterRelationshipStats `json:"relationship_stats"`
+	ContentStats   CharacterContentStats  `json:"content_stats"`
+	UserPreferences CharacterUserPreferences `json:"user_preferences"`
+	GeneratedAt    time.Time              `json:"generated_at"`
+}
+
+// CharacterBasicInfo 角色基本信息
+type CharacterBasicInfo struct {
+	Name        string   `json:"name"`
+	Type        string   `json:"type"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+	Popularity  int      `json:"popularity"`
+	IsActive    bool     `json:"is_active"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+// CharacterInteractionStats 互動統計
+type CharacterInteractionStats struct {
+	TotalConversations int           `json:"total_conversations"`
+	TotalMessages      int           `json:"total_messages"`
+	TotalUsers         int           `json:"total_users"`
+	AvgSessionLength   time.Duration `json:"avg_session_length"`
+	LastInteraction    *time.Time    `json:"last_interaction"`
+	ActiveDays         int           `json:"active_days"`
+	MessagesByRole     map[string]int `json:"messages_by_role"`
+	EngineUsage        map[string]int `json:"engine_usage"`
+}
+
+// CharacterRelationshipStats 關係統計
+type CharacterRelationshipStats struct {
+	AvgAffectionLevel   float64            `json:"avg_affection_level"`
+	RelationshipStages  map[string]int     `json:"relationship_stages"`
+	MoodDistribution    map[string]int     `json:"mood_distribution"`
+	IntimacyLevels      map[string]int     `json:"intimacy_levels"`
+	KeyMoments          int                `json:"key_moments"`
+	SpecialEvents       int                `json:"special_events"`
+	EmotionalProgression []EmotionalMilestone `json:"emotional_progression"`
+}
+
+// CharacterContentStats 內容統計
+type CharacterContentStats struct {
+	RomanticScenes     int            `json:"romantic_scenes"`
+	DailyConversations int            `json:"daily_conversations"`
+	NSFWLevelDistribution map[string]int `json:"nsfw_level_distribution"`
+	SceneTypes         map[string]int `json:"scene_types"`
+	MemorableQuotes    int            `json:"memorable_quotes"`
+	RegeneratedMessages int           `json:"regenerated_messages"`
+}
+
+// CharacterUserPreferences 用戶偏好統計
+type CharacterUserPreferences struct {
+	FavoriteScenarios  []string `json:"favorite_scenarios"`
+	PreferredMoods     []string `json:"preferred_moods"`
+	InteractionStyles  []string `json:"interaction_styles"`
+	PopularTags        []string `json:"popular_tags"`
+	SessionModes       map[string]int `json:"session_modes"`
+}
+
+// EmotionalMilestone 情感里程碑
+type EmotionalMilestone struct {
+	Date        time.Time `json:"date"`
+	Event       string    `json:"event"`
+	Affection   int       `json:"affection"`
+	Relationship string   `json:"relationship"`
+	UsersCount  int       `json:"users_count"`
+}

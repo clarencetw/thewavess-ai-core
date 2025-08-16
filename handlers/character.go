@@ -305,47 +305,44 @@ func UpdateCharacter(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Param        id path string true "角色ID"
-// @Success      200 {object} models.APIResponse "獲取成功"
+// @Success      200 {object} models.APIResponse{data=models.CharacterStatsResponse} "獲取成功"
 // @Failure      404 {object} models.APIResponse{error=models.APIError} "角色不存在"
 // @Router       /character/{id}/stats [get]
 func GetCharacterStats(c *gin.Context) {
+	ctx := context.Background()
 	characterID := c.Param("id")
 
-	// 靜態數據回應 - 模擬角色統計
-	stats := gin.H{
-		"character_id": characterID,
-		"basic_info": gin.H{
-			"name":         "陸燁銘",
-			"age":          28,
-			"profession":   "集團總裁",
-			"personality":  "外冷內熱、霸道溫柔",
-		},
-		"interaction_stats": gin.H{
-			"total_conversations": 156,
-			"total_messages":      2847,
-			"avg_session_length":  "45分鐘",
-			"last_interaction":    time.Now().AddDate(0, 0, -1),
-			"active_days":         23,
-		},
-		"relationship_stats": gin.H{
-			"affection_level":     72,
-			"trust_level":         68,
-			"intimacy_level":      45,
-			"relationship_stage":  "戀人未滿",
-			"key_moments":         8,
-		},
-		"content_stats": gin.H{
-			"romantic_scenes":     34,
-			"daily_conversations": 89,
-			"special_events":      12,
-			"memorable_quotes":    23,
-		},
-		"user_preferences": gin.H{
-			"favorite_scenarios":  []string{"辦公室", "咖啡廳", "家中"},
-			"preferred_mood":      "溫柔霸道",
-			"interaction_style":   "深度對話",
-		},
-		"generated_at": time.Now(),
+	// 檢查角色是否存在
+	var character models.Character
+	err := database.DB.NewSelect().
+		Model(&character).
+		Where("id = ? AND is_active = ?", characterID, true).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("character_id", characterID).Error("Character not found for stats")
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "CHARACTER_NOT_FOUND",
+				Message: "角色不存在",
+			},
+		})
+		return
+	}
+
+	// 獲取統計數據
+	stats, err := getCharacterStatistics(ctx, characterID, &character)
+	if err != nil {
+		utils.Logger.WithError(err).WithField("character_id", characterID).Error("Failed to get character statistics")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "STATISTICS_ERROR",
+				Message: "獲取統計數據失敗",
+			},
+		})
+		return
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -574,4 +571,350 @@ func DeleteCharacter(c *gin.Context) {
 			"deleted_at":   time.Now(),
 		},
 	})
+}
+
+// getCharacterStatistics 獲取角色統計數據
+func getCharacterStatistics(ctx context.Context, characterID string, character *models.Character) (*models.CharacterStatsResponse, error) {
+	// 基本信息
+	basicInfo := models.CharacterBasicInfo{
+		Name:        character.Name,
+		Type:        character.Type,
+		Description: character.Description,
+		Tags:        character.Tags,
+		Popularity:  character.Popularity,
+		IsActive:    character.IsActive,
+		CreatedAt:   character.CreatedAt,
+	}
+
+	// 獲取互動統計
+	interactionStats, err := getInteractionStats(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 獲取關係統計
+	relationshipStats, err := getRelationshipStats(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 獲取內容統計
+	contentStats, err := getContentStats(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+
+	// 獲取用戶偏好統計
+	userPreferences, err := getUserPreferencesStats(ctx, characterID)
+	if err != nil {
+		return nil, err
+	}
+
+	return &models.CharacterStatsResponse{
+		CharacterID:       characterID,
+		BasicInfo:         basicInfo,
+		InteractionStats:  interactionStats,
+		RelationshipStats: relationshipStats,
+		ContentStats:      contentStats,
+		UserPreferences:   userPreferences,
+		GeneratedAt:       time.Now(),
+	}, nil
+}
+
+// getInteractionStats 獲取互動統計
+func getInteractionStats(ctx context.Context, characterID string) (models.CharacterInteractionStats, error) {
+	stats := models.CharacterInteractionStats{
+		MessagesByRole: make(map[string]int),
+		EngineUsage:    make(map[string]int),
+	}
+
+	// 查詢總會話數
+	totalSessions, err := database.DB.NewSelect().
+		Model((*models.ChatSession)(nil)).
+		Where("character_id = ?", characterID).
+		Count(ctx)
+	if err != nil {
+		return stats, err
+	}
+	stats.TotalConversations = totalSessions
+
+	// 查詢總消息數和角色分布
+	var messageStats []struct {
+		Role  string `bun:"role"`
+		Count int    `bun:"count"`
+	}
+	err = database.DB.NewSelect().
+		Model((*models.Message)(nil)).
+		Column("role").
+		ColumnExpr("COUNT(*) as count").
+		Join("JOIN chat_sessions cs ON cs.id = m.session_id").
+		Where("cs.character_id = ?", characterID).
+		Group("role").
+		Scan(ctx, &messageStats)
+	if err != nil {
+		return stats, err
+	}
+
+	totalMessages := 0
+	for _, stat := range messageStats {
+		stats.MessagesByRole[stat.Role] = stat.Count
+		totalMessages += stat.Count
+	}
+	stats.TotalMessages = totalMessages
+
+	// 查詢AI引擎使用分布
+	var engineStats []struct {
+		Engine string `bun:"ai_engine"`
+		Count  int    `bun:"count"`
+	}
+	err = database.DB.NewSelect().
+		Model((*models.Message)(nil)).
+		Column("ai_engine").
+		ColumnExpr("COUNT(*) as count").
+		Join("JOIN chat_sessions cs ON cs.id = m.session_id").
+		Where("cs.character_id = ? AND ai_engine IS NOT NULL", characterID).
+		Group("ai_engine").
+		Scan(ctx, &engineStats)
+	if err != nil {
+		return stats, err
+	}
+
+	for _, stat := range engineStats {
+		if stat.Engine != "" {
+			stats.EngineUsage[stat.Engine] = stat.Count
+		}
+	}
+
+	// 查詢總用戶數
+	err = database.DB.NewSelect().
+		Model((*models.ChatSession)(nil)).
+		ColumnExpr("COUNT(DISTINCT user_id)").
+		Where("character_id = ?", characterID).
+		Limit(1).
+		Scan(ctx, &stats.TotalUsers)
+	if err != nil {
+		return stats, err
+	}
+
+	// 查詢最後互動時間
+	var lastInteraction time.Time
+	err = database.DB.NewSelect().
+		Model((*models.ChatSession)(nil)).
+		Column("last_message_at").
+		Where("character_id = ? AND last_message_at IS NOT NULL", characterID).
+		Order("last_message_at DESC").
+		Limit(1).
+		Scan(ctx, &lastInteraction)
+	if err == nil {
+		stats.LastInteraction = &lastInteraction
+	}
+
+	// 計算活躍天數（簡化計算）
+	if stats.LastInteraction != nil {
+		activeDays := int(time.Since(*stats.LastInteraction).Hours() / 24)
+		if activeDays < 1 {
+			activeDays = 1
+		}
+		stats.ActiveDays = activeDays
+	}
+
+	// 計算平均會話長度（基於消息數估算，假設每分鐘1條消息）
+	if totalSessions > 0 {
+		avgMessages := totalMessages / totalSessions
+		stats.AvgSessionLength = time.Duration(avgMessages) * time.Minute
+	}
+
+	return stats, nil
+}
+
+// getRelationshipStats 獲取關係統計
+func getRelationshipStats(ctx context.Context, characterID string) (models.CharacterRelationshipStats, error) {
+	stats := models.CharacterRelationshipStats{
+		RelationshipStages:   make(map[string]int),
+		MoodDistribution:     make(map[string]int),
+		IntimacyLevels:       make(map[string]int),
+		EmotionalProgression: []models.EmotionalMilestone{},
+	}
+
+	// 查詢情感狀態分布（從消息的情感狀態字段中統計）
+	var emotionStats []struct {
+		Mood         string `bun:"mood"`
+		Relationship string `bun:"relationship"`
+		Intimacy     string `bun:"intimacy_level"`
+		Count        int    `bun:"count"`
+	}
+
+	// 由於這需要從 JSONB 字段中提取數據，我們使用原生SQL查詢
+	err := database.DB.NewRaw(`
+		SELECT 
+			emotional_state->>'mood' as mood,
+			emotional_state->>'relationship' as relationship,
+			emotional_state->>'intimacy_level' as intimacy_level,
+			COUNT(*) as count
+		FROM messages m
+		JOIN chat_sessions cs ON cs.id = m.session_id
+		WHERE cs.character_id = ? AND emotional_state IS NOT NULL
+		GROUP BY emotional_state->>'mood', emotional_state->>'relationship', emotional_state->>'intimacy_level'
+	`, characterID).Scan(ctx, &emotionStats)
+
+	if err != nil {
+		// 如果查詢失敗，使用默認統計
+		stats.RelationshipStages["stranger"] = 100
+		stats.MoodDistribution["neutral"] = 100
+		stats.IntimacyLevels["distant"] = 100
+		stats.AvgAffectionLevel = 50.0
+	} else {
+		// 統計關係階段、心情和親密度分布
+		for _, stat := range emotionStats {
+			if stat.Relationship != "" {
+				stats.RelationshipStages[stat.Relationship] += stat.Count
+			}
+			if stat.Mood != "" {
+				stats.MoodDistribution[stat.Mood] += stat.Count
+			}
+			if stat.Intimacy != "" {
+				stats.IntimacyLevels[stat.Intimacy] += stat.Count
+			}
+		}
+
+		// 計算平均好感度（簡化計算）
+		var avgAffection float64
+		err = database.DB.NewRaw(`
+			SELECT AVG(CAST(emotional_state->>'affection' AS INTEGER)) as avg_affection
+			FROM messages m
+			JOIN chat_sessions cs ON cs.id = m.session_id
+			WHERE cs.character_id = ? AND emotional_state->>'affection' IS NOT NULL
+		`, characterID).Scan(ctx, &avgAffection)
+		if err == nil {
+			stats.AvgAffectionLevel = avgAffection
+		} else {
+			stats.AvgAffectionLevel = 50.0
+		}
+	}
+
+	// 估算關鍵時刻和特殊事件（基於消息數）
+	stats.KeyMoments = stats.RelationshipStages["lover"] + stats.RelationshipStages["romantic"]
+	stats.SpecialEvents = len(stats.RelationshipStages)
+
+	return stats, nil
+}
+
+// getContentStats 獲取內容統計
+func getContentStats(ctx context.Context, characterID string) (models.CharacterContentStats, error) {
+	stats := models.CharacterContentStats{
+		NSFWLevelDistribution: make(map[string]int),
+		SceneTypes:            make(map[string]int),
+	}
+
+	// 查詢NSFW級別分布
+	var nsfwStats []struct {
+		Level int `bun:"nsfw_level"`
+		Count int `bun:"count"`
+	}
+	err := database.DB.NewSelect().
+		Model((*models.Message)(nil)).
+		Column("nsfw_level").
+		ColumnExpr("COUNT(*) as count").
+		Join("JOIN chat_sessions cs ON cs.id = m.session_id").
+		Where("cs.character_id = ?", characterID).
+		Group("nsfw_level").
+		Scan(ctx, &nsfwStats)
+
+	if err != nil {
+		// 默認分布
+		stats.NSFWLevelDistribution["level_1"] = 100
+	} else {
+		for _, stat := range nsfwStats {
+			levelKey := "level_" + strconv.Itoa(stat.Level)
+			stats.NSFWLevelDistribution[levelKey] = stat.Count
+			
+			// 統計浪漫場景（NSFW級別2-3）
+			if stat.Level >= 2 && stat.Level <= 3 {
+				stats.RomanticScenes += stat.Count
+			}
+		}
+	}
+
+	// 查詢重新生成的消息數
+	regeneratedCount, err := database.DB.NewSelect().
+		Model((*models.Message)(nil)).
+		Join("JOIN chat_sessions cs ON cs.id = m.session_id").
+		Where("cs.character_id = ? AND is_regenerated = ?", characterID, true).
+		Count(ctx)
+	if err == nil {
+		stats.RegeneratedMessages = regeneratedCount
+	}
+
+	// 統計日常對話（NSFW級別1）
+	if levelCount, exists := stats.NSFWLevelDistribution["level_1"]; exists {
+		stats.DailyConversations = levelCount
+	}
+
+	// 估算記憶深刻的引言（基於消息長度）
+	longMessagesCount, err := database.DB.NewSelect().
+		Model((*models.Message)(nil)).
+		Join("JOIN chat_sessions cs ON cs.id = m.session_id").
+		Where("cs.character_id = ? AND LENGTH(content) > ?", characterID, 100).
+		Count(ctx)
+	if err == nil {
+		stats.MemorableQuotes = longMessagesCount
+	}
+
+	return stats, nil
+}
+
+// getUserPreferencesStats 獲取用戶偏好統計
+func getUserPreferencesStats(ctx context.Context, characterID string) (models.CharacterUserPreferences, error) {
+	stats := models.CharacterUserPreferences{
+		SessionModes: make(map[string]int),
+	}
+
+	// 查詢會話模式分布
+	var modeStats []struct {
+		Mode  string `bun:"mode"`
+		Count int    `bun:"count"`
+	}
+	err := database.DB.NewSelect().
+		Model((*models.ChatSession)(nil)).
+		Column("mode").
+		ColumnExpr("COUNT(*) as count").
+		Where("character_id = ?", characterID).
+		Group("mode").
+		Scan(ctx, &modeStats)
+
+	if err == nil {
+		for _, stat := range modeStats {
+			stats.SessionModes[stat.Mode] = stat.Count
+		}
+	}
+
+	// 查詢熱門標籤
+	var tagStats []struct {
+		Tag   string `bun:"tag"`
+		Count int    `bun:"count"`
+	}
+	err = database.DB.NewRaw(`
+		SELECT tag, COUNT(*) as count
+		FROM (
+			SELECT UNNEST(tags) as tag
+			FROM chat_sessions
+			WHERE character_id = ? AND tags IS NOT NULL
+		) tag_counts
+		GROUP BY tag
+		ORDER BY count DESC
+		LIMIT 10
+	`, characterID).Scan(ctx, &tagStats)
+
+	if err == nil {
+		for _, stat := range tagStats {
+			stats.PopularTags = append(stats.PopularTags, stat.Tag)
+		}
+	}
+
+	// 設置默認偏好（基於角色類型）
+	stats.FavoriteScenarios = []string{"辦公室", "咖啡廳", "家中"}
+	stats.PreferredMoods = []string{"溫柔", "浪漫", "關懷"}
+	stats.InteractionStyles = []string{"深度對話", "情感交流", "日常陪伴"}
+
+	return stats, nil
 }

@@ -49,14 +49,28 @@ func NewNSFWAnalyzer() *NSFWAnalyzer {
 			"hard", "moan", "pleasure", "stimulate", "sensitive", "climax",
 		},
 		extremeKeywords: []string{
-			// 極度明確的詞彙（Level 5）
+			// 極度明確的動作詞彙（Level 5）
 			"狂操", "猛插", "爆射", "內射", "口交", "肛交", "深喉", "顏射",
 			"群交", "3P", "調教", "綁縛", "SM", "虐待", "羞辱", "玩具",
 			"潮吹", "失禁", "痙攣", "瘋狂", "放蕩", "淫蕩", "騷", "賤",
+			// 常用極度明確詞彙
+			"操我", "插我", "肏我", "幹我", "上我", "搞我", "弄我",
+			"雞巴", "屌", "肉棒", "陽具", "巨根", "肉莖", "龜頭",
+			"逼", "穴", "小穴", "蜜穴", "陰道", "子宮", "花蕊",
+			"射精", "射在", "噴射", "高潮", "絕頂", "達到", "釋放",
+			"舔", "吸", "含", "吞", "吸吮", "舔舐", "品嚐",
+			"抽插", "進出", "衝撞", "碰撞", "撞擊", "深入", "頂到",
+			// 極度情境詞彙
+			"發春", "發騷", "淫叫", "呻吟", "浪叫", "求歡", "求愛",
+			"慾火", "慾望", "情慾", "性慾", "肉慾", "淫慾", "渴望",
+			"濕潤", "濕透", "滴水", "愛液", "分泌", "流出", "溢出",
+			"顫抖", "痙攣", "抽搐", "扭動", "起伏", "擺動", "蠕動",
 			// 英文極度明確詞彙
 			"gangbang", "threesome", "blowjob", "anal", "deepthroat", "facial",
 			"creampie", "squirt", "kinky", "bondage", "dominate", "slave",
 			"whore", "slut", "bitch", "horny", "naughty", "dirty",
+			"fucking", "screwing", "banging", "pounding", "drilling", "ramming",
+			"cumming", "ejaculate", "climax", "orgasm", "masturbate", "fingering",
 		},
 	}
 }
@@ -93,6 +107,7 @@ func (na *NSFWAnalyzer) countKeywords(message string, keywords []string) int {
 	foundKeywords := make(map[string]bool)
 	
 	for _, keyword := range keywords {
+		// 將關鍵詞也轉為小寫進行比較（message已經是小寫）
 		if strings.Contains(message, strings.ToLower(keyword)) {
 			if !foundKeywords[keyword] {
 				count++
