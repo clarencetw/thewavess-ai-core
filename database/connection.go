@@ -33,7 +33,7 @@ func InitDB() error {
 	// 創建 Bun DB 實例
 	DB = bun.NewDB(sqldb, pgdialect.New())
 
-	// 開發環境下啟用查詢日誌
+	// 開發環境下啟用詳細查詢日誌
 	if os.Getenv("GO_ENV") != "production" {
 		DB.AddQueryHook(bundebug.NewQueryHook(
 			bundebug.WithVerbose(true),

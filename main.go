@@ -1,9 +1,12 @@
 package main
 
 import (
-	"log"
 	"net/http"
+	"os"
+	"strings"
 
+	"github.com/gin-contrib/cors"
+	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
@@ -35,16 +38,63 @@ import (
 // @name Authorization
 // @description Type "Bearer" followed by a space and JWT token.
 
+// configureStaticFiles 配置靜態檔案中間件
+func configureStaticFiles() gin.HandlerFunc {
+	return static.Serve("/public", static.LocalFile("./public", false))
+}
+
+// configureCORS 配置 CORS 中間件
+func configureCORS() cors.Config {
+	config := cors.DefaultConfig()
+	
+	// 從環境變數讀取允許的來源，預設為全開
+	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
+	if allowedOrigins == "" {
+		allowedOrigins = "*"
+	}
+	
+	if allowedOrigins == "*" {
+		config.AllowAllOrigins = true
+	} else {
+		config.AllowOrigins = strings.Split(allowedOrigins, ",")
+	}
+	
+	// 從環境變數讀取允許的方法，預設為常用方法
+	allowedMethods := os.Getenv("CORS_ALLOWED_METHODS")
+	if allowedMethods == "" {
+		allowedMethods = "GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS"
+	}
+	config.AllowMethods = strings.Split(allowedMethods, ",")
+	
+	// 從環境變數讀取允許的標頭，預設為常用標頭
+	allowedHeaders := os.Getenv("CORS_ALLOWED_HEADERS")
+	if allowedHeaders == "" {
+		allowedHeaders = "Origin,Content-Length,Content-Type,Authorization,X-Requested-With,Accept,Accept-Encoding,Accept-Language,Connection,Host,User-Agent"
+	}
+	config.AllowHeaders = strings.Split(allowedHeaders, ",")
+	
+	// 允許認證
+	config.AllowCredentials = true
+	
+	// 從環境變數讀取暴露的標頭
+	exposedHeaders := os.Getenv("CORS_EXPOSED_HEADERS")
+	if exposedHeaders != "" {
+		config.ExposeHeaders = strings.Split(exposedHeaders, ",")
+	}
+	
+	return config
+}
+
 func main() {
+	// Initialize logger first
+	utils.InitLogger()
+
 	// Load environment variables from .env file
 	if err := godotenv.Load(); err != nil {
-		log.Println("Warning: No .env file found or error loading .env file")
+		utils.Logger.Warn("No .env file found or error loading .env file")
 	} else {
-		log.Println("Successfully loaded .env file")
+		utils.Logger.Info("Successfully loaded .env file")
 	}
-
-	// Initialize logger
-	utils.InitLogger()
 
 	// Initialize database (non-fatal for development/testing)
 	dbInitialized := false
@@ -66,6 +116,7 @@ func main() {
 	router := gin.Default()
 
 	// Add middleware
+	router.Use(cors.New(configureCORS()))
 	router.Use(utils.RequestIDMiddleware())
 	router.Use(utils.RecoverMiddleware())
 
@@ -75,7 +126,7 @@ func main() {
 	})
 	
 	// Static files for web interface
-	router.Static("/public", "./public")
+	router.Use(configureStaticFiles())
 
 	// Swagger documentation
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -98,13 +149,16 @@ func main() {
 		},
 	})
 
-	log.Println("Starting Thewavess AI Core API server on :8080")
-	log.Println("Web interface: http://localhost:8080")
-	log.Println("Swagger UI: http://localhost:8080/swagger/index.html")
+	utils.Logger.Info("Starting Thewavess AI Core API server on :8080")
+	utils.Logger.Info("Web interface: http://localhost:8080")
+	utils.Logger.Info("Swagger UI: http://localhost:8080/swagger/index.html")
 	if !dbInitialized {
-		log.Println("⚠️  Warning: Running in database-free mode - some endpoints may not work")
+		utils.Logger.Warn("⚠️  Warning: Running in database-free mode - some endpoints may not work")
 	}
-	log.Fatal(http.ListenAndServe(":8080", router))
+	
+	if err := http.ListenAndServe(":8080", router); err != nil {
+		utils.Logger.WithError(err).Fatal("Failed to start server")
+	}
 }
 
 // healthCheck godoc

@@ -639,14 +639,14 @@ func RefreshToken(c *gin.Context) {
 }
 
 // UploadAvatar godoc
-// @Summary      上傳用戶頭像
-// @Description  上傳用戶頭像圖片
+// @Summary      設置用戶頭像
+// @Description  通過URL設置用戶頭像
 // @Tags         User
-// @Accept       multipart/form-data
+// @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        avatar formData file true "頭像文件"
-// @Success      200 {object} models.APIResponse "上傳成功"
+// @Param        avatar body object true "頭像URL"
+// @Success      200 {object} models.APIResponse "設置成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Router       /user/avatar [post]
@@ -664,42 +664,31 @@ func UploadAvatar(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應 - 模擬文件上傳
-	file, header, err := c.Request.FormFile("avatar")
-	if err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "MISSING_FILE",
-				Message: "請選擇要上傳的頭像文件",
-			},
-		})
-		return
+	var req struct {
+		AvatarURL string `json:"avatar_url" binding:"required,url"`
 	}
-	defer file.Close()
 
-	// 模擬文件驗證
-	if header.Size > 5*1024*1024 { // 5MB
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "FILE_TOO_LARGE",
-				Message: "文件大小不能超過 5MB",
+				Code:    "INVALID_INPUT",
+				Message: "請提供有效的頭像URL: " + err.Error(),
 			},
 		})
 		return
 	}
 
-	// 靜態回應
+	// 靜態回應 - 模擬頭像設置
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Message: "頭像上傳成功",
+		Message: "頭像設置成功",
 		Data: gin.H{
-			"user_id":    userID,
-			"filename":   header.Filename,
-			"size":       header.Size,
-			"avatar_url": "https://placehold.co/200x200/blue/white?text=Avatar",
-			"uploaded_at": time.Now(),
+			"user_id":     userID,
+			"avatar_url":  req.AvatarURL,
+			"updated_at":  time.Now(),
+			"status":      "active",
+			"validation":  "URL format verified",
 		},
 	})
 }
@@ -797,9 +786,8 @@ func VerifyAge(c *gin.Context) {
 	}
 
 	var req struct {
-		BirthYear   int    `json:"birth_year" binding:"required"`
-		IDDocument  string `json:"id_document"`
-		Consent     bool   `json:"consent" binding:"required"`
+		BirthYear int  `json:"birth_year" binding:"required"`
+		Consent   bool `json:"consent" binding:"required"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {

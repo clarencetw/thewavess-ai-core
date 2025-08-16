@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"log"
 	"os"
 
 	"github.com/clarencetw/thewavess-ai-core/database"
@@ -20,13 +19,13 @@ func main() {
 
 	// 初始化數據庫連接
 	if err := database.InitDB(); err != nil {
-		log.Fatalf("Failed to initialize database: %v", err)
+		utils.Logger.WithError(err).Fatal("Failed to initialize database")
 	}
 	defer database.CloseDB()
 
 	// 初始化遷移器
 	if err := database.InitMigrations(); err != nil {
-		log.Fatalf("Failed to initialize migrations: %v", err)
+		utils.Logger.WithError(err).Fatal("Failed to initialize migrations")
 	}
 
 	ctx := context.Background()
@@ -34,19 +33,19 @@ func main() {
 	switch *cmd {
 	case "up":
 		if err := database.MigrateUp(ctx); err != nil {
-			log.Fatalf("Migration up failed: %v", err)
+			utils.Logger.WithError(err).Fatal("Migration up failed")
 		}
 		fmt.Println("✅ Migration up completed successfully")
 
 	case "down":
 		if err := database.MigrateDown(ctx); err != nil {
-			log.Fatalf("Migration down failed: %v", err)
+			utils.Logger.WithError(err).Fatal("Migration down failed")
 		}
 		fmt.Println("✅ Migration down completed successfully")
 
 	case "status":
 		if err := database.MigrateStatus(ctx); err != nil {
-			log.Fatalf("Failed to check migration status: %v", err)
+			utils.Logger.WithError(err).Fatal("Failed to check migration status")
 		}
 
 	case "reset":
@@ -60,7 +59,7 @@ func main() {
 		}
 
 		if err := database.MigrateReset(ctx); err != nil {
-			log.Fatalf("Reset failed: %v", err)
+			utils.Logger.WithError(err).Fatal("Reset failed")
 		}
 		fmt.Println("✅ Database reset completed successfully")
 

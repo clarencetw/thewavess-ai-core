@@ -23,7 +23,7 @@ const AppState = {
     
     // 用戶偏好
     preferences: {
-        nsfw_enabled: false,
+        nsfw_enabled: true,
         theme: 'dark',
         auto_scroll: true
     }
@@ -319,11 +319,22 @@ const UI = {
     
     // 顯示載入狀態
     showLoading(element, show = true) {
+        if (!element) return;
+        
         if (show) {
             element.disabled = true;
+            // 保存原始內容
+            if (!element.dataset.originalContent) {
+                element.dataset.originalContent = element.innerHTML;
+            }
             element.innerHTML = '<svg class="animate-spin h-5 w-5 mr-2 inline" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/></svg>載入中...';
         } else {
             element.disabled = false;
+            // 恢復原始內容
+            if (element.dataset.originalContent) {
+                element.innerHTML = element.dataset.originalContent;
+                delete element.dataset.originalContent;
+            }
         }
     },
     
@@ -362,6 +373,49 @@ const UI = {
                 element.classList.remove('hidden');
             } else {
                 element.classList.add('hidden');
+            }
+        }
+    },
+    
+    // 通用錯誤處理
+    handleError(error, context = '操作', showToast = true) {
+        console.error(`${context}失敗:`, error);
+        
+        let message = `${context}失敗`;
+        
+        if (error.message) {
+            if (error.message.includes('401')) {
+                message = '身份驗證失敗，請重新登入';
+            } else if (error.message.includes('403')) {
+                message = '權限不足';
+            } else if (error.message.includes('404')) {
+                message = '請求的資源不存在';
+            } else if (error.message.includes('500')) {
+                message = '服務器內部錯誤';
+            } else if (error.message.includes('Network')) {
+                message = '網路連接錯誤';
+            } else {
+                message += ': ' + error.message;
+            }
+        }
+        
+        if (showToast) {
+            this.showToast(message, 'error');
+        }
+        
+        return message;
+    },
+    
+    // 顯示連接狀態
+    showConnectionStatus(isOnline) {
+        const statusElement = document.getElementById('connectionStatus');
+        if (statusElement) {
+            if (isOnline) {
+                statusElement.innerHTML = '<i class="fas fa-wifi text-green-400"></i> 已連接';
+                statusElement.className = 'text-green-400 text-sm';
+            } else {
+                statusElement.innerHTML = '<i class="fas fa-wifi-slash text-red-400"></i> 離線模式';
+                statusElement.className = 'text-red-400 text-sm';
             }
         }
     }
@@ -457,6 +511,19 @@ const App = {
         // 監聽用戶登出
         ApiClient.addEventListener('userLoggedOut', () => {
             this.onUserLoggedOut();
+        });
+        
+        // 監聽網路狀態變化
+        window.addEventListener('online', () => {
+            AppState.systemOnline = true;
+            UI.showConnectionStatus(true);
+            UI.showToast('網路連接已恢復', 'success');
+        });
+        
+        window.addEventListener('offline', () => {
+            AppState.systemOnline = false;
+            UI.showConnectionStatus(false);
+            UI.showToast('網路連接中斷，切換到離線模式', 'warning');
         });
         
         // 監聽頁面卸載，保存狀態

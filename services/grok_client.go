@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	
+	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
 // GrokClient Grok 客戶端
@@ -58,12 +60,37 @@ func NewGrokClient() *GrokClient {
 
 // GenerateResponse 生成對話回應（NSFW 內容）
 func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest) (*GrokResponse, error) {
+	// 記錄請求開始
+	utils.Logger.WithFields(map[string]interface{}{
+		"service":        "grok",
+		"model":          request.Model,
+		"max_tokens":     request.MaxTokens,
+		"temperature":    request.Temperature,
+		"user":           request.User,
+		"messages_count": len(request.Messages),
+		"api_configured": c.apiKey != "",
+	}).Info("Grok API request started")
+	
+	// 記錄詳細的消息內容
+	for i, msg := range request.Messages {
+		utils.Logger.WithFields(map[string]interface{}{
+			"service":        "grok",
+			"message_index":  i,
+			"role":          msg.Role,
+			"content_length": len(msg.Content),
+			"content":       msg.Content,
+		}).Debug("Grok request message")
+	}
+	
 	// TODO: 實現實際的 Grok API 調用
 	// 現在先返回模擬回應，後續會實現真實的 HTTP 請求
 	
 	if c.apiKey == "" {
+		utils.Logger.WithField("service", "grok").Error("Grok API key not configured")
 		return nil, fmt.Errorf("Grok API key not configured")
 	}
+	
+	utils.Logger.WithField("service", "grok").Info("Using mock response (real Grok API not yet implemented)")
 	
 	// 模擬回應（NSFW 場景）
 	mockResponse := &GrokResponse{
@@ -102,15 +129,40 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		},
 	}
 	
+	// 記錄響應信息
+	utils.Logger.WithFields(map[string]interface{}{
+		"service":            "grok",
+		"response_id":        mockResponse.ID,
+		"model":              mockResponse.Model,
+		"prompt_tokens":      mockResponse.Usage.PromptTokens,
+		"completion_tokens":  mockResponse.Usage.CompletionTokens,
+		"total_tokens":       mockResponse.Usage.TotalTokens,
+		"choices_count":      len(mockResponse.Choices),
+		"is_mock":           true,
+	}).Info("Grok API response generated")
+	
+	// 記錄響應內容
+	for i, choice := range mockResponse.Choices {
+		utils.Logger.WithFields(map[string]interface{}{
+			"service":        "grok",
+			"choice_index":   i,
+			"finish_reason":  choice.FinishReason,
+			"content_length": len(choice.Message.Content),
+			"content":        choice.Message.Content,
+			"is_mock":       true,
+		}).Debug("Grok response choice")
+	}
+	
 	return mockResponse, nil
 }
 
 // BuildNSFWPrompt 構建 NSFW 場景的提示詞
 func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext, nsfwLevel int) []GrokMessage {
-	var systemPrompt string
-	
-	// 根據 NSFW 等級調整提示詞
-	nsfwGuideline := ""
+    var systemPrompt string
+    
+    // 根據 NSFW 等級調整提示詞
+    // TODO(MEMORY-MVP): 注入記憶區塊（長期 + 最近摘要）。NSFW 場景建議縮短 Recent Context（1-3 條）。
+    nsfwGuideline := ""
 	switch nsfwLevel {
 	case 1:
 		nsfwGuideline = "允許輕微的浪漫暗示，保持優雅"

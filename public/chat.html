@@ -70,11 +70,17 @@
                         <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="newSession()">
                             <i class="fas fa-plus mr-2"></i>新對話
                         </button>
+                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="showSessionList()">
+                            <i class="fas fa-list mr-2"></i>會話列表
+                        </button>
                         <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="exportChat()">
                             <i class="fas fa-download mr-2"></i>匯出對話
                         </button>
                         <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="clearChat()">
                             <i class="fas fa-trash mr-2"></i>清空對話
+                        </button>
+                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded text-red-600" onclick="deleteCurrentSession()">
+                            <i class="fas fa-trash-alt mr-2"></i>刪除會話
                         </button>
                         <hr class="my-2 border-gray-600">
                         <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="Router.navigate('/profile')">
@@ -235,6 +241,34 @@
         </div>
     </div>
     
+    <!-- 會話列表模態框 -->
+    <div id="sessionListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white border rounded-lg p-6 max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <h3 class="text-2xl font-bold mb-4">
+                <i class="fas fa-list text-blue-400 mr-2"></i>
+                對話會話列表
+            </h3>
+            
+            <div class="flex-1 overflow-y-auto">
+                <div id="sessionsList" class="space-y-3">
+                    <div class="text-center py-8 text-gray-500">
+                        載入中...
+                    </div>
+                </div>
+            </div>
+            
+            <div class="mt-4 flex justify-end">
+                <button 
+                    type="button"
+                    class="bg-gray-600 hover:bg-gray-700 text-white py-2 px-6 rounded font-semibold"
+                    onclick="UI.modal.hide('sessionListModal')"
+                >
+                    關閉
+                </button>
+            </div>
+        </div>
+    </div>
+    
     <!-- 表情符號面板 -->
     <div id="emojiPanel" class="hidden fixed bottom-20 right-4 bg-white border rounded-lg p-4 z-50">
         <div class="grid grid-cols-6 gap-2 text-2xl">
@@ -287,8 +321,8 @@
             // 初始化頁面
             initializePage();
             
-            // 創建聊天會話
-            await createChatSession();
+            // 智能初始化聊天會話
+            await initializeChat();
             
             // 設置事件監聽器
             setupEventListeners();
@@ -303,17 +337,24 @@
             document.getElementById('characterStatus').textContent = '在線';
             
             // 設置歡迎消息
+            setupWelcomeMessage();
+            
+            // 設置快速回復
+            setupQuickReplies();
+        }
+        
+        // 設置歡迎消息
+        function setupWelcomeMessage() {
             const welcomeMessages = {
                 'char_001': '你好，我是陸寒淵。很高興認識你...有什麼需要我幫助的嗎？',
                 'char_002': '你好呀，我是沈言墨。今天過得怎麼樣？需要聊聊嗎？',
                 'char_003': '歡迎來到知識的世界，我是林夜白。有什麼想了解的嗎？'
             };
             
-            document.getElementById('welcomeMessage').textContent = 
-                welcomeMessages[currentCharacter.id] || '你好！很高興與你對話。';
+            const welcomeMessage = welcomeMessages[currentCharacter.id] || '你好！很高興與你對話。';
             
-            // 設置快速回復
-            setupQuickReplies();
+            // 更新頁面上的歡迎消息
+            document.getElementById('welcomeMessage').textContent = welcomeMessage;
         }
         
         // 設置快速回復
@@ -331,8 +372,46 @@
             ).join('');
         }
         
-        // 創建聊天會話
-        async function createChatSession() {
+        // 智能初始化聊天
+        async function initializeChat() {
+            try {
+                // 查詢該角色的現有會話
+                const sessionsResult = await ApiClient.get(`/api/v1/chat/sessions?character_id=${currentCharacter.id}`);
+                
+                if (sessionsResult.success && sessionsResult.data && sessionsResult.data.sessions && sessionsResult.data.sessions.length > 0) {
+                    // 使用最新的會話（按創建時間排序）
+                    const characterSessions = sessionsResult.data.sessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+                    currentSession = characterSessions[0];
+                    AppState.currentSession = currentSession;
+                    
+                    console.log('載入現有會話:', currentSession.id);
+                    
+                    // 載入歷史記錄
+                    await loadChatHistory();
+                    
+                    // 啟用輸入
+                    enableChatInput();
+                    
+                    // 更新場景描述
+                    updateSceneDescription();
+                    
+                    UI.showToast(`已載入與 ${currentCharacter.name} 的對話記錄`, 'success');
+                    return;
+                }
+                
+                // 沒有現有會話，創建新會話
+                console.log('沒有找到現有會話，創建新會話');
+                await createNewChatSession();
+                
+            } catch (error) {
+                console.error('初始化聊天失敗:', error);
+                UI.showToast('初始化聊天失敗，創建本地會話', 'warning');
+                createLocalSession();
+            }
+        }
+        
+        // 創建新的聊天會話
+        async function createNewChatSession() {
             try {
                 const result = await ApiClient.post('/api/v1/chat/session', {
                     character_id: currentCharacter.id,
@@ -343,6 +422,15 @@
                 if (result.success) {
                     currentSession = result.data;
                     AppState.currentSession = currentSession;
+                    
+                    // 重置消息歷史
+                    messageHistory = [];
+                    
+                    // 設置歡迎消息
+                    setupWelcomeMessage();
+                    
+                    // 載入歷史記錄（可能為空）
+                    await loadChatHistory();
                     
                     // 啟用輸入
                     enableChatInput();
@@ -360,6 +448,62 @@
                 
                 // 創建本地會話
                 createLocalSession();
+            }
+        }
+        
+        // 載入對話歷史
+        async function loadChatHistory() {
+            if (!currentSession || !currentSession.id) return;
+            
+            try {
+                const result = await ApiClient.get(`/api/v1/chat/session/${currentSession.id}/history`);
+                
+                if (result.success && result.data && result.data.messages && result.data.messages.length > 0) {
+                    // 清空現有消息，將重新載入歷史記錄
+                    const messagesList = document.getElementById('messagesList');
+                    messagesList.innerHTML = '';
+                    
+                    // 添加歷史消息
+                    result.data.messages.forEach(message => {
+                        if (message.role === 'user') {
+                            addMessageToChat('user', message.content, {
+                                timestamp: message.created_at
+                            });
+                        } else if (message.role === 'assistant') {
+                            addMessageToChat('ai', message.content, {
+                                scene_description: message.scene_description,
+                                character_action: message.character_action,
+                                nsfw_level: message.nsfw_level || 1,
+                                ai_engine: message.ai_engine,
+                                timestamp: message.created_at
+                            });
+                        }
+                    });
+                    
+                    // 更新消息歷史
+                    messageHistory = result.data.messages.map(msg => ({
+                        sender: msg.role === 'user' ? 'user' : 'ai',
+                        content: msg.content,
+                        metadata: {
+                            scene_description: msg.scene_description,
+                            character_action: msg.character_action,
+                            nsfw_level: msg.nsfw_level,
+                            ai_engine: msg.ai_engine
+                        },
+                        timestamp: msg.created_at
+                    }));
+                    
+                    // 更新側邊欄歷史記錄
+                    updateChatHistorySidebar();
+                    
+                    UI.showToast(`載入了 ${result.data.length} 條歷史消息`, 'info');
+                } else {
+                    // 沒有歷史記錄，確保歡迎消息顯示
+                    console.log('沒有歷史記錄，保持歡迎消息');
+                }
+            } catch (error) {
+                console.error('載入對話歷史失敗:', error);
+                UI.showToast('載入歷史記錄失敗', 'warning');
             }
         }
         
@@ -520,8 +664,13 @@
                         <p>${content}</p>
                         ${actionHtml}
                         <div class="text-xs opacity-75 mt-1 flex items-center justify-between">
-                            <span>${new Date().toLocaleTimeString()}</span>
-                            ${metadata.nsfw_level ? `<span class="bg-gray-600 text-white px-1 py-0.5 rounded text-xs">L${metadata.nsfw_level}</span>` : ''}
+                            <span>${metadata.timestamp ? new Date(metadata.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</span>
+                            <div class="flex items-center space-x-2">
+                                ${metadata.nsfw_level ? `<span class="bg-gray-600 text-white px-1 py-0.5 rounded text-xs">L${metadata.nsfw_level}</span>` : ''}
+                                <button class="hover:text-blue-500 transition-colors" onclick="regenerateMessage(this)" title="重新生成">
+                                    <i class="fas fa-redo text-xs"></i>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 `;
@@ -709,9 +858,28 @@
         }
         
         // 新建會話
-        function newSession() {
+        async function newSession() {
             if (confirm('確定要開始新的對話嗎？當前對話將被保存。')) {
-                location.reload();
+                try {
+                    // 清空當前消息
+                    document.getElementById('messagesList').innerHTML = `
+                        <div class="flex items-start space-x-3">
+                            <img class="w-8 h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                            <div class="bg-white border rounded p-3 max-w-[80%]">
+                                <p>正在創建新的對話會話...</p>
+                            </div>
+                        </div>
+                    `;
+                    messageHistory = [];
+                    
+                    // 創建新會話
+                    await createNewChatSession();
+                    UI.showToast('新會話創建成功', 'success');
+                } catch (error) {
+                    console.error('創建新會話失敗:', error);
+                    UI.showToast('創建新會話失敗，重新載入頁面', 'error');
+                    location.reload();
+                }
             }
         }
         
@@ -778,9 +946,236 @@
             messageInput.focus();
         }
         
+        // 更新側邊欄歷史記錄
+        function updateChatHistorySidebar() {
+            const historyContainer = document.getElementById('chatHistory');
+            
+            if (messageHistory.length === 0) {
+                historyContainer.innerHTML = '<div class="text-sm text-center py-4">暫無歷史記錄</div>';
+                return;
+            }
+            
+            const recentMessages = messageHistory.slice(-10).reverse(); // 最近10條消息
+            
+            historyContainer.innerHTML = recentMessages.map((msg, index) => {
+                const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                const preview = msg.content.length > 20 ? msg.content.substring(0, 20) + '...' : msg.content;
+                const isUser = msg.sender === 'user';
+                
+                return `
+                    <div class="p-2 rounded hover:bg-white hover:bg-opacity-10 cursor-pointer text-sm border-l-2 ${isUser ? 'border-blue-400' : 'border-green-400'}">
+                        <div class="flex items-center justify-between mb-1">
+                            <span class="font-medium ${isUser ? 'text-blue-400' : 'text-green-400'}">${isUser ? '你' : currentCharacter.name}</span>
+                            <span class="text-xs opacity-75">${time}</span>
+                        </div>
+                        <div class="text-xs opacity-75">${preview}</div>
+                    </div>
+                `;
+            }).join('');
+        }
+        
+        // 顯示會話列表
+        async function showSessionList() {
+            UI.modal.show('sessionListModal');
+            
+            try {
+                const result = await ApiClient.get(`/api/v1/chat/sessions?character_id=${currentCharacter.id}`);
+                const sessionsList = document.getElementById('sessionsList');
+                
+                if (result.success && result.data && result.data.sessions && result.data.sessions.length > 0) {
+                    sessionsList.innerHTML = result.data.sessions.map(session => {
+                        const createdTime = new Date(session.created_at).toLocaleString('zh-TW');
+                        const isCurrentSession = currentSession && session.id === currentSession.id;
+                        
+                        return `
+                            <div class="border rounded-lg p-4 ${isCurrentSession ? 'border-blue-400 bg-blue-50' : 'border-gray-200'} hover:border-blue-300 transition-colors">
+                                <div class="flex items-start justify-between">
+                                    <div class="flex-1 mr-4">
+                                        <h4 class="font-semibold text-lg mb-1">${session.title || '未命名對話'}</h4>
+                                        <p class="text-sm text-gray-600 mb-2">角色: ${session.character_name || '未知'}</p>
+                                        <p class="text-xs text-gray-500">創建時間: ${createdTime}</p>
+                                        <div class="flex items-center space-x-4 text-xs text-gray-500 mt-2">
+                                            <span>消息: ${session.message_count || 0}</span>
+                                            <span>模式: ${session.mode || 'normal'}</span>
+                                            ${isCurrentSession ? '<span class="text-blue-600 font-medium">當前會話</span>' : ''}
+                                        </div>
+                                    </div>
+                                    <div class="flex space-x-2">
+                                        ${!isCurrentSession ? `<button class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-sm" onclick="loadSession('${session.id}')">載入</button>` : ''}
+                                        <button class="bg-red-600 hover:bg-red-700 text-white px-3 py-1 rounded text-sm" onclick="deleteSession('${session.id}', this)">刪除</button>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('');
+                } else {
+                    sessionsList.innerHTML = '<div class="text-center py-8 text-gray-500">沒有找到對話會話</div>';
+                }
+            } catch (error) {
+                console.error('載入會話列表失敗:', error);
+                document.getElementById('sessionsList').innerHTML = '<div class="text-center py-8 text-red-500">載入失敗</div>';
+            }
+        }
+        
+        // 載入指定會話
+        async function loadSession(sessionId) {
+            if (confirm('確定要切換到這個會話嗎？當前會話的未保存內容可能會丟失。')) {
+                try {
+                    const result = await ApiClient.get(`/api/v1/chat/session/${sessionId}`);
+                    
+                    if (result.success && result.data) {
+                        currentSession = result.data;
+                        AppState.currentSession = currentSession;
+                        
+                        // 清空當前消息
+                        document.getElementById('messagesList').innerHTML = `
+                            <div class="flex items-start space-x-3">
+                                <img class="w-8 h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                                <div class="bg-white border rounded p-3 max-w-[80%]">
+                                    <p>會話已切換，載入歷史記錄中...</p>
+                                </div>
+                            </div>
+                        `;
+                        
+                        messageHistory = [];
+                        
+                        // 載入會話歷史
+                        await loadChatHistory();
+                        
+                        UI.modal.hide('sessionListModal');
+                        UI.showToast('會話切換成功', 'success');
+                    } else {
+                        throw new Error('載入會話失敗');
+                    }
+                } catch (error) {
+                    console.error('載入會話失敗:', error);
+                    UI.showToast('載入會話失敗: ' + error.message, 'error');
+                }
+            }
+        }
+        
+        // 刪除指定會話
+        async function deleteSession(sessionId, buttonElement) {
+            if (confirm('確定要刪除這個會話嗎？此操作無法撤銷。')) {
+                try {
+                    UI.showLoading(buttonElement);
+                    
+                    const result = await ApiClient.delete(`/api/v1/chat/session/${sessionId}`);
+                    
+                    if (result.success) {
+                        // 如果刪除的是當前會話，創建新會話
+                        if (currentSession && sessionId === currentSession.id) {
+                            await createChatSession();
+                        }
+                        
+                        // 重新載入會話列表
+                        await showSessionList();
+                        
+                        UI.showToast('會話已刪除', 'success');
+                    } else {
+                        throw new Error(result.error?.message || '刪除失敗');
+                    }
+                } catch (error) {
+                    console.error('刪除會話失敗:', error);
+                    UI.showToast('刪除會話失敗: ' + error.message, 'error');
+                } finally {
+                    UI.showLoading(buttonElement, false);
+                }
+            }
+        }
+        
+        // 刪除當前會話
+        async function deleteCurrentSession() {
+            if (currentSession && currentSession.id) {
+                await deleteSession(currentSession.id, document.querySelector('[onclick="deleteCurrentSession()"]'));
+            } else {
+                UI.showToast('沒有當前會話可刪除', 'warning');
+            }
+        }
+        
+        // 重新生成消息
+        async function regenerateMessage(buttonElement) {
+            if (isAIResponding) {
+                UI.showToast('AI正在回應中，請稍候', 'warning');
+                return;
+            }
+            
+            if (messageHistory.length === 0) {
+                UI.showToast('沒有消息可重新生成', 'warning');
+                return;
+            }
+            
+            // 找到最後一條用戶消息
+            const lastUserMessage = [...messageHistory].reverse().find(msg => msg.sender === 'user');
+            
+            if (!lastUserMessage) {
+                UI.showToast('找不到用戶消息', 'warning');
+                return;
+            }
+            
+            try {
+                UI.showLoading(buttonElement);
+                setAIResponding(true);
+                
+                const result = await ApiClient.post('/api/v1/chat/regenerate', {
+                    session_id: currentSession.id,
+                    message: lastUserMessage.content
+                });
+                
+                if (result.success && result.data) {
+                    // 移除最後一條AI回應(如果存在)
+                    const messagesList = document.getElementById('messagesList');
+                    const lastMessage = messagesList.lastElementChild;
+                    if (lastMessage && !lastMessage.querySelector('.bg-blue-600')) { // 不是用戶消息
+                        lastMessage.remove();
+                        messageHistory.pop(); // 移除對應的歷史記錄
+                    }
+                    
+                    // 添加新的AI回應
+                    handleAIResponse(result.data);
+                    
+                    UI.showToast('消息重新生成完成', 'success');
+                } else {
+                    throw new Error(result.error?.message || '重新生成失敗');
+                }
+            } catch (error) {
+                console.error('重新生成失敗:', error);
+                UI.showToast('重新生成失敗: ' + error.message, 'error');
+            } finally {
+                UI.showLoading(buttonElement, false);
+                setAIResponding(false);
+            }
+        }
+        
+        // 載入情感狀態
+        async function loadEmotionStatus() {
+            try {
+                const statusResult = await ApiClient.get('/api/v1/emotion/status');
+                const affectionResult = await ApiClient.get('/api/v1/emotion/affection');
+                
+                if (statusResult.success && statusResult.data) {
+                    updateEmotionState(statusResult.data);
+                }
+                
+                if (affectionResult.success && affectionResult.data) {
+                    emotionState.affection = affectionResult.data.affection || 50;
+                    updateEmotionDisplay();
+                }
+            } catch (error) {
+                console.error('載入情感狀態失敗:', error);
+                // 使用預設值，不顯示錯誤
+            }
+        }
+        
         // 初始化情感顯示
         updateEmotionDisplay();
         updateNSFWDisplay(1, 'OpenAI');
+        
+        // 載入情感狀態
+        loadEmotionStatus();
     </script>
 </body>
 </html>

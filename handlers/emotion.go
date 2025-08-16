@@ -189,7 +189,7 @@ func TriggerEmotionEvent(c *gin.Context) {
 
 	var req struct {
 		EventType string                 `json:"event_type" binding:"required"`
-		Intensity int                    `json:"intensity"`
+		Intensity float64                `json:"intensity"`
 		Context   map[string]interface{} `json:"context"`
 	}
 

@@ -159,7 +159,7 @@ func GetCharacterByID(c *gin.Context) {
 
 // CreateCharacter godoc
 // @Summary      創建角色
-// @Description  創建新角色（管理員功能）
+// @Description  創建新角色
 // @Tags         Character
 // @Accept       json
 // @Produce      json
@@ -211,7 +211,7 @@ func CreateCharacter(c *gin.Context) {
 
 // UpdateCharacter godoc
 // @Summary      更新角色
-// @Description  更新角色信息（管理員功能）
+// @Description  更新角色信息
 // @Tags         Character
 // @Accept       json
 // @Produce      json
@@ -481,5 +481,97 @@ func SelectCharacter(c *gin.Context) {
 		Success: true,
 		Message: "角色選擇成功",
 		Data:    selection,
+	})
+}
+
+// DeleteCharacter godoc
+// @Summary      刪除角色
+// @Description  刪除角色
+// @Tags         Character
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path string true "角色ID"
+// @Success      200 {object} models.APIResponse "刪除成功"
+// @Failure      404 {object} models.APIResponse{error=models.APIError} "角色不存在"
+// @Router       /character/{id} [delete]
+func DeleteCharacter(c *gin.Context) {
+	ctx := context.Background()
+	characterID := c.Param("id")
+
+	// 檢查角色是否存在（包括已軟刪除的角色）
+	var character models.Character
+	err := database.DB.NewSelect().
+		Model(&character).
+		Where("id = ?", characterID).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("character_id", characterID).Error("Character not found for deletion")
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "CHARACTER_NOT_FOUND",
+				Message: "角色不存在",
+			},
+		})
+		return
+	}
+
+	// 如果角色已經被軟刪除，直接返回成功（冪等操作）
+	if !character.IsActive {
+		c.JSON(http.StatusOK, models.APIResponse{
+			Success: true,
+			Message: "角色已刪除",
+		})
+		return
+	}
+
+	// 軟刪除角色（設置 is_active = false）
+	result, err := database.DB.NewUpdate().
+		Model((*models.Character)(nil)).
+		Set("is_active = ?", false).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ? AND is_active = ?", characterID, true).
+		Exec(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("character_id", characterID).Error("Failed to delete character")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "刪除角色失敗",
+			},
+		})
+		return
+	}
+
+	// 檢查是否有行被更新
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "CHARACTER_NOT_FOUND",
+				Message: "角色不存在",
+			},
+		})
+		return
+	}
+
+	// 記錄日誌
+	utils.Logger.WithFields(map[string]interface{}{
+		"character_id":   characterID,
+		"character_name": character.Name,
+	}).Info("Character deleted successfully")
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "角色刪除成功",
+		Data: gin.H{
+			"character_id": characterID,
+			"deleted_at":   time.Now(),
+		},
 	})
 }

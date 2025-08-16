@@ -13,7 +13,7 @@ func SetupRoutes(router *gin.RouterGroup) {
 	router.GET("/status", handlers.GetStatus)
 	
 	// 測試路由（無需認證） - 用於開發測試
-	router.POST("/test/message", handlers.SendMessage)
+	router.POST("/test/message", handlers.TestMessage)
 
 	// 認證路由（無需認證）
 	auth := router.Group("/auth")

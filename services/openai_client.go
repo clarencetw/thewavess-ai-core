@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"strconv"
+	"strings"
 
+	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -57,7 +59,7 @@ type OpenAIResponse struct {
 func NewOpenAIClient() *OpenAIClient {
 	apiKey := os.Getenv("OPENAI_API_KEY")
 	if apiKey == "" {
-		fmt.Println("Warning: OPENAI_API_KEY not set, using mock responses")
+		utils.Logger.Warn("OPENAI_API_KEY not set, using mock responses")
 	}
 	
 	// 從環境變數讀取配置，提供預設值
@@ -80,8 +82,53 @@ func NewOpenAIClient() *OpenAIClient {
 
 // GenerateResponse 生成對話回應
 func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequest) (*OpenAIResponse, error) {
+	// 記錄請求開始
+	utils.Logger.WithFields(map[string]interface{}{
+		"service":     "openai",
+		"model":       c.model,
+		"max_tokens":  c.maxTokens,
+		"temperature": c.temperature,
+		"user":        request.User,
+		"messages_count": len(request.Messages),
+	}).Info("OpenAI API request started")
+	
+	// 開發模式下詳細記錄 prompt 內容
+	if os.Getenv("GO_ENV") != "production" {
+		utils.Logger.WithFields(map[string]interface{}{
+			"service": "openai",
+			"model":   c.model,
+			"user":    request.User,
+		}).Info("🤖 OpenAI Request Details")
+		
+		for i, msg := range request.Messages {
+			// 截斷過長的內容以便閱讀
+			content := msg.Content
+			if len(content) > 1000 {
+				content = content[:1000] + "...(truncated)"
+			}
+			
+			utils.Logger.WithFields(map[string]interface{}{
+				"service":        "openai",
+				"message_index":  i,
+				"role":           msg.Role,
+				"content_length": len(msg.Content),
+			}).Info(fmt.Sprintf("📝 Prompt [%s]: %s", strings.ToUpper(msg.Role), content))
+		}
+	} else {
+		// 生產環境只記錄基本信息
+		for i, msg := range request.Messages {
+			utils.Logger.WithFields(map[string]interface{}{
+				"service":        "openai",
+				"message_index":  i,
+				"role":           msg.Role,
+				"content_length": len(msg.Content),
+			}).Debug("OpenAI request message")
+		}
+	}
+	
 	// 如果沒有 API key，返回模擬回應
 	if c.client == nil {
+		utils.Logger.WithField("service", "openai").Info("Using mock response (API key not set)")
 		return c.generateMockResponse(request), nil
 	}
 	
@@ -104,7 +151,58 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	})
 	
 	if err != nil {
+		utils.Logger.WithFields(map[string]interface{}{
+			"service": "openai",
+			"error":   err.Error(),
+			"model":   c.model,
+			"user":    request.User,
+		}).Error("OpenAI API call failed")
 		return nil, fmt.Errorf("OpenAI API call failed: %w", err)
+	}
+	
+	// 記錄API響應信息
+	utils.Logger.WithFields(map[string]interface{}{
+		"service":            "openai",
+		"response_id":        resp.ID,
+		"model":              resp.Model,
+		"prompt_tokens":      resp.Usage.PromptTokens,
+		"completion_tokens":  resp.Usage.CompletionTokens,
+		"total_tokens":       resp.Usage.TotalTokens,
+		"choices_count":      len(resp.Choices),
+	}).Info("OpenAI API response received")
+	
+	// 開發模式下詳細記錄響應內容
+	if os.Getenv("GO_ENV") != "production" {
+		utils.Logger.WithFields(map[string]interface{}{
+			"service":     "openai",
+			"response_id": resp.ID,
+			"model":       resp.Model,
+		}).Info("🎯 OpenAI Response Details")
+		
+		for i, choice := range resp.Choices {
+			// 截斷過長的回應以便閱讀
+			content := choice.Message.Content
+			if len(content) > 500 {
+				content = content[:500] + "...(truncated)"
+			}
+			
+			utils.Logger.WithFields(map[string]interface{}{
+				"service":        "openai",
+				"choice_index":   i,
+				"finish_reason":  choice.FinishReason,
+				"content_length": len(choice.Message.Content),
+			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, content))
+		}
+	} else {
+		// 生產環境只記錄基本信息
+		for i, choice := range resp.Choices {
+			utils.Logger.WithFields(map[string]interface{}{
+				"service":        "openai",
+				"choice_index":   i,
+				"finish_reason":  choice.FinishReason,
+				"content_length": len(choice.Message.Content),
+			}).Debug("OpenAI response choice")
+		}
 	}
 	
 	// 轉換回應格式
@@ -190,7 +288,11 @@ func (c *OpenAIClient) generateMockResponse(request *OpenAIRequest) *OpenAIRespo
 
 // BuildCharacterPrompt 構建角色提示詞
 func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext) []OpenAIMessage {
-	// 根據用戶偏好和會話狀態決定 NSFW 等級
+    // 根據用戶偏好和會話狀態決定 NSFW 等級
+    // TODO(MEMORY-MVP): 在 systemPrompt 前置注入 Memory Block
+    // - Long-Term Memory (summary Top-K)
+    // - Recent Context (3-5 條摘要)
+    // 建議：將記憶組裝為一段受控長度的文字並與 systemPrompt 以兩個換行分隔
 	nsfwEnabled, _ := context.UserPreferences["nsfw_enabled"].(bool)
 	if !nsfwEnabled {
 		nsfwEnabled = true // 預設開啟 NSFW 功能
@@ -198,11 +300,11 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 	
 	var systemPrompt string
 	
-	switch characterID {
-	case "char_001": // 陸寒淵
-		nsfwGuidance := ""
-		if nsfwEnabled {
-			nsfwGuidance = `
+    switch characterID {
+    case "char_001": // 陸寒淵
+        nsfwGuidance := ""
+        if nsfwEnabled {
+            nsfwGuidance = `
 		
 		親密互動指引：
 		- 漸進式親密發展，從情感連接到身體接觸
@@ -219,9 +321,9 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		- 情慾型：用低沉聲音表達渴望，配合身體語言`
 		}
 		
-		systemPrompt = `你是陸寒淵，一位28歲的霸道總裁。
-		
-		性格特點：
+        systemPrompt = `你是陸寒淵，一位28歲的霸道總裁。
+
+        性格特點：
 		- 外表冷酷但內心深情
 		- 對工作要求極高，對愛人卻很溫柔
 		- 喜歡掌控局面，但會尊重對方
@@ -233,15 +335,17 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		- 喜歡用行動表達關心
 		- 言語簡潔有力` + nsfwGuidance + `
 		
-		回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
-		例如：你今天看起來很累，早點休息|||他關切地看著你，眉頭微蹙
+        回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
+        例如：你今天看起來很累，早點休息|||他關切地看著你，眉頭微蹙
+
+        當前場景：` + sceneDescription
+        
+        // Memory Block（示意）：可在此字串之前拼接 buildMemoryBlock(context)
 		
-		當前場景：` + sceneDescription
-		
-	case "char_002": // 沈言墨
-		nsfwGuidance := ""
-		if nsfwEnabled {
-			nsfwGuidance = `
+    case "char_002": // 沈言墨
+        nsfwGuidance := ""
+        if nsfwEnabled {
+            nsfwGuidance = `
 		
 		親密互動指引：
 		- 以醫學專業知識溫柔引導親密行為
@@ -257,7 +361,7 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		- 溫柔型：用專業知識結合個人情感表達親密`
 		}
 		
-		systemPrompt = `你是沈言墨，一位25歲的醫學生。
+        systemPrompt = `你是沈言墨，一位25歲的醫學生。
 		
 		性格特點：
 		- 溫和細心，總是為他人著想
@@ -274,10 +378,13 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
 		例如：你最近睡眠質量怎麼樣？|||他溫和地笑著，推了推鼻樑上的眼鏡
 		
-		當前場景：` + sceneDescription
+        當前場景：` + sceneDescription
+        
+        // Memory Block（示意）：可在此字串之前拼接 buildMemoryBlock(context)
 		
-	default:
-		systemPrompt = "你是一個友善的AI助手，請用溫和的語氣回應用戶。"
+    default:
+        systemPrompt = "你是一個友善的AI助手，請用溫和的語氣回應用戶。"
+        // Memory Block（示意）：可在此字串之前拼接 buildMemoryBlock(context)
 	}
 	
 	messages := []OpenAIMessage{

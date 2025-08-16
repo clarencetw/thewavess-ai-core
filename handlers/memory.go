@@ -142,7 +142,7 @@ func SaveMemory(c *gin.Context) {
 		SessionID   string   `json:"session_id" binding:"required"`
 		Type        string   `json:"type" binding:"required"`
 		Content     string   `json:"content" binding:"required"`
-		Importance  string   `json:"importance"`
+		Importance  float64  `json:"importance"`
 		Tags        []string `json:"tags"`
 		CharacterID string   `json:"character_id"`
 	}

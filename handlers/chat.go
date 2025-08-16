@@ -9,6 +9,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
@@ -176,7 +177,7 @@ func GetChatSession(c *gin.Context) {
 
 // GetChatSessions godoc
 // @Summary      獲取用戶聊天會話列表
-// @Description  獲取用戶的聊天會話列表，支援分頁
+// @Description  獲取用戶的聊天會話列表，支援分頁和角色篩選
 // @Tags         Chat
 // @Accept       json
 // @Produce      json
@@ -184,6 +185,7 @@ func GetChatSession(c *gin.Context) {
 // @Param        page query int false "頁碼" default(1)
 // @Param        limit query int false "每頁數量" default(20)
 // @Param        status query string false "會話狀態篩選"
+// @Param        character_id query string false "角色ID篩選"
 // @Success      200 {object} models.APIResponse{data=models.ChatSessionListResponse} "獲取成功"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Router       /chat/sessions [get]
@@ -227,6 +229,11 @@ func GetChatSessions(c *gin.Context) {
 	// 應用狀態篩選
 	if status := c.Query("status"); status != "" {
 		query = query.Where("cs.status = ?", status)
+	}
+
+	// 應用角色篩選
+	if characterID := c.Query("character_id"); characterID != "" {
+		query = query.Where("cs.character_id = ?", characterID)
 	}
 
 	// 獲取總數
@@ -372,14 +379,58 @@ func SendMessage(c *gin.Context) {
 		return
 	}
 
-	// 這裡可以添加 AI 回應生成邏輯
-	// 目前先創建一個簡單的自動回應
-	aiMessage := &models.Message{
-		ID:        utils.GenerateID(16),
-		SessionID: req.SessionID,
-		Role:      "assistant",
-		Content:   "這是一個自動回應。AI 集成功能正在開發中...",
-		AIEngine:  "placeholder",
+	// 整合女性向AI聊天服務
+	chatService := services.NewChatService()
+	
+	// 構建處理請求
+	processRequest := &services.ProcessMessageRequest{
+		SessionID:   req.SessionID,
+		UserMessage: req.Message,
+		CharacterID: session.CharacterID, // 從會話獲取角色ID
+		UserID:      userID.(string),
+		Metadata:    map[string]interface{}{},
+	}
+	
+	// 處理女性向AI對話
+	chatResponse, err := chatService.ProcessMessage(ctx, processRequest)
+	if err != nil {
+		utils.Logger.WithError(err).Error("女性向AI對話處理失敗")
+		// 使用備用回應
+		chatResponse = &services.ChatResponse{
+			SessionID:         req.SessionID,
+			MessageID:         utils.GenerateID(16),
+			CharacterDialogue: "抱歉，我現在有些困惑...能再說一遍嗎？",
+			SceneDescription:  "房間裡的氣氛有些緊張",
+			CharacterAction:   "他皺了皺眉，似乎在思考什麼",
+			EmotionState: &services.EmotionState{
+				Affection:     50,
+				Mood:          "concerned",
+				Relationship:  "friend",
+				IntimacyLevel: "friendly",
+			},
+			AIEngine:     "fallback",
+			NSFWLevel:    1,
+			ResponseTime: time.Since(time.Now()),
+		}
+	}
+	
+	// 創建AI消息
+    aiMessage := &models.Message{
+		ID:               chatResponse.MessageID,
+		SessionID:        req.SessionID,
+		Role:             "assistant",
+		Content:          chatResponse.CharacterDialogue,
+		SceneDescription: chatResponse.SceneDescription,
+		CharacterAction:  chatResponse.CharacterAction,
+		NSFWLevel:        chatResponse.NSFWLevel,
+		AIEngine:         chatResponse.AIEngine,
+        ResponseTimeMs:   int(chatResponse.ResponseTime.Milliseconds()),
+        EmotionalState: map[string]interface{}{
+            "affection":      chatResponse.EmotionState.Affection,
+            "mood":           chatResponse.EmotionState.Mood,
+            "relationship":   chatResponse.EmotionState.Relationship,
+            "intimacy_level": chatResponse.EmotionState.IntimacyLevel,
+        },
 		CreatedAt: time.Now(),
 	}
 
@@ -405,10 +456,31 @@ func SendMessage(c *gin.Context) {
 		// 不中斷流程
 	}
 
+	// 構建完整的女性向聊天回應
+	response := map[string]interface{}{
+		"session_id":  chatResponse.SessionID,
+		"message_id":  chatResponse.MessageID,
+		"content":     chatResponse.CharacterDialogue,
+		"character_dialogue": chatResponse.CharacterDialogue,
+		"scene_description":  chatResponse.SceneDescription,
+		"character_action":   chatResponse.CharacterAction,
+		"emotion_state": map[string]interface{}{
+			"affection":      chatResponse.EmotionState.Affection,
+			"mood":           chatResponse.EmotionState.Mood,
+			"relationship":   chatResponse.EmotionState.Relationship,
+			"intimacy_level": chatResponse.EmotionState.IntimacyLevel,
+		},
+		"ai_engine":    chatResponse.AIEngine,
+		"nsfw_level":   chatResponse.NSFWLevel,
+		"response_time": chatResponse.ResponseTime.Milliseconds(),
+		"special_event": chatResponse.SpecialEvent,
+		"timestamp":    time.Now(),
+	}
+
 	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
-		Message: "消息發送成功",
-		Data:    aiMessage.ToResponse(),
+		Message: "女性向AI對話成功",
+		Data:    response,
 	})
 }
 
@@ -884,5 +956,48 @@ func RegenerateResponse(c *gin.Context) {
 		Success: true,
 		Message: "回應重新生成成功",
 		Data:    newMessage,
+	})
+}
+
+// TestMessage godoc
+// @Summary      測試消息端點
+// @Description  用於開發測試的簡單消息處理（無需認證）
+// @Tags         Test
+// @Accept       json
+// @Produce      json
+// @Param        message body object true "測試消息"
+// @Success      200 {object} models.APIResponse "測試成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
+// @Router       /test/message [post]
+func TestMessage(c *gin.Context) {
+	var req struct {
+		Message string `json:"message" binding:"required"`
+	}
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_INPUT",
+				Message: "請求參數錯誤: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 靜態回應 - 測試用
+	testResponse := gin.H{
+		"test_id":          utils.GenerateID(16),
+		"received_message": req.Message,
+		"echo_response":    "測試收到: " + req.Message,
+		"timestamp":        time.Now(),
+		"status":           "success",
+		"environment":      "development",
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "測試消息處理成功",
+		Data:    testResponse,
 	})
 }
