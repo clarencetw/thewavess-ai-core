@@ -52,3 +52,9 @@ docs/
 *.tmp
 *.temp
 .DS_Store
+
+# Database data directories (keep structure, ignore data)
+data/postgres/*
+!data/postgres/.gitkeep
+data/redis/*
+!data/redis/.gitkeep
