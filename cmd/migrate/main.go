@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/joho/godotenv"
 	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
@@ -16,6 +17,13 @@ func main() {
 
 	// 初始化 logger
 	utils.InitLogger()
+
+	// Load environment variables from .env file
+	if err := godotenv.Load(); err != nil {
+		utils.Logger.Warn("No .env file found or error loading .env file")
+	} else {
+		utils.Logger.Info("Successfully loaded .env file")
+	}
 
 	// 初始化數據庫連接
 	if err := database.InitDB(); err != nil {

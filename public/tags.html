@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>標籤管理 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Moment.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
+    
+</head>
+<body class="min-h-full p-4 bg-gray-50 text-gray-900">
+    <!-- 頂部導航 -->
+    <nav class="bg-white border rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <button 
+                    class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded"
+                    onclick="goBack()"
+                >
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                
+                <h1 class="text-2xl font-bold">
+                    <i class="fas fa-tags text-yellow-400 mr-2"></i>
+                    標籤管理
+                </h1>
+            </div>
+            
+            <button 
+                class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                onclick="refreshTagsData()"
+            >
+                <i class="fas fa-sync mr-2"></i>
+                刷新
+            </button>
+        </div>
+    </nav>
+    
+    <!-- 主內容區域 -->
+    <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- 左側 - 標籤展示與管理 -->
+        <div class="lg:col-span-3 space-y-6">
+            <!-- 熱門標籤 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">
+                    <i class="fas fa-fire text-red-400 mr-2"></i>
+                    熱門標籤
+                </h2>
+                
+                <div class="flex flex-wrap gap-2" id="popularTags">
+                    <!-- 動態生成熱門標籤 -->
+                </div>
+            </div>
+            
+            <!-- 所有標籤 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">
+                    <i class="fas fa-list text-blue-400 mr-2"></i>
+                    所有標籤
+                </h2>
+                
+                <!-- 標籤篩選 -->
+                <div class="mb-4 flex flex-wrap gap-2">
+                    <button class="tag-filter-btn active" data-category="all">全部</button>
+                    <button class="tag-filter-btn" data-category="emotion">情感</button>
+                    <button class="tag-filter-btn" data-category="scene">場景</button>
+                    <button class="tag-filter-btn" data-category="character">角色</button>
+                    <button class="tag-filter-btn" data-category="style">風格</button>
+                    <button class="tag-filter-btn" data-category="content">內容</button>
+                </div>
+                
+                <!-- 標籤搜尋 -->
+                <div class="mb-4">
+                    <input 
+                        type="text" 
+                        id="tagSearchInput"
+                        class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        placeholder="搜尋標籤..."
+                        onkeyup="searchTags()"
+                    >
+                </div>
+                
+                <!-- 標籤列表 -->
+                <div id="allTagsList" class="space-y-3">
+                    <!-- 動態生成標籤列表 -->
+                </div>
+            </div>
+            
+            <!-- 標籤創建 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h2 class="text-xl font-semibold mb-4">
+                    <i class="fas fa-plus text-green-400 mr-2"></i>
+                    創建新標籤
+                </h2>
+                
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block font-medium mb-2">標籤名稱</label>
+                        <input 
+                            type="text" 
+                            id="newTagName"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                            placeholder="輸入標籤名稱..."
+                        >
+                    </div>
+                    
+                    <div>
+                        <label class="block font-medium mb-2">標籤類別</label>
+                        <select 
+                            id="newTagCategory"
+                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        >
+                            <option value="emotion">情感</option>
+                            <option value="scene">場景</option>
+                            <option value="character">角色</option>
+                            <option value="style">風格</option>
+                            <option value="content">內容</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="mt-4">
+                    <label class="block font-medium mb-2">標籤描述</label>
+                    <textarea 
+                        id="newTagDescription"
+                        class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                        rows="3"
+                        placeholder="描述這個標籤的用途和含義..."
+                    ></textarea>
+                </div>
+                
+                <div class="mt-4">
+                    <label class="block font-medium mb-2">標籤顏色</label>
+                    <div class="flex space-x-2">
+                        <button class="tag-color-btn bg-blue-500" data-color="blue" onclick="selectTagColor('blue')"></button>
+                        <button class="tag-color-btn bg-green-500" data-color="green" onclick="selectTagColor('green')"></button>
+                        <button class="tag-color-btn bg-red-500" data-color="red" onclick="selectTagColor('red')"></button>
+                        <button class="tag-color-btn bg-yellow-500" data-color="yellow" onclick="selectTagColor('yellow')"></button>
+                        <button class="tag-color-btn bg-purple-500" data-color="purple" onclick="selectTagColor('purple')"></button>
+                        <button class="tag-color-btn bg-pink-500" data-color="pink" onclick="selectTagColor('pink')"></button>
+                        <button class="tag-color-btn bg-indigo-500" data-color="indigo" onclick="selectTagColor('indigo')"></button>
+                        <button class="tag-color-btn bg-gray-500" data-color="gray" onclick="selectTagColor('gray')"></button>
+                    </div>
+                </div>
+                
+                <div class="mt-6 flex space-x-4">
+                    <button 
+                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded"
+                        onclick="createNewTag()"
+                    >
+                        <i class="fas fa-plus mr-2"></i>
+                        創建標籤
+                    </button>
+                    
+                    <button 
+                        class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded"
+                        onclick="clearTagForm()"
+                    >
+                        <i class="fas fa-eraser mr-2"></i>
+                        清空表單
+                    </button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右側 - 標籤統計與管理 -->
+        <div class="space-y-6">
+            <!-- 標籤統計 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-chart-pie text-blue-400 mr-2"></i>
+                    標籤統計
+                </h3>
+                
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-blue-400" id="totalTags">0</div>
+                        <div class="text-sm text-gray-600">總標籤數</div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-green-400" id="activeTags">0</div>
+                        <div class="text-sm text-gray-600">活躍標籤</div>
+                    </div>
+                    
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-orange-400" id="recentTags">0</div>
+                        <div class="text-sm text-gray-600">今日新增</div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 標籤分類分布 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-chart-bar text-purple-400 mr-2"></i>
+                    分類分布
+                </h3>
+                
+                <div class="space-y-3" id="categoryDistribution">
+                    <!-- 動態生成分類分布 -->
+                </div>
+            </div>
+            
+            <!-- 快速操作 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-rocket text-yellow-400 mr-2"></i>
+                    快速操作
+                </h3>
+                
+                <div class="space-y-3">
+                    <button 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded text-left"
+                        onclick="exportTags()"
+                    >
+                        <i class="fas fa-download mr-2"></i>
+                        匯出標籤
+                    </button>
+                    
+                    <button 
+                        class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded text-left"
+                        onclick="importTags()"
+                    >
+                        <i class="fas fa-upload mr-2"></i>
+                        匯入標籤
+                    </button>
+                    
+                    <button 
+                        class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded text-left"
+                        onclick="optimizeTags()"
+                    >
+                        <i class="fas fa-magic mr-2"></i>
+                        標籤優化
+                    </button>
+                    
+                    <button 
+                        class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded text-left"
+                        onclick="cleanupTags()"
+                    >
+                        <i class="fas fa-trash mr-2"></i>
+                        清理無用標籤
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- CSS -->
+    <style>
+        .tag-filter-btn {
+            @apply px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer;
+        }
+        .tag-filter-btn.active {
+            @apply bg-blue-600 text-white border-blue-600;
+        }
+        .tag-color-btn {
+            @apply w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform;
+        }
+        .tag-color-btn.selected {
+            @apply border-gray-800;
+        }
+        .tag-item {
+            @apply inline-block px-3 py-1 rounded-full text-sm font-medium cursor-pointer transition-all hover:scale-105;
+        }
+        .tag-list-item {
+            @apply flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors;
+        }
+    </style>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        let allTags = [];
+        let currentFilter = 'all';
+        let selectedTagColor = 'blue';
+        
+        // 頁面初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await App.init();
+            
+            // 載入標籤數據
+            await loadTagsData();
+            
+            // 設置事件監聽器
+            setupEventListeners();
+        });
+        
+        // 設置事件監聽器
+        function setupEventListeners() {
+            // 標籤類別篩選
+            document.querySelectorAll('.tag-filter-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    // 更新活動狀態
+                    document.querySelectorAll('.tag-filter-btn').forEach(b => b.classList.remove('active'));
+                    this.classList.add('active');
+                    
+                    // 更新篩選條件
+                    currentFilter = this.dataset.category;
+                    filterTags();
+                });
+            });
+        }
+        
+        // 載入標籤數據
+        async function loadTagsData() {
+            try {
+                // 載入所有標籤
+                const allTagsResult = await ApiClient.get('/api/v1/tags');
+                
+                if (allTagsResult.success && allTagsResult.data) {
+                    allTags = allTagsResult.data.tags || [];
+                } else {
+                    allTags = generateMockTags();
+                }
+                
+                // 載入熱門標籤
+                const popularResult = await ApiClient.get('/api/v1/tags/popular');
+                let popularTags = [];
+                
+                if (popularResult.success && popularResult.data) {
+                    popularTags = popularResult.data.tags || [];
+                } else {
+                    popularTags = allTags.slice(0, 10);
+                }
+                
+                // 顯示數據
+                displayPopularTags(popularTags);
+                displayAllTags(allTags);
+                updateTagsStats();
+                updateCategoryDistribution();
+                
+            } catch (error) {
+                console.error('載入標籤數據失敗:', error);
+                
+                // 使用模擬數據
+                allTags = generateMockTags();
+                displayPopularTags(allTags.slice(0, 10));
+                displayAllTags(allTags);
+                updateTagsStats();
+                updateCategoryDistribution();
+                
+                UI.showToast('使用模擬數據', 'warning');
+            }
+        }
+        
+        // 顯示熱門標籤
+        function displayPopularTags(tags) {
+            const popularTagsDiv = document.getElementById('popularTags');
+            popularTagsDiv.innerHTML = '';
+            
+            tags.forEach(tag => {
+                const tagElement = createTagElement(tag, true);
+                popularTagsDiv.appendChild(tagElement);
+            });
+        }
+        
+        // 顯示所有標籤
+        function displayAllTags(tags) {
+            const allTagsList = document.getElementById('allTagsList');
+            allTagsList.innerHTML = '';
+            
+            tags.forEach(tag => {
+                const tagItem = createTagListItem(tag);
+                allTagsList.appendChild(tagItem);
+            });
+        }
+        
+        // 創建標籤元素
+        function createTagElement(tag, showUsage = false) {
+            const span = document.createElement('span');
+            span.className = `tag-item bg-${tag.color || 'blue'}-100 text-${tag.color || 'blue'}-800`;
+            span.onclick = () => selectTag(tag);
+            
+            let content = tag.name;
+            if (showUsage && tag.usage_count) {
+                content += ` (${tag.usage_count})`;
+            }
+            
+            span.textContent = content;
+            return span;
+        }
+        
+        // 創建標籤列表項目
+        function createTagListItem(tag) {
+            const div = document.createElement('div');
+            div.className = 'tag-list-item';
+            
+            div.innerHTML = `
+                <div class="flex-1">
+                    <div class="flex items-center space-x-2">
+                        <span class="inline-block w-3 h-3 rounded-full bg-${tag.color || 'blue'}-500"></span>
+                        <span class="font-medium">${tag.name}</span>
+                        <span class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded">${getCategoryLabel(tag.category)}</span>
+                    </div>
+                    <div class="text-sm text-gray-600 mt-1">${tag.description || '無描述'}</div>
+                </div>
+                <div class="flex items-center space-x-2">
+                    <span class="text-sm text-gray-500">${tag.usage_count || 0} 次使用</span>
+                    <button 
+                        class="text-blue-600 hover:text-blue-800 text-sm"
+                        onclick="editTag('${tag.id}')"
+                    >
+                        <i class="fas fa-edit"></i>
+                    </button>
+                    <button 
+                        class="text-red-600 hover:text-red-800 text-sm"
+                        onclick="deleteTag('${tag.id}')"
+                    >
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            
+            return div;
+        }
+        
+        // 篩選標籤
+        function filterTags() {
+            let filteredTags = allTags;
+            
+            if (currentFilter !== 'all') {
+                filteredTags = allTags.filter(tag => tag.category === currentFilter);
+            }
+            
+            displayAllTags(filteredTags);
+        }
+        
+        // 搜尋標籤
+        function searchTags() {
+            const query = document.getElementById('tagSearchInput').value.toLowerCase().trim();
+            
+            let filteredTags = allTags;
+            
+            if (currentFilter !== 'all') {
+                filteredTags = filteredTags.filter(tag => tag.category === currentFilter);
+            }
+            
+            if (query) {
+                filteredTags = filteredTags.filter(tag => 
+                    tag.name.toLowerCase().includes(query) ||
+                    (tag.description && tag.description.toLowerCase().includes(query))
+                );
+            }
+            
+            displayAllTags(filteredTags);
+        }
+        
+        // 選擇標籤顏色
+        function selectTagColor(color) {
+            selectedTagColor = color;
+            
+            // 更新按鈕狀態
+            document.querySelectorAll('.tag-color-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+            document.querySelector(`[data-color="${color}"]`).classList.add('selected');
+        }
+        
+        // 創建新標籤
+        async function createNewTag() {
+            const name = document.getElementById('newTagName').value.trim();
+            const category = document.getElementById('newTagCategory').value;
+            const description = document.getElementById('newTagDescription').value.trim();
+            
+            if (!name) {
+                UI.showToast('請輸入標籤名稱', 'warning');
+                return;
+            }
+            
+            // 檢查標籤是否已存在
+            if (allTags.some(tag => tag.name.toLowerCase() === name.toLowerCase())) {
+                UI.showToast('標籤已存在', 'warning');
+                return;
+            }
+            
+            const newTag = {
+                id: 'tag_' + Date.now(),
+                name: name,
+                category: category,
+                description: description,
+                color: selectedTagColor,
+                usage_count: 0,
+                created_at: moment().toISOString()
+            };
+            
+            try {
+                // 這裡應該調用創建標籤的 API
+                // const result = await ApiClient.post('/api/v1/tags', newTag);
+                
+                // 模擬創建成功
+                allTags.unshift(newTag);
+                displayAllTags(allTags);
+                updateTagsStats();
+                updateCategoryDistribution();
+                clearTagForm();
+                
+                UI.showToast('標籤創建成功', 'success');
+                
+            } catch (error) {
+                console.error('創建標籤失敗:', error);
+                UI.showToast('創建失敗: ' + error.message, 'error');
+            }
+        }
+        
+        // 清空標籤表單
+        function clearTagForm() {
+            document.getElementById('newTagName').value = '';
+            document.getElementById('newTagCategory').value = 'emotion';
+            document.getElementById('newTagDescription').value = '';
+            selectTagColor('blue');
+        }
+        
+        // 選擇標籤
+        function selectTag(tag) {
+            UI.showToast(`已選擇標籤: ${tag.name}`, 'info');
+        }
+        
+        // 編輯標籤
+        function editTag(tagId) {
+            const tag = allTags.find(t => t.id === tagId);
+            if (!tag) return;
+            
+            // 填充表單
+            document.getElementById('newTagName').value = tag.name;
+            document.getElementById('newTagCategory').value = tag.category;
+            document.getElementById('newTagDescription').value = tag.description || '';
+            selectTagColor(tag.color || 'blue');
+            
+            UI.showToast('標籤已載入到表單中', 'info');
+        }
+        
+        // 刪除標籤
+        async function deleteTag(tagId) {
+            const tag = allTags.find(t => t.id === tagId);
+            if (!tag) return;
+            
+            if (!confirm(`確定要刪除標籤「${tag.name}」嗎？`)) {
+                return;
+            }
+            
+            try {
+                // 這裡應該調用刪除標籤的 API
+                // await ApiClient.delete(`/api/v1/tags/${tagId}`);
+                
+                // 模擬刪除成功
+                allTags = allTags.filter(t => t.id !== tagId);
+                displayAllTags(allTags);
+                updateTagsStats();
+                updateCategoryDistribution();
+                
+                UI.showToast('標籤已刪除', 'success');
+                
+            } catch (error) {
+                console.error('刪除標籤失敗:', error);
+                UI.showToast('刪除失敗: ' + error.message, 'error');
+            }
+        }
+        
+        // 更新標籤統計
+        function updateTagsStats() {
+            const totalTags = allTags.length;
+            const activeTags = allTags.filter(tag => (tag.usage_count || 0) > 0).length;
+            const today = moment().format('YYYY-MM-DD');
+            const recentTags = allTags.filter(tag => {
+                const tagDate = moment(tag.created_at).format('YYYY-MM-DD');
+                return tagDate === today;
+            }).length;
+            
+            document.getElementById('totalTags').textContent = totalTags;
+            document.getElementById('activeTags').textContent = activeTags;
+            document.getElementById('recentTags').textContent = recentTags;
+        }
+        
+        // 更新分類分布
+        function updateCategoryDistribution() {
+            const categories = ['emotion', 'scene', 'character', 'style', 'content'];
+            const distribution = {};
+            
+            categories.forEach(cat => {
+                distribution[cat] = allTags.filter(tag => tag.category === cat).length;
+            });
+            
+            const total = Object.values(distribution).reduce((sum, count) => sum + count, 0);
+            
+            const distributionDiv = document.getElementById('categoryDistribution');
+            distributionDiv.innerHTML = '';
+            
+            categories.forEach(category => {
+                const count = distribution[category];
+                const percentage = total > 0 ? Math.round(count / total * 100) : 0;
+                
+                const item = document.createElement('div');
+                item.className = 'flex justify-between items-center';
+                item.innerHTML = `
+                    <span class="text-sm">${getCategoryLabel(category)}</span>
+                    <div class="flex-1 mx-3 bg-gray-200 rounded-full h-2">
+                        <div class="bg-blue-400 h-2 rounded-full" style="width: ${percentage}%"></div>
+                    </div>
+                    <span class="text-sm text-gray-600">${count}</span>
+                `;
+                
+                distributionDiv.appendChild(item);
+            });
+        }
+        
+        // 獲取分類標籤
+        function getCategoryLabel(category) {
+            const labels = {
+                'emotion': '情感',
+                'scene': '場景',
+                'character': '角色',
+                'style': '風格',
+                'content': '內容'
+            };
+            return labels[category] || category;
+        }
+        
+        // 匯出標籤
+        function exportTags() {
+            const exportData = {
+                version: '1.0',
+                exported_at: moment().toISOString(),
+                tags: allTags
+            };
+            
+            const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `tags_export_${moment().format('YYYY-MM-DD')}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+            
+            UI.showToast('標籤已匯出', 'success');
+        }
+        
+        // 匯入標籤
+        function importTags() {
+            UI.showToast('匯入功能開發中', 'info');
+        }
+        
+        // 標籤優化
+        function optimizeTags() {
+            if (!confirm('標籤優化將會合併相似的標籤，確定要繼續嗎？')) {
+                return;
+            }
+            
+            UI.showToast('標籤優化功能開發中', 'info');
+        }
+        
+        // 清理無用標籤
+        function cleanupTags() {
+            if (!confirm('這將刪除所有未使用的標籤，確定要繼續嗎？')) {
+                return;
+            }
+            
+            const beforeCount = allTags.length;
+            allTags = allTags.filter(tag => (tag.usage_count || 0) > 0);
+            const afterCount = allTags.length;
+            const removedCount = beforeCount - afterCount;
+            
+            displayAllTags(allTags);
+            updateTagsStats();
+            updateCategoryDistribution();
+            
+            UI.showToast(`已清理 ${removedCount} 個無用標籤`, 'success');
+        }
+        
+        // 刷新標籤數據
+        function refreshTagsData() {
+            loadTagsData();
+            UI.showToast('數據已刷新', 'success');
+        }
+        
+        // 生成模擬標籤
+        function generateMockTags() {
+            return [
+                { id: 'tag_001', name: '浪漫', category: 'emotion', description: '浪漫氛圍的對話', color: 'pink', usage_count: 45, created_at: moment().toISOString() },
+                { id: 'tag_002', name: '霸道總裁', category: 'character', description: '霸道總裁風格', color: 'red', usage_count: 32, created_at: moment().toISOString() },
+                { id: 'tag_003', name: '溫柔', category: 'emotion', description: '溫柔體貼的互動', color: 'green', usage_count: 28, created_at: moment().toISOString() },
+                { id: 'tag_004', name: '辦公室', category: 'scene', description: '辦公室場景', color: 'blue', usage_count: 21, created_at: moment().toISOString() },
+                { id: 'tag_005', name: '甜蜜', category: 'emotion', description: '甜蜜時刻', color: 'yellow', usage_count: 19, created_at: moment().toISOString() },
+                { id: 'tag_006', name: '醫院', category: 'scene', description: '醫院場景', color: 'indigo', usage_count: 15, created_at: moment().toISOString() },
+                { id: 'tag_007', name: '親密', category: 'content', description: '親密互動內容', color: 'purple', usage_count: 12, created_at: moment().toISOString() },
+                { id: 'tag_008', name: '禁慾系', category: 'character', description: '禁慾系角色風格', color: 'gray', usage_count: 10, created_at: moment().toISOString() },
+                { id: 'tag_009', name: '青梅竹馬', category: 'character', description: '青梅竹馬關係設定', color: 'green', usage_count: 18, created_at: moment().toISOString() },
+                { id: 'tag_010', name: '甜寵', category: 'style', description: '甜蜜寵愛的互動風格', color: 'pink', usage_count: 25, created_at: moment().toISOString() },
+                { id: 'tag_011', name: '年下', category: 'character', description: '年下角色設定', color: 'blue', usage_count: 8, created_at: moment().toISOString() },
+                { id: 'tag_012', name: '暗戀', category: 'emotion', description: '暗戀情感主題', color: 'purple', usage_count: 14, created_at: moment().toISOString() }
+            ];
+        }
+        
+        // 返回上一頁
+        function goBack() {
+            Router.navigate('/');
+        }
+        
+        // 初始化時選擇默認顏色
+        window.addEventListener('load', function() {
+            selectTagColor('blue');
+        });
+    </script>
+</body>
+</html>

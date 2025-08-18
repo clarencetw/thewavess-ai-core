@@ -15,9 +15,7 @@ type ChatSession struct {
 	UserID          string     `bun:"user_id,notnull" json:"user_id"`
 	CharacterID     string     `bun:"character_id,notnull" json:"character_id"`
 	Title           string     `bun:"title" json:"title,omitempty"`
-	Mode            string     `bun:"mode,default:'normal'" json:"mode"`
 	Status          string     `bun:"status,default:'active'" json:"status"`
-	Tags            []string   `bun:"tags,array" json:"tags,omitempty"`
 	MessageCount    int        `bun:"message_count,default:0" json:"message_count"`
 	TotalCharacters int        `bun:"total_characters,default:0" json:"total_characters"`
 	LastMessageAt   *time.Time `bun:"last_message_at" json:"last_message_at,omitempty"`
@@ -52,19 +50,6 @@ type Message struct {
 	Session *ChatSession `bun:"rel:belongs-to,join:session_id=id" json:"session,omitempty"`
 }
 
-// UserSession 用戶會話關聯模型
-type UserSession struct {
-	bun.BaseModel `bun:"table:user_sessions,alias:us"`
-
-	UserID    string    `bun:"user_id,pk" json:"user_id"`
-	SessionID string    `bun:"session_id,pk" json:"session_id"`
-	Role      string    `bun:"role,default:'owner'" json:"role"`
-	JoinedAt  time.Time `bun:"joined_at,nullzero,default:now()" json:"joined_at"`
-
-	// 關聯
-	User    *User        `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
-	Session *ChatSession `bun:"rel:belongs-to,join:session_id=id" json:"session,omitempty"`
-}
 
 // TableName 返回數據庫表名
 func (cs *ChatSession) TableName() string {
@@ -75,9 +60,6 @@ func (m *Message) TableName() string {
 	return "messages"
 }
 
-func (us *UserSession) TableName() string {
-	return "user_sessions"
-}
 
 // BeforeAppendModel 在模型操作前執行
 func (cs *ChatSession) BeforeAppendModel(ctx context.Context, query bun.Query) error {
@@ -90,20 +72,18 @@ func (cs *ChatSession) BeforeAppendModel(ctx context.Context, query bun.Query) e
 
 // ChatSessionResponse 會話響應格式
 type ChatSessionResponse struct {
-	ID              string                 `json:"id"`
-	UserID          string                 `json:"user_id"`
-	CharacterID     string                 `json:"character_id"`
-	Title           string                 `json:"title,omitempty"`
-	Mode            string                 `json:"mode"`
-	Status          string                 `json:"status"`
-	Tags            []string               `json:"tags,omitempty"`
-	MessageCount    int                    `json:"message_count"`
-	TotalCharacters int                    `json:"total_characters"`
-	LastMessageAt   *time.Time             `json:"last_message_at,omitempty"`
-	CreatedAt       time.Time              `json:"created_at"`
-	UpdatedAt       time.Time              `json:"updated_at"`
-	Character       *CharacterResponse     `json:"character,omitempty"`
-	LastMessage     *MessageResponse       `json:"last_message,omitempty"`
+	ID              string             `json:"id"`
+	UserID          string             `json:"user_id"`
+	CharacterID     string             `json:"character_id"`
+	Title           string             `json:"title,omitempty"`
+	Status          string             `json:"status"`
+	MessageCount    int                `json:"message_count"`
+	TotalCharacters int                `json:"total_characters"`
+	LastMessageAt   *time.Time         `json:"last_message_at,omitempty"`
+	CreatedAt       time.Time          `json:"created_at"`
+	UpdatedAt       time.Time          `json:"updated_at"`
+	Character       *CharacterResponse `json:"character,omitempty"`
+	LastMessage     *MessageResponse   `json:"last_message,omitempty"`
 }
 
 // MessageResponse 消息響應格式
@@ -130,9 +110,7 @@ func (cs *ChatSession) ToResponse() *ChatSessionResponse {
 		UserID:          cs.UserID,
 		CharacterID:     cs.CharacterID,
 		Title:           cs.Title,
-		Mode:            cs.Mode,
 		Status:          cs.Status,
-		Tags:            cs.Tags,
 		MessageCount:    cs.MessageCount,
 		TotalCharacters: cs.TotalCharacters,
 		LastMessageAt:   cs.LastMessageAt,
@@ -174,10 +152,8 @@ func (m *Message) ToResponse() *MessageResponse {
 
 // CreateSessionRequest 創建會話請求
 type CreateSessionRequest struct {
-	CharacterID string   `json:"character_id" binding:"required"`
-	Title       string   `json:"title,omitempty"`
-	Mode        string   `json:"mode,omitempty" binding:"omitempty,oneof=normal novel nsfw"`
-	Tags        []string `json:"tags,omitempty"`
+	CharacterID string `json:"character_id" binding:"required"`
+	Title       string `json:"title,omitempty"`
 }
 
 // SendMessageRequest 發送消息請求

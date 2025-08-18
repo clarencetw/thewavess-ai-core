@@ -11,6 +11,10 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- Moment.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
+    
 </head>
 <body class="h-full flex flex-col bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
@@ -40,21 +44,17 @@
             
             <div class="flex items-center space-x-2">
                 <!-- 情感狀態 -->
-                <div class="bg-gray-100 border rounded px-3 py-2 text-sm">
-                    <i class="fas fa-heart text-red-400 mr-1"></i>
+                <div class="bg-pink-50 border border-pink-200 rounded px-3 py-2 text-sm">
+                    <i class="fas fa-heart text-pink-500 mr-1"></i>
                     <span id="affectionLevel">50</span>
+                    <span class="text-pink-600 ml-1">♥</span>
                 </div>
                 
-                <!-- 模式切換 -->
-                <select 
-                    id="chatMode"
-                    class="px-3 py-2 rounded bg-white border border-gray-300 text-gray-900 text-sm"
-                    onchange="changeChatMode()"
-                >
-                    <option value="normal">普通模式</option>
-                    <option value="novel">小說模式</option>
-                    <option value="nsfw">成人模式</option>
-                </select>
+                <!-- 對話狀態 -->
+                <div class="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-sm">
+                    <i class="fas fa-comment text-blue-500 mr-1"></i>
+                    <span class="text-blue-600">對話中</span>
+                </div>
                 
                 <!-- 功能菜單 -->
                 <div class="relative">
@@ -67,23 +67,24 @@
                     </button>
                     
                     <div id="menuDropdown" class="hidden absolute right-0 top-12 bg-white border rounded p-2 min-w-[150px] z-10">
-                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="newSession()">
-                            <i class="fas fa-plus mr-2"></i>新對話
-                        </button>
-                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="showSessionList()">
-                            <i class="fas fa-list mr-2"></i>會話列表
-                        </button>
-                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="exportChat()">
+                        <button class="w-full text-left px-3 py-2 hover:bg-gray-100 rounded" onclick="exportChat()">
                             <i class="fas fa-download mr-2"></i>匯出對話
                         </button>
-                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="clearChat()">
+                        <button class="w-full text-left px-3 py-2 hover:bg-gray-100 rounded" onclick="clearChat()">
                             <i class="fas fa-trash mr-2"></i>清空對話
                         </button>
-                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded text-red-600" onclick="deleteCurrentSession()">
-                            <i class="fas fa-trash-alt mr-2"></i>刪除會話
+                        <hr class="my-2 border-gray-300">
+                        <button class="w-full text-left px-3 py-2 hover:bg-gray-100 rounded" onclick="Router.navigate('/emotion')">
+                            <i class="fas fa-heart mr-2"></i>情感系統
                         </button>
-                        <hr class="my-2 border-gray-600">
-                        <button class="w-full text-left px-3 py-2 hover:bg-white hover:bg-opacity-10 rounded" onclick="Router.navigate('/profile')">
+                        <button class="w-full text-left px-3 py-2 hover:bg-gray-100 rounded" onclick="Router.navigate('/memory')">
+                            <i class="fas fa-brain mr-2"></i>記憶系統
+                        </button>
+                        <button class="w-full text-left px-3 py-2 hover:bg-gray-100 rounded" onclick="Router.navigate('/search')">
+                            <i class="fas fa-search mr-2"></i>搜尋功能
+                        </button>
+                        <hr class="my-2 border-gray-300">
+                        <button class="w-full text-left px-3 py-2 hover:bg-gray-100 rounded" onclick="Router.navigate('/profile')">
                             <i class="fas fa-user mr-2"></i>個人資料
                         </button>
                     </div>
@@ -415,13 +416,15 @@
             try {
                 const result = await ApiClient.post('/api/v1/chat/session', {
                     character_id: currentCharacter.id,
-                    title: `與 ${currentCharacter.name} 的對話`,
-                    mode: 'normal'
+                    title: `與 ${currentCharacter.name} 的對話`
                 });
                 
                 if (result.success) {
                     currentSession = result.data;
                     AppState.currentSession = currentSession;
+                    
+                    // 更新對話狀態
+                    updateChatStatus();
                     
                     // 重置消息歷史
                     messageHistory = [];
@@ -513,12 +516,12 @@
                 id: 'local_' + Date.now(),
                 character_id: currentCharacter.id,
                 title: `與 ${currentCharacter.name} 的對話`,
-                mode: 'normal',
-                created_at: new Date().toISOString()
+                created_at: moment().toISOString()
             };
             
             enableChatInput();
             updateSceneDescription();
+            updateChatStatus();
             
             UI.showToast('已切換到離線模式', 'warning');
         }
@@ -642,7 +645,7 @@
                 messageDiv.innerHTML = `
                     <div class="bg-blue-600 text-white rounded p-3 max-w-[80%]">
                         <p>${content}</p>
-                        <div class="text-xs opacity-75 mt-1">${new Date().toLocaleTimeString()}</div>
+                        <div class="text-xs opacity-75 mt-1">${Utils.formatShortTime(new Date())}</div>
                     </div>
                     <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0">
                         U
@@ -664,7 +667,7 @@
                         <p>${content}</p>
                         ${actionHtml}
                         <div class="text-xs opacity-75 mt-1 flex items-center justify-between">
-                            <span>${metadata.timestamp ? new Date(metadata.timestamp).toLocaleTimeString() : new Date().toLocaleTimeString()}</span>
+                            <span>${metadata.timestamp ? Utils.formatShortTime(metadata.timestamp) : Utils.formatShortTime(new Date())}</span>
                             <div class="flex items-center space-x-2">
                                 ${metadata.nsfw_level ? `<span class="bg-gray-600 text-white px-1 py-0.5 rounded text-xs">L${metadata.nsfw_level}</span>` : ''}
                                 <button class="hover:text-blue-500 transition-colors" onclick="regenerateMessage(this)" title="重新生成">
@@ -687,7 +690,7 @@
                 sender,
                 content,
                 metadata,
-                timestamp: new Date().toISOString()
+                timestamp: moment().toISOString()
             });
         }
         
@@ -720,7 +723,7 @@
                     id: responseData.id,
                     role: responseData.role || 'assistant',
                     content: responseData.content,
-                    timestamp: responseData.created_at || new Date().toISOString()
+                    timestamp: responseData.created_at || moment().toISOString()
                 });
             }
         }
@@ -844,11 +847,22 @@
             engineElement.textContent = engine === 'grok' ? 'Grok' : 'OpenAI';
         }
         
-        // 切換聊天模式
-        function changeChatMode() {
-            const mode = document.getElementById('chatMode').value;
-            // TODO: 實現模式切換
-            UI.showToast(`切換到 ${mode} 模式`, 'info');
+        // 更新對話狀態
+        function updateChatStatus() {
+            // 根據當前會話狀態更新顯示
+            if (currentSession && currentSession.id) {
+                // 顯示對話中狀態
+                document.querySelector('.text-blue-600').textContent = '對話中';
+            } else {
+                // 顯示準備中狀態
+                document.querySelector('.text-blue-600').textContent = '準備中';
+            }
+        }
+        
+        // 刷新對話狀態
+        function refreshChatStatus() {
+            updateChatStatus();
+            UI.showToast('對話狀態已更新', 'info');
         }
         
         // 切換菜單
@@ -901,7 +915,7 @@
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `chat_${currentCharacter.name}_${new Date().toISOString().split('T')[0]}.json`;
+            a.download = `chat_${currentCharacter.name}_${Utils.formatDate(new Date())}.json`;
             a.click();
             URL.revokeObjectURL(url);
             
@@ -958,10 +972,7 @@
             const recentMessages = messageHistory.slice(-10).reverse(); // 最近10條消息
             
             historyContainer.innerHTML = recentMessages.map((msg, index) => {
-                const time = new Date(msg.timestamp).toLocaleTimeString('zh-TW', { 
-                    hour: '2-digit', 
-                    minute: '2-digit' 
-                });
+                const time = Utils.formatShortTime(msg.timestamp);
                 const preview = msg.content.length > 20 ? msg.content.substring(0, 20) + '...' : msg.content;
                 const isUser = msg.sender === 'user';
                 
@@ -987,7 +998,7 @@
                 
                 if (result.success && result.data && result.data.sessions && result.data.sessions.length > 0) {
                     sessionsList.innerHTML = result.data.sessions.map(session => {
-                        const createdTime = new Date(session.created_at).toLocaleString('zh-TW');
+                        const createdTime = Utils.formatFriendlyDateTime(session.created_at);
                         const isCurrentSession = currentSession && session.id === currentSession.id;
                         
                         return `
@@ -999,7 +1010,7 @@
                                         <p class="text-xs text-gray-500">創建時間: ${createdTime}</p>
                                         <div class="flex items-center space-x-4 text-xs text-gray-500 mt-2">
                                             <span>消息: ${session.message_count || 0}</span>
-                                            <span>模式: ${session.mode || 'normal'}</span>
+                                            <span>狀態: ${session.status || 'active'}</span>
                                             ${isCurrentSession ? '<span class="text-blue-600 font-medium">當前會話</span>' : ''}
                                         </div>
                                     </div>
@@ -1029,6 +1040,9 @@
                     if (result.success && result.data) {
                         currentSession = result.data;
                         AppState.currentSession = currentSession;
+                        
+                        // 更新對話狀態
+                        updateChatStatus();
                         
                         // 清空當前消息
                         document.getElementById('messagesList').innerHTML = `
@@ -1150,23 +1164,44 @@
             }
         }
         
-        // 載入情感狀態
+        // 載入情感狀態（映射 API 欄位到 UI 狀態）
         async function loadEmotionStatus() {
             try {
                 const statusResult = await ApiClient.get('/api/v1/emotion/status');
                 const affectionResult = await ApiClient.get('/api/v1/emotion/affection');
-                
+
+                // 映射心情（mood）
                 if (statusResult.success && statusResult.data) {
-                    updateEmotionState(statusResult.data);
+                    const moodType = statusResult.data.current_emotion?.type || 'neutral';
+                    updateEmotionState({ mood: moodType });
                 }
-                
-                if (affectionResult.success && affectionResult.data) {
-                    emotionState.affection = affectionResult.data.affection || 50;
-                    updateEmotionDisplay();
+
+                // 映射好感度與關係（relationship）
+                if (affectionResult.success && affectionResult.data?.affection_level) {
+                    const level = affectionResult.data.affection_level;
+                    const current = typeof level.current === 'number' ? level.current : 50;
+                    const tier = level.level_tier;
+                    const relationship = mapRelationshipByTier(tier);
+                    updateEmotionState({ affection: current, relationship });
+                } else if (affectionResult.success && affectionResult.data?.affection) {
+                    // 後備鍵（保險處理）
+                    updateEmotionState({ affection: affectionResult.data.affection });
                 }
             } catch (error) {
                 console.error('載入情感狀態失敗:', error);
                 // 使用預設值，不顯示錯誤
+            }
+        }
+
+        // 將等級層（1..5）映射為內部關係碼
+        function mapRelationshipByTier(tier) {
+            switch (tier) {
+                case 1: return 'stranger';
+                case 2: return 'acquaintance';
+                case 3: return 'friend';
+                case 4: return 'close_friend';
+                case 5: return 'lover';
+                default: return emotionState.relationship || 'stranger';
             }
         }
         

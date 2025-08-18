@@ -11,6 +11,10 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- Moment.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
+    
 </head>
 <body class="min-h-full p-4 bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
@@ -407,9 +411,9 @@
                 <div class="text-center mb-4">
                     <div class="relative inline-block">
                         <img 
-                            src="${character.avatar}" 
+                            src="${character.avatar_url || character.avatar || getDefaultAvatar(character.id)}" 
                             alt="${character.name}"
-                            class="w-24 h-24 rounded-full mx-auto border-4 border-opacity-50 border-white transition-all"
+                            class="w-24 h-24 rounded-full mx-auto border-4 border-opacity-50 border-white transition-all object-cover"
                         >
                         <div class="absolute -top-2 -right-2">
                             <span class="${nsfwColor} w-4 h-4 rounded-full block"></span>
@@ -448,9 +452,19 @@
             return card;
         }
         
+        // 獲取默認頭像
+        function getDefaultAvatar(characterId) {
+            const avatars = {
+                'char_001': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=face',  // 霸道總裁風格
+                'char_002': 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=300&h=300&fit=crop&crop=face',  // 溫柔醫生風格
+                'char_003': 'https://images.unsplash.com/photo-1564564321837-a57b7070ac4f?w=300&h=300&fit=crop&crop=face'   // 其他角色
+            };
+            return avatars[characterId] || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=face';
+        }
+        
         // 顯示角色詳情模態框
         function showCharacterModal(character) {
-            document.getElementById('modalAvatar').src = character.avatar || character.avatar_url;
+            document.getElementById('modalAvatar').src = character.avatar_url || character.avatar || getDefaultAvatar(character.id);
             document.getElementById('modalName').textContent = character.name;
             document.getElementById('modalTitle').textContent = character.title;
             document.getElementById('modalDescription').textContent = character.description;
@@ -543,7 +557,7 @@
             const panel = document.getElementById('selectedCharacterPanel');
             panel.classList.remove('hidden');
             
-            document.getElementById('selectedAvatar').src = selectedCharacter.avatar || selectedCharacter.avatar_url;
+            document.getElementById('selectedAvatar').src = selectedCharacter.avatar_url || selectedCharacter.avatar || getDefaultAvatar(selectedCharacter.id);
             document.getElementById('selectedName').textContent = selectedCharacter.name;
             document.getElementById('selectedDescription').textContent = selectedCharacter.description;
             

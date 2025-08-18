@@ -11,6 +11,10 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- Moment.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
+    
 </head>
 <body class="h-full flex items-center justify-center p-4 bg-gray-50 text-gray-900">
     <!-- 主容器 -->
@@ -30,8 +34,8 @@
             <!-- 說明文字 -->
             <div class="mb-6 space-y-3 text-left">
                 <p class="flex items-start">
-                    <i class="fas fa-shield-alt text-blue-400 mr-3 mt-1 flex-shrink-0"></i>
-                    <span>本服務包含成人內容，僅限 <strong>18 歲以上</strong> 成年用戶使用</span>
+                    <i class="fas fa-heart text-pink-400 mr-3 mt-1 flex-shrink-0"></i>
+                    <span>本服務是專為女性設計的AI情感陪伴平台，包含成人內容，僅限 <strong>18 歲以上</strong> 成年用戶使用</span>
                 </p>
                 <p class="flex items-start">
                     <i class="fas fa-gavel text-yellow-400 mr-3 mt-1 flex-shrink-0"></i>
@@ -189,7 +193,7 @@
         function handleAdultUser() {
             // 保存年齡驗證狀態
             Utils.storage.set('ageVerified', true);
-            Utils.storage.set('ageVerificationDate', new Date().toISOString());
+            Utils.storage.set('ageVerificationDate', moment().toISOString());
             
             // 更新應用狀態
             AppState.ageVerified = true;

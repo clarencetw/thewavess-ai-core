@@ -151,24 +151,3 @@ func (u *User) ToResponse() *UserResponse {
 	}
 }
 
-// ToLegacyResponse 轉換為舊版響應格式（向後兼容）
-func (u *User) ToLegacyResponse() *UserResponse {
-	return &UserResponse{
-		ID:          u.ID,
-		Username:    u.Username,
-		Email:       u.Email,
-		DisplayName: u.DisplayName,
-		Bio:         u.Bio,
-		Status:      u.Status,
-		Nickname:    u.Nickname,
-		Gender:      u.Gender,
-		BirthDate:   u.BirthDate,
-		AvatarURL:   u.AvatarURL,
-		IsVerified:  u.IsVerified,
-		IsAdult:     u.IsAdult,
-		Preferences: u.Preferences,
-		CreatedAt:   u.CreatedAt,
-		UpdatedAt:   u.UpdatedAt,
-		LastLoginAt: u.LastLoginAt,
-	}
-}

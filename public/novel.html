@@ -1,0 +1,646 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>小說模式 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Moment.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
+    
+</head>
+<body class="min-h-full p-4 bg-gray-50 text-gray-900">
+    <!-- 頂部導航 -->
+    <nav class="bg-white border rounded-lg p-4 mb-4">
+        <div class="flex items-center justify-between">
+            <div class="flex items-center space-x-4">
+                <button 
+                    class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded"
+                    onclick="goBack()"
+                >
+                    <i class="fas fa-arrow-left"></i>
+                </button>
+                
+                <h1 class="text-2xl font-bold">
+                    <i class="fas fa-book text-indigo-400 mr-2"></i>
+                    小說模式
+                </h1>
+            </div>
+            
+            <div class="flex items-center space-x-2">
+                <button 
+                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded"
+                    onclick="saveProgress()"
+                >
+                    <i class="fas fa-save mr-2"></i>
+                    保存進度
+                </button>
+                
+                <button 
+                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded"
+                    onclick="showNovelList()"
+                >
+                    <i class="fas fa-list mr-2"></i>
+                    小說列表
+                </button>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主內容區域 -->
+    <div class="max-w-4xl mx-auto grid grid-cols-1 lg:grid-cols-4 gap-6">
+        <!-- 左側 - 小說內容 -->
+        <div class="lg:col-span-3">
+            <!-- 小說閱讀區 -->
+            <div class="bg-white border rounded-lg p-6 mb-6">
+                <div class="mb-4">
+                    <h2 class="text-xl font-bold mb-2" id="novelTitle">選擇一個小說開始</h2>
+                    <div class="text-sm text-gray-600" id="novelMeta">
+                        <span id="currentChapter">--</span> | 
+                        <span id="progressInfo">--</span>
+                    </div>
+                </div>
+                
+                <div id="novelContent" class="prose max-w-none min-h-[400px] text-gray-800 leading-relaxed">
+                    <p class="text-center text-gray-500 mt-20">
+                        <i class="fas fa-book-open text-4xl mb-4"></i><br>
+                        請選擇一個小說開始您的互動故事之旅
+                    </p>
+                </div>
+                
+                <!-- 選擇按鈕區 -->
+                <div id="choiceButtons" class="mt-6 space-y-3" style="display: none;">
+                    <!-- 動態生成選擇按鈕 -->
+                </div>
+                
+                <!-- 輸入區（自由選擇模式） -->
+                <div id="freeChoiceInput" class="mt-6" style="display: none;">
+                    <div class="flex space-x-4">
+                        <input 
+                            type="text" 
+                            id="customChoice"
+                            class="flex-1 px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
+                            placeholder="輸入您的選擇或行動..."
+                            onkeypress="handleChoiceKeyPress(event)"
+                        >
+                        <button 
+                            class="bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded"
+                            onclick="submitCustomChoice()"
+                        >
+                            <i class="fas fa-paper-plane mr-2"></i>
+                            提交
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 右側 - 控制面板 -->
+        <div class="space-y-6">
+            <!-- 小說列表 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-library text-indigo-400 mr-2"></i>
+                    可用小說
+                </h3>
+                
+                <div class="space-y-3" id="novelLibrary">
+                    <!-- 動態生成小說列表 -->
+                </div>
+            </div>
+            
+            <!-- 進度管理 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-chart-line text-green-400 mr-2"></i>
+                    進度管理
+                </h3>
+                
+                <div class="space-y-4">
+                    <div class="text-center">
+                        <div class="text-2xl font-bold text-indigo-400" id="currentProgress">0%</div>
+                        <div class="text-sm text-gray-600">當前進度</div>
+                    </div>
+                    
+                    <div class="w-full bg-gray-200 rounded-full h-2">
+                        <div id="progressBar" class="bg-indigo-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-4 text-center text-sm">
+                        <div>
+                            <div class="font-bold" id="totalChoices">0</div>
+                            <div class="text-gray-600">總選擇數</div>
+                        </div>
+                        <div>
+                            <div class="font-bold" id="totalTime">0分鐘</div>
+                            <div class="text-gray-600">遊戲時間</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 存檔管理 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-save text-blue-400 mr-2"></i>
+                    存檔管理
+                </h3>
+                
+                <div class="space-y-3">
+                    <button 
+                        class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded text-left"
+                        onclick="quickSave()"
+                    >
+                        <i class="fas fa-save mr-2"></i>
+                        快速保存
+                    </button>
+                    
+                    <button 
+                        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded text-left"
+                        onclick="quickLoad()"
+                    >
+                        <i class="fas fa-upload mr-2"></i>
+                        快速載入
+                    </button>
+                    
+                    <button 
+                        class="w-full bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-4 rounded text-left"
+                        onclick="showSaveSlots()"
+                    >
+                        <i class="fas fa-folder mr-2"></i>
+                        存檔列表
+                    </button>
+                    
+                    <button 
+                        class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded text-left"
+                        onclick="restartNovel()"
+                    >
+                        <i class="fas fa-redo mr-2"></i>
+                        重新開始
+                    </button>
+                </div>
+            </div>
+            
+            <!-- 小說統計 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-chart-bar text-purple-400 mr-2"></i>
+                    遊戲統計
+                </h3>
+                
+                <div class="space-y-3 text-sm">
+                    <div class="flex justify-between">
+                        <span>完成的小說</span>
+                        <span id="completedNovels">2</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>總遊戲時間</span>
+                        <span id="totalGameTime">3.5小時</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>做出的選擇</span>
+                        <span id="totalChoicesMade">127</span>
+                    </div>
+                    <div class="flex justify-between">
+                        <span>最愛角色</span>
+                        <span id="favoriteCharacter">陸寒淵</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        let currentNovel = null;
+        let currentProgress = null;
+        let gameStartTime = null;
+        let totalChoices = 0;
+        
+        // 頁面初始化
+        document.addEventListener('DOMContentLoaded', async function() {
+            await App.init();
+            
+            // 載入小說列表
+            await loadNovelLibrary();
+            
+            // 載入當前進度（如果有）
+            await loadCurrentProgress();
+        });
+        
+        // 載入小說列表
+        async function loadNovelLibrary() {
+            try {
+                const result = await ApiClient.get('/api/v1/novel/list');
+                
+                let novels = [];
+                if (result.success && result.data) {
+                    novels = result.data.novels || [];
+                } else {
+                    // 使用模擬數據
+                    novels = generateMockNovels();
+                }
+                
+                displayNovelLibrary(novels);
+                
+            } catch (error) {
+                console.error('載入小說列表失敗:', error);
+                displayNovelLibrary(generateMockNovels());
+                UI.showToast('使用模擬數據', 'warning');
+            }
+        }
+        
+        // 顯示小說列表
+        function displayNovelLibrary(novels) {
+            const library = document.getElementById('novelLibrary');
+            library.innerHTML = '';
+            
+            novels.forEach(novel => {
+                const item = document.createElement('div');
+                item.className = 'p-3 border rounded-lg hover:bg-gray-50 cursor-pointer transition-colors';
+                item.onclick = () => startNovel(novel.id);
+                
+                item.innerHTML = `
+                    <div class="font-medium text-sm">${novel.title}</div>
+                    <div class="text-xs text-gray-600 mt-1">${novel.description}</div>
+                    <div class="flex justify-between items-center mt-2 text-xs text-gray-500">
+                        <span>${novel.genre || '浪漫'}</span>
+                        <span>${novel.estimated_time || '30分鐘'}</span>
+                    </div>
+                `;
+                
+                library.appendChild(item);
+            });
+        }
+        
+        // 開始小說
+        async function startNovel(novelId) {
+            try {
+                UI.showLoading();
+                
+                const result = await ApiClient.post('/api/v1/novel/start', {
+                    novel_id: novelId
+                });
+                
+                if (result.success && result.data) {
+                    currentNovel = result.data.novel;
+                    currentProgress = result.data.progress;
+                    gameStartTime = new Date();
+                    totalChoices = 0;
+                    
+                    displayNovelContent(result.data);
+                    updateProgressDisplay();
+                } else {
+                    throw new Error(result.error?.message || '開始小說失敗');
+                }
+                
+            } catch (error) {
+                console.error('開始小說失敗:', error);
+                
+                // 使用模擬數據
+                const mockData = generateMockNovelStart(novelId);
+                currentNovel = mockData.novel;
+                currentProgress = mockData.progress;
+                gameStartTime = new Date();
+                totalChoices = 0;
+                
+                displayNovelContent(mockData);
+                updateProgressDisplay();
+                
+                UI.showToast('使用模擬小說數據', 'info');
+                
+            } finally {
+                UI.hideLoading();
+            }
+        }
+        
+        // 顯示小說內容
+        function displayNovelContent(data) {
+            document.getElementById('novelTitle').textContent = data.novel.title;
+            document.getElementById('currentChapter').textContent = `第 ${data.progress.chapter || 1} 章`;
+            document.getElementById('progressInfo').textContent = `進度 ${data.progress.completion_percentage || 0}%`;
+            
+            // 顯示當前內容
+            const content = document.getElementById('novelContent');
+            content.innerHTML = `
+                <div class="mb-6">
+                    <p class="text-lg leading-relaxed">${data.progress.current_content || '故事開始...'}</p>
+                </div>
+                
+                ${data.progress.current_scene ? `
+                    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                        <p class="italic">${data.progress.current_scene}</p>
+                    </div>
+                ` : ''}
+            `;
+            
+            // 顯示選擇按鈕
+            if (data.progress.choices && data.progress.choices.length > 0) {
+                displayChoices(data.progress.choices);
+            } else {
+                // 顯示自由輸入
+                showFreeChoiceInput();
+            }
+        }
+        
+        // 顯示選擇按鈕
+        function displayChoices(choices) {
+            const choiceButtons = document.getElementById('choiceButtons');
+            const freeChoiceInput = document.getElementById('freeChoiceInput');
+            
+            choiceButtons.innerHTML = '';
+            choices.forEach((choice, index) => {
+                const button = document.createElement('button');
+                button.className = 'w-full bg-indigo-100 hover:bg-indigo-200 text-indigo-800 p-4 rounded-lg text-left transition-colors';
+                button.onclick = () => makeChoice(index, choice.text);
+                
+                button.innerHTML = `
+                    <div class="font-medium">${String.fromCharCode(65 + index)}. ${choice.text}</div>
+                    ${choice.consequence ? `<div class="text-sm mt-1 opacity-75">${choice.consequence}</div>` : ''}
+                `;
+                
+                choiceButtons.appendChild(button);
+            });
+            
+            choiceButtons.style.display = 'block';
+            freeChoiceInput.style.display = 'none';
+        }
+        
+        // 顯示自由選擇輸入
+        function showFreeChoiceInput() {
+            document.getElementById('choiceButtons').style.display = 'none';
+            document.getElementById('freeChoiceInput').style.display = 'block';
+        }
+        
+        // 做出選擇
+        async function makeChoice(choiceIndex, choiceText) {
+            if (!currentNovel || !currentProgress) {
+                UI.showToast('請先選擇一個小說', 'warning');
+                return;
+            }
+            
+            try {
+                UI.showLoading();
+                
+                const result = await ApiClient.post('/api/v1/novel/choice', {
+                    novel_id: currentProgress.novel_id,
+                    progress_id: currentProgress.id,
+                    choice_index: choiceIndex,
+                    choice_text: choiceText
+                });
+                
+                if (result.success && result.data) {
+                    currentProgress = result.data.progress;
+                    totalChoices++;
+                    
+                    displayNovelContent(result.data);
+                    updateProgressDisplay();
+                } else {
+                    throw new Error(result.error?.message || '選擇失敗');
+                }
+                
+            } catch (error) {
+                console.error('做出選擇失敗:', error);
+                
+                // 模擬選擇結果
+                simulateChoiceResult(choiceText);
+                
+            } finally {
+                UI.hideLoading();
+            }
+        }
+        
+        // 處理自定義選擇按鍵
+        function handleChoiceKeyPress(event) {
+            if (event.key === 'Enter') {
+                submitCustomChoice();
+            }
+        }
+        
+        // 提交自定義選擇
+        async function submitCustomChoice() {
+            const customChoice = document.getElementById('customChoice').value.trim();
+            if (!customChoice) {
+                UI.showToast('請輸入您的選擇', 'warning');
+                return;
+            }
+            
+            await makeChoice(-1, customChoice);
+            document.getElementById('customChoice').value = '';
+        }
+        
+        // 模擬選擇結果
+        function simulateChoiceResult(choiceText) {
+            totalChoices++;
+            
+            // 模擬進度更新
+            if (currentProgress) {
+                currentProgress.completion_percentage = Math.min(100, (currentProgress.completion_percentage || 0) + Math.random() * 15 + 5);
+                currentProgress.chapter = Math.floor(currentProgress.completion_percentage / 20) + 1;
+                
+                // 生成新內容
+                const mockContinuation = generateMockContinuation(choiceText);
+                currentProgress.current_content = mockContinuation.content;
+                currentProgress.choices = mockContinuation.choices;
+                
+                displayNovelContent({
+                    novel: currentNovel,
+                    progress: currentProgress
+                });
+                updateProgressDisplay();
+            }
+            
+            UI.showToast('選擇已提交（模擬）', 'info');
+        }
+        
+        // 更新進度顯示
+        function updateProgressDisplay() {
+            if (!currentProgress) return;
+            
+            const progress = currentProgress.completion_percentage || 0;
+            document.getElementById('currentProgress').textContent = `${Math.round(progress)}%`;
+            document.getElementById('progressBar').style.width = `${progress}%`;
+            document.getElementById('totalChoices').textContent = totalChoices.toString();
+            
+            // 計算遊戲時間
+            if (gameStartTime) {
+                const playTime = Math.floor((new Date() - gameStartTime) / 60000);
+                document.getElementById('totalTime').textContent = `${playTime}分鐘`;
+            }
+        }
+        
+        // 載入當前進度
+        async function loadCurrentProgress() {
+            try {
+                const result = await ApiClient.get('/api/v1/novel/progress/list');
+                
+                if (result.success && result.data && result.data.saves && result.data.saves.length > 0) {
+                    // 載入最近的進度
+                    const latestSave = result.data.saves[0];
+                    const progressResult = await ApiClient.get(`/api/v1/novel/progress/${latestSave.novel_id}`);
+                    
+                    if (progressResult.success && progressResult.data) {
+                        currentNovel = progressResult.data.novel;
+                        currentProgress = progressResult.data.progress;
+                        displayNovelContent(progressResult.data);
+                        updateProgressDisplay();
+                    }
+                }
+            } catch (error) {
+                console.warn('載入進度失敗:', error);
+            }
+        }
+        
+        // 保存進度
+        async function saveProgress() {
+            if (!currentNovel || !currentProgress) {
+                UI.showToast('沒有進度可保存', 'warning');
+                return;
+            }
+            
+            try {
+                const result = await ApiClient.post('/api/v1/novel/progress/save', {
+                    novel_id: currentProgress.novel_id,
+                    progress_data: currentProgress,
+                    save_name: `自動保存 - ${Utils.formatFriendlyDateTime(new Date())}`
+                });
+                
+                if (result.success) {
+                    UI.showToast('進度已保存', 'success');
+                } else {
+                    throw new Error(result.error?.message || '保存失敗');
+                }
+                
+            } catch (error) {
+                console.error('保存進度失敗:', error);
+                UI.showToast('模擬保存完成', 'info');
+            }
+        }
+        
+        // 快速保存
+        async function quickSave() {
+            await saveProgress();
+        }
+        
+        // 快速載入
+        async function quickLoad() {
+            try {
+                await loadCurrentProgress();
+                UI.showToast('進度已載入', 'success');
+            } catch (error) {
+                UI.showToast('載入失敗', 'error');
+            }
+        }
+        
+        // 顯示小說列表
+        function showNovelList() {
+            // 滾動到小說列表
+            document.getElementById('novelLibrary').scrollIntoView({ behavior: 'smooth' });
+        }
+        
+        // 顯示存檔列表
+        function showSaveSlots() {
+            UI.showToast('存檔管理功能開發中', 'info');
+        }
+        
+        // 重新開始小說
+        function restartNovel() {
+            if (!currentNovel) {
+                UI.showToast('請先選擇一個小說', 'warning');
+                return;
+            }
+            
+            if (confirm('確定要重新開始這個小說嗎？當前進度將會丟失。')) {
+                startNovel(currentNovel.id);
+            }
+        }
+        
+        // 生成模擬小說
+        function generateMockNovels() {
+            return [
+                {
+                    id: 'novel_001',
+                    title: '霸道總裁的溫柔陷阱',
+                    description: '與陸寒淵的浪漫邂逅，每個選擇都會影響你們的關係發展。',
+                    genre: '現代言情',
+                    estimated_time: '45分鐘'
+                },
+                {
+                    id: 'novel_002',
+                    title: '醫生的秘密花園',
+                    description: '溫柔醫生沈言墨的治癒系戀愛物語。',
+                    genre: '醫療言情',
+                    estimated_time: '35分鐘'
+                },
+                {
+                    id: 'novel_003',
+                    title: '星空下的約定',
+                    description: '一段跨越時空的浪漫愛情故事。',
+                    genre: '奇幻言情',
+                    estimated_time: '50分鐘'
+                }
+            ];
+        }
+        
+        // 生成模擬小說開始數據
+        function generateMockNovelStart(novelId) {
+            const novels = generateMockNovels();
+            const novel = novels.find(n => n.id === novelId) || novels[0];
+            
+            return {
+                novel: novel,
+                progress: {
+                    id: 'progress_' + Date.now(),
+                    novel_id: novelId,
+                    chapter: 1,
+                    completion_percentage: 0,
+                    current_content: `歡迎來到《${novel.title}》的世界。故事即將開始，您的每個選擇都將影響劇情的發展...`,
+                    current_scene: '在一個陽光明媚的下午，你走進了一家咖啡廳...',
+                    choices: [
+                        { text: '選擇靠窗的座位', consequence: '可能會遇到有趣的人' },
+                        { text: '選擇角落的座位', consequence: '享受安靜的時光' },
+                        { text: '直接走向吧台', consequence: '與咖啡師對話' }
+                    ]
+                }
+            };
+        }
+        
+        // 生成模擬續寫內容
+        function generateMockContinuation(choice) {
+            const continuations = [
+                {
+                    content: `您選擇了"${choice}"。故事繼續發展，一個意想不到的轉折出現了...`,
+                    choices: [
+                        { text: '主動打招呼', consequence: '增加好感度' },
+                        { text: '保持沉默', consequence: '觀察情況' },
+                        { text: '假裝看書', consequence: '營造神秘感' }
+                    ]
+                },
+                {
+                    content: `因為您的選擇"${choice}"，劇情發生了有趣的變化。角色對您產生了不同的印象...`,
+                    choices: [
+                        { text: '展現幽默感', consequence: '輕鬆氛圍' },
+                        { text: '表現成熟穩重', consequence: '建立信任' },
+                        { text: '保持神秘', consequence: '增加吸引力' }
+                    ]
+                }
+            ];
+            
+            return continuations[Math.floor(Math.random() * continuations.length)];
+        }
+        
+        // 返回上一頁
+        function goBack() {
+            Router.navigate('/');
+        }
+    </script>
+</body>
+</html>

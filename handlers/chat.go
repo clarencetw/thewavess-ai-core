@@ -55,12 +55,12 @@ func CreateChatSession(c *gin.Context) {
 
 	// 驗證角色是否存在
 	var character models.Character
-	exists, err := database.DB.NewSelect().
+	err := database.DB.NewSelect().
 		Model(&character).
 		Where("id = ? AND is_active = ?", req.CharacterID, true).
-		Exists(ctx)
+		Scan(ctx)
 
-	if err != nil || !exists {
+	if err != nil {
 		utils.Logger.WithError(err).WithField("character_id", req.CharacterID).Error("Character not found")
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
@@ -72,23 +72,154 @@ func CreateChatSession(c *gin.Context) {
 		return
 	}
 
-	// 創建聊天會話
-	session := &models.ChatSession{
+	// 檢查是否已存在用戶-角色會話（一對一架構）
+	var session models.ChatSession
+	exists, err = database.DB.NewSelect().
+		Model(&session).
+		Where("user_id = ? AND character_id = ? AND status != ?", userID.(string), req.CharacterID, "deleted").
+		Exists(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to check existing session")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "檢查會話失敗",
+			},
+		})
+		return
+	}
+
+	if exists {
+		// 如果已存在會話，返回現有會話
+		err = database.DB.NewSelect().
+			Model(&session).
+			Where("user_id = ? AND character_id = ? AND status != ?", userID.(string), req.CharacterID, "deleted").
+			Scan(ctx)
+
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to get existing session")
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "DATABASE_ERROR",
+					Message: "獲取現有會話失敗",
+				},
+			})
+			return
+		}
+
+		// 如果提供了新標題，更新會話標題
+		if req.Title != "" && req.Title != session.Title {
+			session.Title = req.Title
+			session.UpdatedAt = time.Now()
+			_, err = database.DB.NewUpdate().
+				Model(&session).
+				Column("title", "updated_at").
+				Where("id = ?", session.ID).
+				Exec(ctx)
+			if err != nil {
+				utils.Logger.WithError(err).Error("Failed to update session title")
+			}
+		}
+
+		// 關聯角色信息
+		session.Character = &character
+
+		c.JSON(http.StatusOK, models.APIResponse{
+			Success: true,
+			Message: "獲取現有聊天會話成功",
+			Data:    session.ToResponse(),
+		})
+		return
+	}
+
+	// 檢查是否有已刪除的會話可以重新啟用
+	var deletedSession models.ChatSession
+	deletedExists, err := database.DB.NewSelect().
+		Model(&deletedSession).
+		Where("user_id = ? AND character_id = ? AND status = ?", userID.(string), req.CharacterID, "deleted").
+		Exists(ctx)
+	
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to check deleted session")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "檢查已刪除會話失敗",
+			},
+		})
+		return
+	}
+
+	if deletedExists {
+		// 重新啟用已刪除的會話
+		err = database.DB.NewSelect().
+			Model(&deletedSession).
+			Where("user_id = ? AND character_id = ? AND status = ?", userID.(string), req.CharacterID, "deleted").
+			Scan(ctx)
+
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to get deleted session")
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "DATABASE_ERROR",
+					Message: "獲取已刪除會話失敗",
+				},
+			})
+			return
+		}
+
+		// 更新會話資訊並重新啟用
+		deletedSession.Status = "active"
+		deletedSession.UpdatedAt = time.Now()
+		if req.Title != "" {
+			deletedSession.Title = req.Title
+		}
+
+		_, err = database.DB.NewUpdate().
+			Model(&deletedSession).
+			Column("status", "title", "updated_at").
+			Where("id = ?", deletedSession.ID).
+			Exec(ctx)
+
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to reactivate deleted session")
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "DATABASE_ERROR",
+					Message: "重新啟用會話失敗",
+				},
+			})
+			return
+		}
+
+		// 關聯角色信息
+		deletedSession.Character = &character
+
+		c.JSON(http.StatusCreated, models.APIResponse{
+			Success: true,
+			Message: "聊天會話重新啟用成功",
+			Data:    deletedSession.ToResponse(),
+		})
+		return
+	}
+
+	// 如果不存在會話，創建新的聊天會話
+	session = models.ChatSession{
 		ID:          utils.GenerateID(16),
 		UserID:      userID.(string),
 		CharacterID: req.CharacterID,
 		Title:       req.Title,
-		Mode:        req.Mode,
 		Status:      "active",
-		Tags:        req.Tags,
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
-	// 設置默認模式
-	if session.Mode == "" {
-		session.Mode = "normal"
-	}
 
 	// 設置默認標題
 	if session.Title == "" {
@@ -96,7 +227,7 @@ func CreateChatSession(c *gin.Context) {
 	}
 
 	// 插入數據庫
-	_, err = database.DB.NewInsert().Model(session).Exec(ctx)
+	_, err = database.DB.NewInsert().Model(&session).Exec(ctx)
 	if err != nil {
 		utils.Logger.WithError(err).Error("Failed to create chat session")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -356,31 +487,8 @@ func SendMessage(c *gin.Context) {
 		return
 	}
 
-	// 創建用戶消息
-	userMessage := &models.Message{
-		ID:        utils.GenerateID(16),
-		SessionID: req.SessionID,
-		Role:      "user",
-		Content:   req.Message,
-		CreatedAt: time.Now(),
-	}
-
-	// 插入用戶消息
-	_, err = database.DB.NewInsert().Model(userMessage).Exec(ctx)
-	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to create user message")
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "DATABASE_ERROR",
-				Message: "保存消息失敗",
-			},
-		})
-		return
-	}
-
-	// 整合女性向AI聊天服務
-	chatService := services.NewChatService()
+    // 整合女性向AI聊天服務
+    chatService := services.NewChatService()
 	
 	// 構建處理請求
 	processRequest := &services.ProcessMessageRequest{
@@ -414,47 +522,8 @@ func SendMessage(c *gin.Context) {
 		}
 	}
 	
-	// 創建AI消息
-    aiMessage := &models.Message{
-		ID:               chatResponse.MessageID,
-		SessionID:        req.SessionID,
-		Role:             "assistant",
-		Content:          chatResponse.CharacterDialogue,
-		SceneDescription: chatResponse.SceneDescription,
-		CharacterAction:  chatResponse.CharacterAction,
-		NSFWLevel:        chatResponse.NSFWLevel,
-		AIEngine:         chatResponse.AIEngine,
-        ResponseTimeMs:   int(chatResponse.ResponseTime.Milliseconds()),
-        EmotionalState: map[string]interface{}{
-            "affection":      chatResponse.EmotionState.Affection,
-            "mood":           chatResponse.EmotionState.Mood,
-            "relationship":   chatResponse.EmotionState.Relationship,
-            "intimacy_level": chatResponse.EmotionState.IntimacyLevel,
-        },
-		CreatedAt: time.Now(),
-	}
-
-	// 插入 AI 消息
-	_, err = database.DB.NewInsert().Model(aiMessage).Exec(ctx)
-	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to create AI message")
-		// 不中斷流程，用戶消息已成功保存
-	}
-
-	// 更新會話統計
-	now := time.Now()
-	_, err = database.DB.NewUpdate().
-		Model((*models.ChatSession)(nil)).
-		Set("message_count = message_count + ?", 2). // 用戶消息 + AI 回應
-		Set("last_message_at = ?", now).
-		Set("updated_at = ?", now).
-		Where("id = ?", req.SessionID).
-		Exec(ctx)
-
-	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to update session stats")
-		// 不中斷流程
-	}
+	// ChatService 已經處理了 AI 消息插入和會話統計更新
+	// 這裡不需要重複操作
 
 	// 構建完整的女性向聊天回應
 	response := map[string]interface{}{

@@ -871,20 +871,20 @@ func getUserPreferencesStats(ctx context.Context, characterID string) (models.Ch
 
 	// 查詢會話模式分布
 	var modeStats []struct {
-		Mode  string `bun:"mode"`
-		Count int    `bun:"count"`
+		Status string `bun:"status"`
+		Count  int    `bun:"count"`
 	}
 	err := database.DB.NewSelect().
 		Model((*models.ChatSession)(nil)).
-		Column("mode").
+		Column("status").
 		ColumnExpr("COUNT(*) as count").
 		Where("character_id = ?", characterID).
-		Group("mode").
+		Group("status").
 		Scan(ctx, &modeStats)
 
 	if err == nil {
 		for _, stat := range modeStats {
-			stats.SessionModes[stat.Mode] = stat.Count
+			stats.SessionModes[stat.Status] = stat.Count
 		}
 	}
 

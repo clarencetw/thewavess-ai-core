@@ -133,7 +133,6 @@ func SetupRoutes(router *gin.RouterGroup) {
 		tts.POST("/batch", handlers.BatchGenerateTTS)
 		tts.POST("/preview", handlers.PreviewTTS)
 		tts.GET("/history", handlers.GetTTSHistory)
-		tts.GET("/config", handlers.GetTTSConfig)
 	}
 
 	// TTS 公開路由（語音列表）

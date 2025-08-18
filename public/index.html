@@ -11,6 +11,10 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- Moment.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
+    
 </head>
 <body class="min-h-screen p-4 bg-gray-50 text-gray-900">
     <!-- 主容器 -->
@@ -22,7 +26,7 @@
                 Thewavess AI Core
             </h1>
             <p class="text-xl text-gray-700">
-                專為成人用戶設計的智能聊天系統
+                專為女性用戶設計的智能聊天系統，提供深度情感體驗與安全的內容互動
             </p>
         </div>
         
@@ -133,6 +137,82 @@
             </button>
         </div>
         
+        <!-- 功能導航 -->
+        <div class="mt-8">
+            <h2 class="text-2xl font-bold text-center mb-6">功能導航</h2>
+            <div class="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
+                <button 
+                    class="bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow text-center"
+                    onclick="Router.navigate('/emotion')"
+                >
+                    <div class="text-3xl text-pink-500 mb-2">
+                        <i class="fas fa-heart"></i>
+                    </div>
+                    <div class="font-semibold text-sm">情感系統</div>
+                </button>
+                
+                <button 
+                    class="bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow text-center"
+                    onclick="Router.navigate('/memory')"
+                >
+                    <div class="text-3xl text-purple-500 mb-2">
+                        <i class="fas fa-brain"></i>
+                    </div>
+                    <div class="font-semibold text-sm">記憶系統</div>
+                </button>
+                
+                <button 
+                    class="bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow text-center"
+                    onclick="Router.navigate('/search')"
+                >
+                    <div class="text-3xl text-green-500 mb-2">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <div class="font-semibold text-sm">搜尋功能</div>
+                </button>
+                
+                <button 
+                    class="bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow text-center"
+                    onclick="Router.navigate('/novel')"
+                >
+                    <div class="text-3xl text-indigo-500 mb-2">
+                        <i class="fas fa-book"></i>
+                    </div>
+                    <div class="font-semibold text-sm">小說模式</div>
+                </button>
+                
+                <button 
+                    class="bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow text-center"
+                    onclick="Router.navigate('/tts')"
+                >
+                    <div class="text-3xl text-green-600 mb-2">
+                        <i class="fas fa-volume-up"></i>
+                    </div>
+                    <div class="font-semibold text-sm">TTS 語音</div>
+                </button>
+                
+                <button 
+                    class="bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow text-center"
+                    onclick="Router.navigate('/tags')"
+                >
+                    <div class="text-3xl text-yellow-500 mb-2">
+                        <i class="fas fa-tags"></i>
+                    </div>
+                    <div class="font-semibold text-sm">標籤管理</div>
+                </button>
+                
+                <button 
+                    class="bg-white border rounded-lg p-4 hover:shadow-lg transition-shadow text-center"
+                    onclick="Router.navigate('/admin')"
+                >
+                    <div class="text-3xl text-gray-600 mb-2">
+                        <i class="fas fa-cogs"></i>
+                    </div>
+                    <div class="font-semibold text-sm">管理後台</div>
+                </button>
+            </div>
+        </div>
+        
         <!-- 特色功能說明 -->
         <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mt-8">
             <div class="bg-white border rounded p-4 text-center">
@@ -141,7 +221,7 @@
                 </div>
                 <h3 class="text-xl font-semibold mb-2">智能 AI 對話</h3>
                 <p class="text-sm">
-                    整合 OpenAI GPT-4o 和 Grok，提供自然流暢的對話體驗
+                    整合 OpenAI GPT-4o 和 Grok，提供深度情感連結的對話體驗，專為女性用戶優化
                 </p>
             </div>
             
@@ -151,7 +231,7 @@
                 </div>
                 <h3 class="text-xl font-semibold mb-2">角色扮演系統</h3>
                 <p class="text-sm">
-                    多種個性化 AI 角色，從霸道總裁到溫柔醫生，滿足不同喜好
+                    多維度個性化 AI 角色，陸寒淵（霸道總裁）、沈言墨（溫柔醫生），專為女性向互動設計
                 </p>
             </div>
             
@@ -161,7 +241,7 @@
                 </div>
                 <h3 class="text-xl font-semibold mb-2">安全分級系統</h3>
                 <p class="text-sm">
-                    5 級智能內容分析，確保適合的內容推送給合適的用戶
+                    5 級智能 NSFW 內容分級，優雅且安全的成人內容處理，確保舒適的互動體驗
                 </p>
             </div>
         </div>

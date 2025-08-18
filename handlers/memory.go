@@ -2,10 +2,13 @@ package handlers
 
 import (
 	"net/http"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
@@ -35,80 +38,94 @@ func GetMemoryTimeline(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應
-	memories := []gin.H{
-		{
-			"id":           "mem_001",
+	// 獲取查詢參數
+	characterID := c.DefaultQuery("character_id", "char_001")
+	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
+	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
+	userIDStr := userID.(string)
+
+	// 獲取記憶管理器
+	memoryManager := services.GetMemoryManager()
+	longTermMemory := memoryManager.GetLongTermMemory(userIDStr, characterID)
+
+	// 構建記憶時間線
+	var memories []gin.H
+
+	// 添加里程碑記憶
+	for _, milestone := range longTermMemory.Milestones {
+		memories = append(memories, gin.H{
+			"id":           utils.GenerateID(12),
 			"type":         "milestone",
 			"importance":   "high",
-			"title":        "第一次見面",
-			"content":      "今天認識了一個很有趣的人，聊天很投機",
-			"emotion_tag":  "happy",
-			"timestamp":    time.Now().AddDate(0, -1, 0),
-			"session_id":   "session_001",
-			"character_id": "char_001",
-		},
-		{
-			"id":           "mem_002",
-			"type":         "conversation",
-			"importance":   "medium",
-			"title":        "深夜談心",
-			"content":      "聊到了彼此的夢想和過去，感覺更了解對方了",
-			"emotion_tag":  "touched",
-			"timestamp":    time.Now().AddDate(0, 0, -15),
-			"session_id":   "session_045",
-			"character_id": "char_001",
-		},
-		{
-			"id":           "mem_003",
+			"title":        milestone.Type,
+			"content":      milestone.Description,
+			"emotion_tag":  "milestone",
+			"timestamp":    milestone.Date,
+			"character_id": characterID,
+		})
+	}
+
+	// 添加偏好記憶
+	for _, pref := range longTermMemory.Preferences {
+		memories = append(memories, gin.H{
+			"id":           utils.GenerateID(12),
 			"type":         "preference",
-			"importance":   "low",
-			"title":        "喜歡的食物",
-			"content":      "原來你喜歡吃提拉米蘇，下次要記得",
+			"importance":   getImportanceLevel(float64(pref.Importance)),
+			"title":        pref.Category,
+			"content":      pref.Content,
 			"emotion_tag":  "neutral",
-			"timestamp":    time.Now().AddDate(0, 0, -7),
-			"session_id":   "session_089",
-			"character_id": "char_001",
-		},
-		{
-			"id":           "mem_004",
-			"type":         "event",
+			"timestamp":    pref.CreatedAt,
+			"character_id": characterID,
+		})
+	}
+
+	// 添加禁忌記憶
+	for _, dislike := range longTermMemory.Dislikes {
+		memories = append(memories, gin.H{
+			"id":           utils.GenerateID(12),
+			"type":         "dislike",
 			"importance":   "high",
-			"title":        "生日祝福",
-			"content":      "記得你的生日，準備了特別的驚喜",
-			"emotion_tag":  "excited",
-			"timestamp":    time.Now().AddDate(0, 0, -3),
-			"session_id":   "session_156",
-			"character_id": "char_001",
-		},
-		{
-			"id":           "mem_005",
-			"type":         "emotion",
-			"importance":   "medium",
-			"title":        "安慰時刻",
-			"content":      "你工作壓力很大的時候，我陪你聊了很久",
-			"emotion_tag":  "caring",
-			"timestamp":    time.Now().AddDate(0, 0, -1),
-			"session_id":   "session_201",
-			"character_id": "char_001",
-		},
+			"title":        "禁忌：" + dislike.Topic,
+			"content":      dislike.Evidence,
+			"emotion_tag":  "negative",
+			"timestamp":    dislike.RecordedAt,
+			"character_id": characterID,
+		})
+	}
+
+	// 分頁處理
+	totalCount := len(memories)
+	start := (page - 1) * limit
+	end := start + limit
+	if start > totalCount {
+		memories = []gin.H{}
+	} else {
+		if end > totalCount {
+			end = totalCount
+		}
+		memories = memories[start:end]
+	}
+
+	// 統計分類
+	categories := gin.H{
+		"milestone":  len(longTermMemory.Milestones),
+		"preference": len(longTermMemory.Preferences),
+		"dislike":    len(longTermMemory.Dislikes),
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "獲取記憶時間線成功",
 		Data: gin.H{
-			"user_id":     userID,
-			"memories":    memories,
-			"total_count": len(memories),
-			"categories": gin.H{
-				"milestone":    2,
-				"conversation": 8,
-				"preference":   5,
-				"event":        3,
-				"emotion":      7,
-			},
-			"memory_strength": 85, // 記憶強度百分比
+			"user_id":        userIDStr,
+			"character_id":   characterID,
+			"memories":       memories,
+			"total_count":    totalCount,
+			"current_page":   page,
+			"total_pages":    (totalCount + limit - 1) / limit,
+			"categories":     categories,
+			"memory_strength": calculateMemoryStrength(longTermMemory),
+			"last_updated":   longTermMemory.LastUpdated,
 		},
 	})
 }
@@ -158,34 +175,112 @@ func SaveMemory(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應
-	memory := gin.H{
-		"id":           utils.GenerateID(16),
-		"user_id":      userID,
-		"character_id": req.CharacterID,
-		"session_id":   req.SessionID,
-		"type":         req.Type,
-		"content":      req.Content,
-		"importance":   req.Importance,
-		"tags":         req.Tags,
-		"embedding": gin.H{
-			"status":     "processed",
-			"vector_id":  "vec_" + utils.GenerateID(8),
-			"similarity": 0.95,
-		},
-		"retention": gin.H{
-			"strength":        100,
-			"decay_rate":      0.02,
-			"last_recalled":   time.Now(),
-			"recall_count":    1,
-		},
-		"created_at": utils.GetCurrentTimestampString(),
+	userIDStr := userID.(string)
+	characterID := req.CharacterID
+	if characterID == "" {
+		characterID = "char_001"
 	}
+
+	// 獲取記憶管理器
+	memoryManager := GetMemoryManager()
+	
+	// 根據類型保存不同的記憶
+	var savedMemory gin.H
+	
+	switch req.Type {
+	case "preference":
+		// 創建偏好記憶
+		pref := services.Preference{
+			ID:         utils.GenerateID(12),
+			Category:   extractCategory(req.Content),
+			Content:    req.Content,
+			Importance: int(req.Importance),
+			Evidence:   req.SessionID,
+			CreatedAt:  time.Now(),
+		}
+		
+		// 手動添加到長期記憶
+		longTerm := memoryManager.GetLongTermMemory(userIDStr, characterID)
+		longTerm.Preferences = append(longTerm.Preferences, pref)
+		longTerm.LastUpdated = time.Now()
+		
+		savedMemory = gin.H{
+			"id":         pref.ID,
+			"type":       "preference",
+			"category":   pref.Category,
+			"content":    pref.Content,
+			"importance": pref.Importance,
+			"created_at": pref.CreatedAt,
+		}
+		
+	case "milestone":
+		// 創建里程碑記憶
+		milestone := services.Milestone{
+			ID:          utils.GenerateID(12),
+			Type:        extractMilestoneType(req.Content),
+			Description: req.Content,
+			Date:        time.Now(),
+			Affection:   getCurrentAffection(userIDStr, characterID),
+		}
+		
+		// 手動添加到長期記憶
+		longTerm := memoryManager.GetLongTermMemory(userIDStr, characterID)
+		longTerm.Milestones = append(longTerm.Milestones, milestone)
+		longTerm.LastUpdated = time.Now()
+		
+		savedMemory = gin.H{
+			"id":          milestone.ID,
+			"type":        "milestone",
+			"milestone_type": milestone.Type,
+			"description": milestone.Description,
+			"date":        milestone.Date,
+			"affection":   milestone.Affection,
+		}
+		
+	case "dislike":
+		// 創建禁忌記憶
+		dislike := services.Dislike{
+			Topic:      extractTopic(req.Content),
+			Severity:   int(req.Importance),
+			Evidence:   req.Content,
+			RecordedAt: time.Now(),
+		}
+		
+		// 手動添加到長期記憶
+		longTerm := memoryManager.GetLongTermMemory(userIDStr, characterID)
+		longTerm.Dislikes = append(longTerm.Dislikes, dislike)
+		longTerm.LastUpdated = time.Now()
+		
+		savedMemory = gin.H{
+			"id":          utils.GenerateID(12),
+			"type":        "dislike",
+			"topic":       dislike.Topic,
+			"severity":    dislike.Severity,
+			"evidence":    dislike.Evidence,
+			"recorded_at": dislike.RecordedAt,
+		}
+		
+	default:
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_TYPE",
+				Message: "不支援的記憶類型: " + req.Type,
+			},
+		})
+		return
+	}
+
+	// 添加通用信息
+	savedMemory["user_id"] = userIDStr
+	savedMemory["character_id"] = characterID
+	savedMemory["session_id"] = req.SessionID
+	savedMemory["tags"] = req.Tags
 
 	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
 		Message: "記憶保存成功",
-		Data:    memory,
+		Data:    savedMemory,
 	})
 }
 
@@ -201,6 +296,19 @@ func SaveMemory(c *gin.Context) {
 // @Success      200 {object} models.APIResponse "搜尋成功"
 // @Router       /memory/search [get]
 func SearchMemory(c *gin.Context) {
+	// 檢查認證
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
 	query := c.Query("query")
 	if query == "" {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
@@ -213,36 +321,80 @@ func SearchMemory(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應
-	searchResults := []gin.H{
-		{
-			"id":           "mem_002",
-			"type":         "conversation",
-			"title":        "深夜談心",
-			"content":      "聊到了彼此的夢想和過去，感覺更了解對方了",
-			"relevance":    0.92,
-			"highlight":    "聊到了彼此的<mark>夢想</mark>和過去",
-			"timestamp":    time.Now().AddDate(0, 0, -15),
-		},
-		{
-			"id":           "mem_006",
-			"type":         "preference",
-			"title":        "未來計劃",
-			"content":      "你說想要環遊世界，實現自己的夢想",
-			"relevance":    0.85,
-			"highlight":    "實現自己的<mark>夢想</mark>",
-			"timestamp":    time.Now().AddDate(0, 0, -5),
-		},
+	userIDStr := userID.(string)
+	characterID := c.DefaultQuery("character_id", "char_001")
+	memoryType := c.Query("type") // preference, milestone, dislike
+
+	// 獲取記憶管理器
+	memoryManager := GetMemoryManager()
+	longTermMemory := memoryManager.GetLongTermMemory(userIDStr, characterID)
+
+	startTime := time.Now()
+	var searchResults []gin.H
+
+	// 搜尋偏好
+	if memoryType == "" || memoryType == "preference" {
+		for _, pref := range longTermMemory.Preferences {
+			if matchesQuery(query, pref.Content, pref.Category) {
+				searchResults = append(searchResults, gin.H{
+					"id":        utils.GenerateID(12),
+					"type":      "preference",
+					"title":     pref.Category,
+					"content":   pref.Content,
+					"relevance": calculateRelevance(query, pref.Content),
+					"highlight": highlightMatch(query, pref.Content),
+					"timestamp": pref.CreatedAt,
+				})
+			}
+		}
 	}
+
+	// 搜尋里程碑
+	if memoryType == "" || memoryType == "milestone" {
+		for _, milestone := range longTermMemory.Milestones {
+			if matchesQuery(query, milestone.Description, milestone.Type) {
+				searchResults = append(searchResults, gin.H{
+					"id":        utils.GenerateID(12),
+					"type":      "milestone",
+					"title":     milestone.Type,
+					"content":   milestone.Description,
+					"relevance": calculateRelevance(query, milestone.Description),
+					"highlight": highlightMatch(query, milestone.Description),
+					"timestamp": milestone.Date,
+				})
+			}
+		}
+	}
+
+	// 搜尋禁忌
+	if memoryType == "" || memoryType == "dislike" {
+		for _, dislike := range longTermMemory.Dislikes {
+			if matchesQuery(query, dislike.Evidence, dislike.Topic) {
+				searchResults = append(searchResults, gin.H{
+					"id":        utils.GenerateID(12),
+					"type":      "dislike",
+					"title":     "禁忌: " + dislike.Topic,
+					"content":   dislike.Evidence,
+					"relevance": calculateRelevance(query, dislike.Evidence),
+					"highlight": highlightMatch(query, dislike.Evidence),
+					"timestamp": dislike.RecordedAt,
+				})
+			}
+		}
+	}
+
+	searchTime := time.Since(startTime)
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "搜尋記憶成功",
 		Data: gin.H{
 			"query":        query,
+			"character_id": characterID,
 			"results":      searchResults,
 			"total_found":  len(searchResults),
-			"search_time":  "23ms",
+			"search_time":  searchTime.String(),
+			"search_type":  memoryType,
 		},
 	})
 }
@@ -398,53 +550,48 @@ func GetMemoryStats(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應 - 模擬記憶統計
+	userIDStr := userID.(string)
+	characterID := c.DefaultQuery("character_id", "char_001")
+
+	// 獲取記憶管理器
+	memoryManager := GetMemoryManager()
+	
+	// 獲取全局統計
+	globalStats := memoryManager.GetMemoryStatistics()
+	
+	// 獲取用戶特定記憶
+	longTermMemory := memoryManager.GetLongTermMemory(userIDStr, characterID)
+	
+	// 計算記憶質量分數
+	qualityScore := calculateMemoryQuality(longTermMemory)
+	
+	// 構建統計響應
 	stats := gin.H{
-		"user_id": userID,
+		"user_id":      userIDStr,
+		"character_id": characterID,
 		"overview": gin.H{
-			"total_memories":     156,
-			"active_memories":    143,
-			"archived_memories":  13,
-			"memory_capacity":    "85%",
-			"quality_score":      8.7,
+			"total_memories":     globalStats["total_preferences"].(int) + globalStats["total_milestones"].(int) + globalStats["total_dislikes"].(int),
+			"preferences":        len(longTermMemory.Preferences),
+			"milestones":         len(longTermMemory.Milestones),
+			"dislikes":          len(longTermMemory.Dislikes),
+			"memory_strength":    calculateMemoryStrength(longTermMemory),
+			"quality_score":      qualityScore,
+			"last_updated":       longTermMemory.LastUpdated,
 		},
-		"by_character": gin.H{
-			"陸燁銘": gin.H{
-				"total":       89,
-				"recent":      23,
-				"importance":  gin.H{"high": 15, "medium": 45, "low": 29},
-				"relationship_impact": 72,
-			},
-			"沈言墨": gin.H{
-				"total":       67,
-				"recent":      18,
-				"importance":  gin.H{"high": 8, "medium": 38, "low": 21},
-				"relationship_impact": 58,
-			},
+		"global_stats": globalStats,
+		"memory_breakdown": gin.H{
+			"preferences": len(longTermMemory.Preferences),
+			"milestones":  len(longTermMemory.Milestones),
+			"dislikes":    len(longTermMemory.Dislikes),
 		},
-		"by_type": gin.H{
-			"conversation":   85,
-			"preference":     34,
-			"emotion":        23,
-			"special_event":  14,
-		},
-		"temporal_distribution": gin.H{
-			"this_week":    12,
-			"this_month":   45,
-			"last_month":   67,
-			"older":        32,
-		},
+		"temporal_distribution": calculateTemporalDistribution(longTermMemory),
 		"memory_health": gin.H{
-			"coherence_score":    9.2,
-			"retention_rate":     "94%",
-			"retrieval_accuracy": "97%",
-			"update_frequency":   "daily",
+			"coherence_score":    qualityScore,
+			"retention_rate":     "100%", // 內存中保持100%
+			"retrieval_accuracy": "100%", // 直接訪問準確率100%
+			"update_frequency":   getUpdateFrequency(longTermMemory.LastUpdated),
 		},
-		"recommendations": []string{
-			"記憶容量良好，建議繼續保持互動頻率",
-			"與陸燁銘的記憶豐富，可嘗試更深層對話",
-			"考慮整理部分舊記憶以提升效率",
-		},
+		"recommendations": generateMemoryRecommendations(longTermMemory),
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -591,4 +738,350 @@ func RestoreMemory(c *gin.Context) {
 		Message: "記憶還原完成",
 		Data:    restore,
 	})
+}
+
+// 輔助函數
+
+// getImportanceLevel 將數值重要度轉換為字符串等級
+func getImportanceLevel(importance float64) string {
+	switch {
+	case importance >= 0.8:
+		return "high"
+	case importance >= 0.5:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+// calculateMemoryStrength 計算記憶強度
+func calculateMemoryStrength(memory *services.LongTermMemory) int {
+	if memory == nil {
+		return 0
+	}
+	
+	score := 0
+	
+	// 偏好記憶貢獻
+	score += len(memory.Preferences) * 3
+	
+	// 里程碑記憶貢獻
+	score += len(memory.Milestones) * 5
+	
+	// 禁忌記憶貢獻
+	score += len(memory.Dislikes) * 2
+	
+	// 時間衰減因子
+	if !memory.LastUpdated.IsZero() {
+		daysSinceUpdate := time.Since(memory.LastUpdated).Hours() / 24
+		if daysSinceUpdate < 7 {
+			score += 10 // 最近更新獎勵
+		}
+	}
+	
+	// 限制在0-100範圍內
+	strength := score
+	if strength > 100 {
+		strength = 100
+	}
+	
+	return strength
+}
+
+// GetMemoryManager 獲取記憶管理器實例
+func GetMemoryManager() *services.MemoryManager {
+	return services.GetMemoryManager()
+}
+
+// calculateMemoryQuality 計算記憶質量分數
+func calculateMemoryQuality(memory *services.LongTermMemory) float64 {
+	if memory == nil {
+		return 0.0
+	}
+	
+	score := 0.0
+	total := 0
+	
+	// 偏好多樣性
+	if len(memory.Preferences) > 0 {
+		score += 30.0
+		total += 30
+		if len(memory.Preferences) > 5 {
+			score += 10.0 // 獎勵豐富度
+		}
+	}
+	
+	// 里程碑重要性
+	if len(memory.Milestones) > 0 {
+		score += 40.0
+		total += 40
+		if len(memory.Milestones) > 3 {
+			score += 10.0 // 獎勵關係發展
+		}
+	}
+	
+	// 時間新鮮度
+	if !memory.LastUpdated.IsZero() {
+		daysSinceUpdate := time.Since(memory.LastUpdated).Hours() / 24
+		if daysSinceUpdate < 1 {
+			score += 20.0
+			total += 20
+		} else if daysSinceUpdate < 7 {
+			score += 15.0
+			total += 20
+		} else {
+			score += 5.0
+			total += 20
+		}
+	}
+	
+	// 禁忌記錄（良好的邊界意識）
+	if len(memory.Dislikes) > 0 {
+		score += 10.0
+	}
+	total += 10
+	
+	if total == 0 {
+		return 0.0
+	}
+	
+	return (score / float64(total)) * 10.0 // 轉為10分制
+}
+
+// calculateTemporalDistribution 計算時間分佈
+func calculateTemporalDistribution(memory *services.LongTermMemory) gin.H {
+	now := time.Now()
+	thisWeek := 0
+	thisMonth := 0
+	lastMonth := 0
+	older := 0
+	
+	// 分析偏好
+	for _, pref := range memory.Preferences {
+		days := now.Sub(pref.CreatedAt).Hours() / 24
+		if days <= 7 {
+			thisWeek++
+		} else if days <= 30 {
+			thisMonth++
+		} else if days <= 60 {
+			lastMonth++
+		} else {
+			older++
+		}
+	}
+	
+	// 分析里程碑
+	for _, milestone := range memory.Milestones {
+		days := now.Sub(milestone.Date).Hours() / 24
+		if days <= 7 {
+			thisWeek++
+		} else if days <= 30 {
+			thisMonth++
+		} else if days <= 60 {
+			lastMonth++
+		} else {
+			older++
+		}
+	}
+	
+	return gin.H{
+		"this_week":  thisWeek,
+		"this_month": thisMonth,
+		"last_month": lastMonth,
+		"older":      older,
+	}
+}
+
+// getUpdateFrequency 獲取更新頻率
+func getUpdateFrequency(lastUpdate time.Time) string {
+	if lastUpdate.IsZero() {
+		return "never"
+	}
+	
+	hours := time.Since(lastUpdate).Hours()
+	if hours < 24 {
+		return "daily"
+	} else if hours < 168 { // 7天
+		return "weekly"
+	} else if hours < 720 { // 30天
+		return "monthly"
+	}
+	return "rarely"
+}
+
+// generateMemoryRecommendations 生成記憶建議
+func generateMemoryRecommendations(memory *services.LongTermMemory) []string {
+	var recommendations []string
+	
+	if len(memory.Preferences) < 3 {
+		recommendations = append(recommendations, "建議多分享個人偏好以增進了解")
+	}
+	
+	if len(memory.Milestones) < 2 {
+		recommendations = append(recommendations, "多互動可以創造更多美好回憶")
+	}
+	
+	if !memory.LastUpdated.IsZero() {
+		days := time.Since(memory.LastUpdated).Hours() / 24
+		if days > 7 {
+			recommendations = append(recommendations, "最近較少互動，建議恢復對話")
+		} else if days < 1 {
+			recommendations = append(recommendations, "互動頻率很好，保持這個節奏")
+		}
+	}
+	
+	if len(memory.Preferences) > 8 && len(memory.Milestones) > 5 {
+		recommendations = append(recommendations, "記憶豐富，關係發展良好")
+	}
+	
+	if len(recommendations) == 0 {
+		recommendations = append(recommendations, "記憶系統運作正常")
+	}
+	
+	return recommendations
+}
+
+// 搜尋相關輔助函數
+
+// matchesQuery 檢查內容是否匹配查詢
+func matchesQuery(query string, contents ...string) bool {
+	queryLower := strings.ToLower(query)
+	
+	for _, content := range contents {
+		if strings.Contains(strings.ToLower(content), queryLower) {
+			return true
+		}
+	}
+	
+	return false
+}
+
+// calculateRelevance 計算相關性分數
+func calculateRelevance(query string, content string) float64 {
+	queryLower := strings.ToLower(query)
+	contentLower := strings.ToLower(content)
+	
+	// 完全匹配
+	if queryLower == contentLower {
+		return 1.0
+	}
+	
+	// 包含查詢詞
+	if strings.Contains(contentLower, queryLower) {
+		// 計算匹配程度
+		queryLen := len(queryLower)
+		contentLen := len(contentLower)
+		
+		if contentLen == 0 {
+			return 0.0
+		}
+		
+		// 基礎相關性 + 長度因子
+		base := 0.7
+		lengthFactor := float64(queryLen) / float64(contentLen)
+		
+		relevance := base + (lengthFactor * 0.3)
+		if relevance > 1.0 {
+			relevance = 1.0
+		}
+		
+		return relevance
+	}
+	
+	return 0.0
+}
+
+// highlightMatch 高亮匹配的內容
+func highlightMatch(query string, content string) string {
+	queryLower := strings.ToLower(query)
+	contentLower := strings.ToLower(content)
+	
+	// 找到匹配位置
+	index := strings.Index(contentLower, queryLower)
+	if index == -1 {
+		return content
+	}
+	
+	// 構建高亮版本
+	before := content[:index]
+	match := content[index : index+len(query)]
+	after := content[index+len(query):]
+	
+	return before + "<mark>" + match + "</mark>" + after
+}
+
+// 記憶保存相關輔助函數
+
+// extractCategory 從內容中提取類別
+func extractCategory(content string) string {
+	contentLower := strings.ToLower(content)
+	
+	if strings.Contains(contentLower, "喜歡") || strings.Contains(contentLower, "愛") || strings.Contains(contentLower, "偏好") {
+		return "喜好"
+	} else if strings.Contains(contentLower, "食物") || strings.Contains(contentLower, "吃") {
+		return "飲食"
+	} else if strings.Contains(contentLower, "音樂") || strings.Contains(contentLower, "歌") {
+		return "音樂"
+	} else if strings.Contains(contentLower, "電影") || strings.Contains(contentLower, "看") {
+		return "娛樂"
+	} else if strings.Contains(contentLower, "運動") || strings.Contains(contentLower, "健身") {
+		return "運動"
+	} else if strings.Contains(contentLower, "旅行") || strings.Contains(contentLower, "旅遊") {
+		return "旅行"
+	}
+	
+	return "一般"
+}
+
+// extractMilestoneType 從內容中提取里程碑類型
+func extractMilestoneType(content string) string {
+	contentLower := strings.ToLower(content)
+	
+	if strings.Contains(contentLower, "第一次") || strings.Contains(contentLower, "初次") {
+		return "第一次"
+	} else if strings.Contains(contentLower, "告白") || strings.Contains(contentLower, "表白") {
+		return "表白"
+	} else if strings.Contains(contentLower, "約會") || strings.Contains(contentLower, "出去") {
+		return "約會"
+	} else if strings.Contains(contentLower, "生日") || strings.Contains(contentLower, "慶祝") {
+		return "慶祝"
+	} else if strings.Contains(contentLower, "吵架") || strings.Contains(contentLower, "爭執") {
+		return "衝突"
+	} else if strings.Contains(contentLower, "和好") || strings.Contains(contentLower, "道歉") {
+		return "和解"
+	}
+	
+	return "重要時刻"
+}
+
+// extractTopic 從內容中提取話題
+func extractTopic(content string) string {
+	contentLower := strings.ToLower(content)
+	
+	if strings.Contains(contentLower, "前任") || strings.Contains(contentLower, "前女友") || strings.Contains(contentLower, "前男友") {
+		return "前任話題"
+	} else if strings.Contains(contentLower, "工作") || strings.Contains(contentLower, "加班") {
+		return "工作壓力"
+	} else if strings.Contains(contentLower, "家庭") || strings.Contains(contentLower, "父母") {
+		return "家庭問題"
+	} else if strings.Contains(contentLower, "錢") || strings.Contains(contentLower, "財務") {
+		return "金錢話題"
+	} else if strings.Contains(contentLower, "政治") || strings.Contains(contentLower, "選舉") {
+		return "政治話題"
+	}
+	
+	// 取前10個字作為話題
+	topic := content
+	if len(topic) > 10 {
+		topic = topic[:10] + "..."
+	}
+	
+	return topic
+}
+
+// getCurrentAffection 獲取當前好感度
+func getCurrentAffection(userID, characterID string) int {
+	emotionManager := services.GetEmotionManager()
+	emotion := emotionManager.GetEmotionState(userID, characterID)
+	return emotion.Affection
 }

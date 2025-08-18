@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
@@ -33,41 +34,35 @@ func GetEmotionStatus(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應
-	emotionStatus := gin.H{
-		"user_id":      userID,
-		"character_id": "char_001",
+	// 獲取查詢參數
+	characterID := c.DefaultQuery("character_id", "char_001")
+	userIDStr := userID.(string)
+
+	// 使用實際的情感管理器
+	emotionManager := services.GetEmotionManager()
+	currentEmotion := emotionManager.GetEmotionState(userIDStr, characterID)
+
+	// 獲取情感統計數據
+	stats := emotionManager.GetSimpleEmotionStats(userIDStr, characterID)
+
+    // 構建真實的情感狀態響應
+    // TODO(擴充建議): 若後端保存了「本輪規則命中明細 explanations」，
+    // 可在此一併返回，方便前端顯示「為什麼加/減分」。
+    // 例如新增欄位: "explanations": ["命中正向詞 '喜歡' +2", "NSFW 等級 3 +1", "長訊息 +1"]
+    emotionStatus := gin.H{
+		"user_id":      userIDStr,
+		"character_id": characterID,
 		"current_emotion": gin.H{
-			"type":      "happy",
-			"intensity": 75,
-			"description": "角色現在心情很好，對你的回應會更加積極",
+			"type":        currentEmotion.Mood,
+			"intensity":   currentEmotion.Affection,
+			"description": getEmotionDescription(currentEmotion.Mood, currentEmotion.Affection),
 		},
-		"emotion_history": []gin.H{
-			{
-				"emotion":    "neutral",
-				"intensity":  50,
-				"timestamp":  time.Now().Add(-2 * time.Hour),
-				"trigger":    "conversation_start",
-			},
-			{
-				"emotion":    "interested",
-				"intensity":  65,
-				"timestamp":  time.Now().Add(-1 * time.Hour),
-				"trigger":    "engaging_topic",
-			},
-			{
-				"emotion":    "happy",
-				"intensity":  75,
-				"timestamp":  time.Now().Add(-30 * time.Minute),
-				"trigger":    "compliment_received",
-			},
+		"relationship": gin.H{
+			"status":      currentEmotion.Relationship,
+			"intimacy":    currentEmotion.IntimacyLevel,
+			"affection":   currentEmotion.Affection,
 		},
-		"factors": gin.H{
-			"conversation_quality": 85,
-			"response_frequency":   72,
-			"topic_interest":       90,
-			"interaction_time":     "45 minutes",
-		},
+		"statistics": stats,
 		"updated_at": utils.GetCurrentTimestampString(),
 	}
 
@@ -102,56 +97,44 @@ func GetAffectionLevel(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應
-	affectionData := gin.H{
-		"user_id":      userID,
-		"character_id": "char_001",
+	// 獲取查詢參數
+	characterID := c.DefaultQuery("character_id", "char_001")
+	userIDStr := userID.(string)
+
+	// 使用實際的情感管理器
+	emotionManager := services.GetEmotionManager()
+	currentEmotion := emotionManager.GetEmotionState(userIDStr, characterID)
+	stats := emotionManager.GetSimpleEmotionStats(userIDStr, characterID)
+
+	// 計算等級和進度
+	levelName, levelTier := getAffectionLevelInfo(currentEmotion.Affection)
+	nextLevelThreshold := getNextLevelThreshold(levelTier)
+	pointsNeeded := nextLevelThreshold - currentEmotion.Affection
+
+    // 構建真實的好感度響應
+    // TODO(擴充建議): 回傳「下一步建議」或「加速升級提示」，
+    // 例如根據常命中/未命中規則建議使用者互動方式。
+    affectionData := gin.H{
+		"user_id":      userIDStr,
+		"character_id": characterID,
 		"affection_level": gin.H{
-			"current":     68,
+			"current":     currentEmotion.Affection,
 			"max":         100,
-			"level_name":  "友好",
-			"level_tier":  3, // 1:陌生 2:認識 3:友好 4:親密 5:摯愛
-			"description": "角色對你有好感，願意分享更多私人話題",
+			"level_name":  levelName,
+			"level_tier":  levelTier,
+			"description": getAffectionDescription(levelTier),
 		},
 		"progress": gin.H{
-			"to_next_level":    82,
-			"points_needed":    14,
-			"estimated_days":   7,
+			"to_next_level":  nextLevelThreshold,
+			"points_needed":  max(0, pointsNeeded),
+			"estimated_days": max(1, pointsNeeded/2), // 假設每天平均+2好感度
 		},
-		"bonuses": []gin.H{
-			{
-				"type":        "response_quality",
-				"bonus":       "+15%",
-				"description": "角色會給出更詳細的回應",
-			},
-			{
-				"type":        "unlock_topics",
-				"bonus":       "3 new topics",
-				"description": "解鎖了新的對話主題",
-			},
+		"relationship": gin.H{
+			"status":    currentEmotion.Relationship,
+			"intimacy":  currentEmotion.IntimacyLevel,
+			"mood":      currentEmotion.Mood,
 		},
-		"milestones": []gin.H{
-			{
-				"level":       10,
-				"name":        "初次見面",
-				"achieved_at": time.Now().AddDate(0, 0, -30),
-			},
-			{
-				"level":       25,
-				"name":        "熟悉的陌生人",
-				"achieved_at": time.Now().AddDate(0, 0, -20),
-			},
-			{
-				"level":       50,
-				"name":        "成為朋友",
-				"achieved_at": time.Now().AddDate(0, 0, -7),
-			},
-		},
-		"daily_interactions": gin.H{
-			"today":      12,
-			"limit":      50,
-			"bonus_rate": 1.5,
-		},
+		"statistics": stats,
 		"updated_at": utils.GetCurrentTimestampString(),
 	}
 
@@ -204,8 +187,10 @@ func TriggerEmotionEvent(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應
-	eventResponse := gin.H{
+    // 靜態數據回應
+    // TODO(擴充建議): 可將這個事件流接入 EmotionManager，
+    // 依據 event_type -> 權重表，實際更新情感並返回真實的 before/after。
+    eventResponse := gin.H{
 		"event_id":   utils.GenerateID(16),
 		"user_id":    userID,
 		"event_type": req.EventType,
@@ -496,4 +481,97 @@ func GetRelationshipMilestones(c *gin.Context) {
 		Message: "獲取關係里程碑成功",
 		Data:    milestones,
 	})
+}
+
+// 輔助函數
+
+// getEmotionDescription 獲取情感描述
+func getEmotionDescription(mood string, affection int) string {
+	descriptions := map[string]string{
+		"happy":      "角色現在心情很好，對你的回應會更加積極",
+		"excited":    "角色感到興奮，期待和你的互動",
+		"shy":        "角色有些害羞，但對你很有好感",
+		"romantic":   "角色陷入了浪漫的情緒中",
+		"passionate": "角色充滿激情，渴望更深入的交流",
+		"pleased":    "角色對你很滿意，心情愉悅",
+		"loving":     "角色深深愛著你，全心全意",
+		"friendly":   "角色對你很友好，樂於交談",
+		"polite":     "角色保持著禮貌的態度",
+		"neutral":    "角色心情平靜，態度中性",
+		"concerned":  "角色對你有些擔心",
+		"annoyed":    "角色有些煩躁，需要安撫",
+	}
+	
+	baseDesc := descriptions[mood]
+	if baseDesc == "" {
+		baseDesc = "角色心情平靜"
+	}
+	
+	if affection >= 80 {
+		return baseDesc + "，對你的愛意溢於言表"
+	} else if affection >= 60 {
+		return baseDesc + "，對你有很深的感情"
+	} else if affection >= 40 {
+		return baseDesc + "，對你很有好感"
+	} else if affection >= 20 {
+		return baseDesc + "，開始對你產生興趣"
+	}
+	
+	return baseDesc
+}
+
+// getAffectionLevelInfo 獲取好感度等級資訊
+func getAffectionLevelInfo(affection int) (string, int) {
+	switch {
+	case affection >= 90:
+		return "摯愛", 5
+	case affection >= 70:
+		return "戀人", 4
+	case affection >= 50:
+		return "親密", 3
+	case affection >= 25:
+		return "友好", 2
+	default:
+		return "陌生", 1
+	}
+}
+
+// getNextLevelThreshold 獲取下一等級閾值
+func getNextLevelThreshold(currentTier int) int {
+	thresholds := map[int]int{
+		1: 25,  // 陌生 -> 友好
+		2: 50,  // 友好 -> 親密
+		3: 70,  // 親密 -> 戀人
+		4: 90,  // 戀人 -> 摯愛
+		5: 100, // 摯愛 -> 完美
+	}
+	
+	if threshold, exists := thresholds[currentTier]; exists {
+		return threshold
+	}
+	return 100
+}
+
+// getAffectionDescription 獲取好感度描述
+func getAffectionDescription(tier int) string {
+	descriptions := map[int]string{
+		1: "角色對你還不太熟悉，保持著基本的禮貌",
+		2: "角色開始對你有好感，願意進行友好的交流",
+		3: "角色對你有很深的好感，願意分享更多私人話題",
+		4: "角色深深愛著你，渴望更親密的關係",
+		5: "角色完全愛上了你，你們是完美的伴侶",
+	}
+	
+	if desc, exists := descriptions[tier]; exists {
+		return desc
+	}
+	return descriptions[1]
+}
+
+// max 輔助函數
+func max(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }

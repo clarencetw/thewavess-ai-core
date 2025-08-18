@@ -1,13 +1,26 @@
 package handlers
 
 import (
+	"encoding/base64"
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
+
+var ttsService *services.TTSService
+
+func getTTSService() *services.TTSService {
+	if ttsService == nil {
+		ttsService = services.NewTTSService()
+	}
+	return ttsService
+}
 
 // GenerateTTS godoc
 // @Summary      生成語音
@@ -55,13 +68,34 @@ func GenerateTTS(c *gin.Context) {
 		return
 	}
 
-	// 靜態回應 - 模擬TTS生成
+	// 設置默認值
+	if req.Speed == 0 {
+		req.Speed = 1.0
+	}
+	if req.Voice == "" {
+		req.Voice = "voice_001"
+	}
+
+	// 調用 TTS 服務生成語音
+	response, err := getTTSService().GenerateSpeech(c.Request.Context(), req.Text, req.Voice, req.Speed)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "TTS_GENERATION_FAILED",
+				Message: "語音生成失敗: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 構建回應數據
 	ttsResult := gin.H{
 		"tts_id":    utils.GenerateID(16),
 		"user_id":   userID,
 		"text":      req.Text,
 		"voice":     req.Voice,
-		"character": "陸燁銘",
+		"character": getCharacterByVoice(req.Voice),
 		"settings": gin.H{
 			"speed":    req.Speed,
 			"pitch":    req.Pitch,
@@ -69,21 +103,22 @@ func GenerateTTS(c *gin.Context) {
 			"quality":  "high",
 		},
 		"result": gin.H{
-			"audio_url":   "https://example.com/tts/" + utils.GenerateID(32) + ".mp3",
-			"duration":    "15.3s",
-			"file_size":   "245KB",
-			"format":      "mp3",
-			"sample_rate": "44100Hz",
+			"audio_data":    base64.StdEncoding.EncodeToString(response.AudioData), // Base64編碼的音頻數據
+			"audio_url":     fmt.Sprintf("data:audio/%s;base64,%s", response.Format, base64.StdEncoding.EncodeToString(response.AudioData)), // 可直接播放的 Data URL
+			"duration":      response.Duration,
+			"file_size":     formatFileSize(response.Size),
+			"format":        response.Format,
+			"sample_rate":   "44100Hz",
 		},
 		"processing": gin.H{
 			"started_at":   time.Now(),
-			"completed_at": time.Now().Add(2 * time.Second),
-			"queue_time":   "0.5s",
-			"render_time":  "1.5s",
+			"completed_at": time.Now(),
+			"queue_time":   "0.1s",
+			"render_time":  "1.2s",
 		},
 		"usage": gin.H{
 			"characters_processed": len(req.Text),
-			"tokens_used":         15,
+			"tokens_used":         len(req.Text) / 4, // 估算token使用
 			"cost":               "$0.002",
 		},
 	}
@@ -142,15 +177,46 @@ func BatchGenerateTTS(c *gin.Context) {
 		return
 	}
 
-	// 靜態回應 - 模擬批量TTS生成
+	// 設置默認語音
+	defaultVoice := "voice_001"
+	defaultSpeed := 1.0
+
+	// 提取文字列表
+	texts := make([]string, len(req.Items))
+	for i, item := range req.Items {
+		texts[i] = item.Text
+	}
+
+	// 調用批量 TTS 服務
+	responses, err := getTTSService().BatchGenerateSpeech(c.Request.Context(), texts, defaultVoice, defaultSpeed)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "BATCH_TTS_FAILED",
+				Message: "批量語音生成失敗: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 構建批量結果
 	batchResults := []gin.H{}
 	for i, item := range req.Items {
+		voice := item.Voice
+		if voice == "" {
+			voice = defaultVoice
+		}
+		
 		result := gin.H{
-			"index":     i + 1,
-			"text":      item.Text,
-			"audio_url": "https://example.com/tts/batch_" + utils.GenerateID(16) + ".mp3",
-			"duration":  "12.5s",
-			"status":    "completed",
+			"index":      i + 1,
+			"text":       item.Text,
+			"voice":      voice,
+			"character":  getCharacterByVoice(voice),
+			"audio_data": responses[i].AudioData,
+			"duration":   responses[i].Duration,
+			"file_size":  formatFileSize(responses[i].Size),
+			"status":     "completed",
 		}
 		batchResults = append(batchResults, result)
 	}
@@ -194,50 +260,28 @@ func GetVoiceList(c *gin.Context) {
 	characterID := c.Query("character_id")
 	language := c.Query("language")
 
-	// 靜態數據回應 - 模擬語音列表
-	voices := []gin.H{
-		{
-			"voice_id":     "voice_001",
-			"name":         "陸燁銘標準音",
-			"character_id": "char_001",
-			"character":    "陸燁銘",
+	// 從 TTS 服務獲取語音列表
+	availableVoices := getTTSService().GetAvailableVoices()
+	
+	// 擴展語音信息
+	voices := []gin.H{}
+	for _, voice := range availableVoices {
+		voiceInfo := gin.H{
+			"voice_id":     voice["voice_id"],
+			"name":         voice["name"],
+			"character_id": voice["character_id"],
+			"character":    voice["character"],
+			"openai_voice": voice["openai_voice"],
+			"description":  voice["description"],
 			"language":     "zh-TW",
 			"gender":       "male",
 			"age_range":    "25-35",
-			"personality":  []string{"霸道", "溫柔", "成熟"},
-			"emotions":     []string{"neutral", "romantic", "serious", "gentle", "dominant"},
-			"sample_url":   "https://example.com/samples/voice_001.mp3",
+			"personality":  getPersonalityByCharacter(voice["character"].(string)),
+			"emotions":     getEmotionsByCharacter(voice["character"].(string)),
 			"quality":      "premium",
-			"is_default":   true,
-		},
-		{
-			"voice_id":     "voice_002",
-			"name":         "陸燁銘深情音",
-			"character_id": "char_001",
-			"character":    "陸燁銘",
-			"language":     "zh-TW",
-			"gender":       "male",
-			"age_range":    "25-35",
-			"personality":  []string{"深情", "磁性", "魅惑"},
-			"emotions":     []string{"romantic", "intimate", "passionate", "tender"},
-			"sample_url":   "https://example.com/samples/voice_002.mp3",
-			"quality":      "premium",
-			"is_default":   false,
-		},
-		{
-			"voice_id":     "voice_003",
-			"name":         "沈言墨溫雅音",
-			"character_id": "char_002",
-			"character":    "沈言墨",
-			"language":     "zh-TW",
-			"gender":       "male",
-			"age_range":    "28-38",
-			"personality":  []string{"溫雅", "知性", "儒雅"},
-			"emotions":     []string{"gentle", "wise", "caring", "scholarly"},
-			"sample_url":   "https://example.com/samples/voice_003.mp3",
-			"quality":      "premium",
-			"is_default":   true,
-		},
+			"is_default":   voice["voice_id"] == "voice_001",
+		}
+		voices = append(voices, voiceInfo)
 	}
 
 	// 過濾邏輯
@@ -325,7 +369,20 @@ func PreviewTTS(c *gin.Context) {
 		return
 	}
 
-	// 靜態回應 - 模擬語音預覽
+	// 調用 TTS 服務生成預覽語音
+	response, err := getTTSService().GenerateSpeech(c.Request.Context(), req.Text, req.VoiceID, 1.0)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "TTS_PREVIEW_FAILED",
+				Message: "語音預覽生成失敗: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 構建預覽回應
 	preview := gin.H{
 		"preview_id": utils.GenerateID(16),
 		"user_id":    userID,
@@ -333,16 +390,18 @@ func PreviewTTS(c *gin.Context) {
 		"voice_id":   req.VoiceID,
 		"emotion":    req.Emotion,
 		"audio": gin.H{
-			"preview_url": "https://example.com/tts/preview_" + utils.GenerateID(32) + ".mp3",
-			"duration":    "8.2s",
-			"file_size":   "131KB",
-			"expires_at":  time.Now().Add(1 * time.Hour),
+			"audio_data": base64.StdEncoding.EncodeToString(response.AudioData), // Base64編碼的音頻數據
+			"audio_url":  fmt.Sprintf("data:audio/%s;base64,%s", response.Format, base64.StdEncoding.EncodeToString(response.AudioData)), // 可直接播放的 Data URL
+			"duration":   response.Duration,
+			"file_size":  formatFileSize(response.Size),
+			"format":     response.Format,
+			"expires_at": time.Now().Add(1 * time.Hour),
 		},
 		"voice_info": gin.H{
-			"name":       "陸燁銘標準音",
-			"character":  "陸燁銘",
-			"emotion":    req.Emotion,
-			"quality":    "preview",
+			"name":      getVoiceNameByID(req.VoiceID),
+			"character": getCharacterByVoice(req.VoiceID),
+			"emotion":   req.Emotion,
+			"quality":   "preview",
 		},
 		"generated_at": time.Now(),
 		"note":         "預覽音質為標準品質，正式生成將使用高品質音效",
@@ -436,73 +495,70 @@ func GetTTSHistory(c *gin.Context) {
 	})
 }
 
-// GetTTSConfig godoc
-// @Summary      獲取TTS配置
-// @Description  獲取用戶的TTS偏好設置
-// @Tags         TTS
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Success      200 {object} models.APIResponse "獲取成功"
-// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /tts/config [get]
-func GetTTSConfig(c *gin.Context) {
-	// 檢查認證
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: "未授權訪問",
-			},
-		})
-		return
-	}
 
-	// 靜態數據回應 - 模擬TTS配置
-	config := gin.H{
-		"user_id": userID,
-		"preferences": gin.H{
-			"auto_generate":    true,
-			"default_voice":    "voice_001",
-			"default_emotion":  "neutral",
-			"quality":          "high",
-			"speed":            1.0,
-			"pitch":            0.0,
-			"volume":           0.8,
-		},
-		"character_settings": gin.H{
-			"char_001": gin.H{
-				"voice_id":       "voice_001",
-				"default_emotion": "romantic",
-				"speed_adjustment": 0.9,
-			},
-			"char_002": gin.H{
-				"voice_id":       "voice_003", 
-				"default_emotion": "gentle",
-				"speed_adjustment": 1.1,
-			},
-		},
-		"advanced_settings": gin.H{
-			"enable_ssml":      false,
-			"emotion_blending": true,
-			"background_music": false,
-			"noise_reduction":  true,
-			"auto_save":        true,
-		},
-		"usage_limits": gin.H{
-			"daily_quota":     1000,
-			"monthly_quota":   30000,
-			"used_today":      45,
-			"used_this_month": 1250,
-		},
-		"last_updated": time.Now().AddDate(0, 0, -7),
-	}
+// 輔助函數
 
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Message: "獲取TTS配置成功",
-		Data:    config,
-	})
+// getCharacterByVoice 根據語音ID獲取角色名稱
+func getCharacterByVoice(voiceID string) string {
+	voiceMap := map[string]string{
+		"voice_001": "陸燁銘",
+		"voice_002": "陸燁銘", 
+		"voice_003": "沈言墨",
+	}
+	
+	if character, exists := voiceMap[voiceID]; exists {
+		return character
+	}
+	return "陸燁銘" // 默認角色
+}
+
+// getVoiceNameByID 根據語音ID獲取語音名稱
+func getVoiceNameByID(voiceID string) string {
+	voiceMap := map[string]string{
+		"voice_001": "陸燁銘標準音",
+		"voice_002": "陸燁銘深情音",
+		"voice_003": "沈言墨溫雅音",
+	}
+	
+	if name, exists := voiceMap[voiceID]; exists {
+		return name
+	}
+	return "陸燁銘標準音" // 默認語音
+}
+
+// getPersonalityByCharacter 根據角色獲取性格標籤
+func getPersonalityByCharacter(character string) []string {
+	personalityMap := map[string][]string{
+		"陸燁銘": {"霸道", "溫柔", "成熟", "深情", "磁性"},
+		"沈言墨": {"溫雅", "知性", "儒雅", "溫和"},
+	}
+	
+	if personality, exists := personalityMap[character]; exists {
+		return personality
+	}
+	return []string{"溫和", "成熟"} // 默認性格
+}
+
+// getEmotionsByCharacter 根據角色獲取支持的情感
+func getEmotionsByCharacter(character string) []string {
+	emotionsMap := map[string][]string{
+		"陸燁銘": {"neutral", "romantic", "serious", "gentle", "dominant", "passionate"},
+		"沈言墨": {"gentle", "wise", "caring", "scholarly", "warm"},
+	}
+	
+	if emotions, exists := emotionsMap[character]; exists {
+		return emotions
+	}
+	return []string{"neutral", "gentle"} // 默認情感
+}
+
+// formatFileSize 格式化文件大小
+func formatFileSize(bytes int64) string {
+	if bytes < 1024 {
+		return strconv.FormatInt(bytes, 10) + "B"
+	} else if bytes < 1024*1024 {
+		return strconv.FormatInt(bytes/1024, 10) + "KB"
+	} else {
+		return strconv.FormatInt(bytes/(1024*1024), 10) + "MB"
+	}
 }

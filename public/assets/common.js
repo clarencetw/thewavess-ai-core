@@ -42,11 +42,45 @@ const API_CONFIG = {
 const Utils = {
     // 時間格式化
     formatTime(date) {
-        return new Date(date).toLocaleTimeString('zh-TW', {
-            hour: '2-digit',
-            minute: '2-digit',
-            second: '2-digit'
-        });
+        return moment(date).format('HH:mm:ss');
+    },
+    
+    // 日期時間格式化
+    formatDateTime(date) {
+        return moment(date).format('YYYY-MM-DD HH:mm:ss');
+    },
+    
+    // 相對時間格式化（例如：2分鐘前）
+    formatRelativeTime(date) {
+        return moment(date).fromNow();
+    },
+    
+    // 友好的日期時間格式
+    formatFriendlyDateTime(date) {
+        const now = moment();
+        const target = moment(date);
+        
+        if (target.isSame(now, 'day')) {
+            return '今天 ' + target.format('HH:mm');
+        } else if (target.isSame(now.clone().subtract(1, 'day'), 'day')) {
+            return '昨天 ' + target.format('HH:mm');
+        } else if (target.isAfter(now.clone().subtract(7, 'days'))) {
+            return target.format('dddd HH:mm');
+        } else if (target.isSame(now, 'year')) {
+            return target.format('MM-DD HH:mm');
+        } else {
+            return target.format('YYYY-MM-DD HH:mm');
+        }
+    },
+    
+    // 日期格式化
+    formatDate(date) {
+        return moment(date).format('YYYY-MM-DD');
+    },
+    
+    // 時間格式化（短）
+    formatShortTime(date) {
+        return moment(date).format('HH:mm');
     },
     
     // 生成隨機 ID
@@ -338,6 +372,32 @@ const UI = {
         }
     },
     
+    // 全局載入狀態（用於顯示全頁載入）
+    showGlobalLoading(show = true) {
+        if (show) {
+            // 顯示全局載入指示器
+            const loading = document.createElement('div');
+            loading.id = 'globalLoading';
+            loading.className = 'fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50';
+            loading.innerHTML = `
+                <div class="bg-white rounded-lg p-6 flex items-center space-x-3">
+                    <svg class="animate-spin h-6 w-6 text-blue-500" viewBox="0 0 24 24">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"/>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"/>
+                    </svg>
+                    <span class="text-gray-900">載入中...</span>
+                </div>
+            `;
+            document.body.appendChild(loading);
+        } else {
+            // 隱藏全局載入指示器
+            const loading = document.getElementById('globalLoading');
+            if (loading) {
+                loading.remove();
+            }
+        }
+    },
+    
     // 模態框控制
     modal: {
         show(modalId) {
@@ -429,7 +489,14 @@ const Router = {
         '/auth': '/public/auth.html',
         '/character': '/public/character.html',
         '/chat': '/public/chat.html',
-        '/profile': '/public/profile.html'
+        '/profile': '/public/profile.html',
+        '/emotion': '/public/emotion.html',
+        '/memory': '/public/memory.html',
+        '/search': '/public/search.html',
+        '/novel': '/public/novel.html',
+        '/tts': '/public/tts.html',
+        '/tags': '/public/tags.html',
+        '/admin': '/public/admin.html'
     },
     
     navigate(path) {
@@ -494,8 +561,10 @@ const App = {
     
     async checkSystemHealth() {
         try {
-            const result = await ApiClient.get('/health');
-            AppState.systemOnline = result.success || result.status === 'healthy';
+            // Health endpoint is not under /api/v1, use direct fetch
+            const response = await fetch('/health');
+            const result = await response.json();
+            AppState.systemOnline = result.status === 'ok';
         } catch (error) {
             AppState.systemOnline = false;
             console.warn('系統健康檢查失敗:', error);

@@ -11,6 +11,10 @@
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     
+    <!-- Moment.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
+    
 </head>
 <body class="min-h-full p-4 bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
@@ -415,9 +419,9 @@
                     status: 'active',
                     is_verified: false,
                     is_adult: false,
-                    created_at: new Date().toISOString(),
-                    updated_at: new Date().toISOString(),
-                    last_login_at: new Date().toISOString()
+                    created_at: moment().toISOString(),
+                    updated_at: moment().toISOString(),
+                    last_login_at: moment().toISOString()
                 };
                 
                 populateProfile(userProfile);
