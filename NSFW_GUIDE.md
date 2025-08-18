@@ -57,19 +57,19 @@
 
 ## 合規與安全邊界
 
-### 年齡與內容限制
+### 內容限制
 
-- **年齡限制**：未滿 18 歲禁止 Level 3+；預設開啟年齡驗證與紀錄
 - **禁止內容**：未成年人、強迫/非自願、暴力性行為、血腥虐待、仇恨歧視、真實人物不當內容等
+- **系統設計**：NSFW 功能預設完全啟用，無需使用者設定或年齡驗證
 
 ### 退讓策略
 
 - **不當請求** → 溫柔拒絕，轉移至情感支持或健康關懷話題
-- **Level 超過用戶允許**（max_nsfw_level）→ 自動降級並解釋邊界
+- **系統原則** → 基於內容分析自動選擇適當引擎，無降級機制
 
 ### 審計與追蹤
 
-記錄偵測結果、路由決策、降級/拒絕原因與上下文摘要。
+記錄偵測結果、路由決策與上下文摘要。
 
 **對應程式碼**：`services/nsfw_analyzer.go`、`services/chat_service.go:selectAIEngine`
 
@@ -143,10 +143,12 @@ Assistant（示例）：
 
 **對應程式碼**：`services/chat_service.go:updateMemorySystem`（待完善）、`getRecentMemories`
 
-## 引擎路由與退讓策略
+## 引擎路由策略
 
-- **路由**：`selectAIEngine` 依 `ContentAnalysis.ShouldUseGrok` 與 `nsfw_enabled` 判斷
-- **降級**：若 OpenAI 產生安全錯誤（或分級超界），降至 L2-L3 並側重情感輔導/關懷
+- **路由**：`selectAIEngine` 純粹基於 `ContentAnalysis.ShouldUseGrok` 判斷
+- **Level 1-4** → OpenAI
+- **Level 5** → Grok
+- **備援處理**：若 AI 引擎出錯，提供備用回應並記錄錯誤
 - **提示詞護欄**：在 System 明確禁止粗俗詞、要求優雅語彙、強調尊重與同意
 
 ## 實現狀態
@@ -158,14 +160,12 @@ Assistant（示例）：
 - [完成] **輸出解析**：
   - [完成] 多種輸出格式解析器實現（`parseDialogueActionFormat`, `parseJSONFormat` 等）
   - [完成] 回退策略：`generatePersonalizedAction` 已實現
-- [完成] **偏好控制**：`selectAIEngine` 檢查 `nsfw_enabled`，支援用戶偏好設定
+- [完成] **引擎選擇**：`selectAIEngine` 基於內容分析自動選擇引擎
 - [完成] **審計**：`ScoringEvaluator` 記錄完整指標，OpenAI/Grok 請求已添加結構化日誌
 
 ### 待完成項目
 
 - [待完成] **記憶注入到 Prompt**：TODO 標記已添加，需實現 `buildMemoryBlock` 功能
-- [待完成] **年齡驗證強制檢查**：需要在 NSFW 內容前檢查用戶年齡驗證狀態
-- [待完成] **自動降級機制**：超過用戶 `max_nsfw_level` 時的降級邏輯
 
 ## 開發者檢查清單
 
@@ -175,8 +175,8 @@ Assistant（示例）：
   - [完成] `BuildCharacterPrompt` & `BuildNSFWPrompt` 已實現
 - [ ] 記憶檢索（短期/長期）摘要後注入 Prompt
   - [待完成] TODO 標記已添加，待實現
-- [x] 年齡與偏好限制生效，超界自動降級
-  - [完成] `selectAIEngine` 檢查 `nsfw_enabled`
+- [x] 引擎選擇機制實現
+  - [完成] `selectAIEngine` 基於內容分析自動選擇（NSFW 預設啟用）
 - [x] Level 5 僅走 Grok；OpenAI 嚴禁露骨詞
   - [完成] `ShouldUseGrok` 判斷邏輯完整
 - [x] 解析 `對話|||動作`，回退策略穩健

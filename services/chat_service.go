@@ -435,7 +435,6 @@ func (s *ChatService) getRecentMemories(sessionID, userID, characterID string, l
 func (s *ChatService) getUserPreferences(userID string) map[string]interface{} {
 	// 使用默認偏好
 	return map[string]interface{}{
-		"nsfw_enabled":     true,
 		"scene_style":      "romantic",
 		"response_length":  "medium",
 		"emotion_tracking": true,
@@ -515,9 +514,7 @@ func (s *ChatService) getCharacterState(characterID string, emotion *EmotionStat
 func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, userPrefs map[string]interface{}) string {
 	// NSFW 功能永久開啟，根據內容分析決定使用哪個引擎
 	if analysis.ShouldUseGrok {
-		if nsfwEnabled, ok := userPrefs["nsfw_enabled"].(bool); ok && nsfwEnabled {
-			return "grok"
-		}
+		return "grok"
 	}
 	return "openai"
 }
@@ -1431,7 +1428,6 @@ func (s *ChatService) getUserPreferencesFromDB(ctx context.Context, userID strin
 	}
 
 	preferences := map[string]interface{}{
-		"nsfw_enabled":     true,
 		"scene_style":      "romantic",
 		"response_length":  "medium",
 		"emotion_tracking": true,

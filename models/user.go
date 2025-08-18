@@ -141,6 +141,9 @@ func (u *User) ToResponse() *UserResponse {
 		DisplayName: u.DisplayName,
 		Bio:         u.Bio,
 		Status:      u.Status,
+		Nickname:    u.Nickname,
+		Gender:      u.Gender,
+		BirthDate:   u.BirthDate,
 		AvatarURL:   u.AvatarURL,
 		IsVerified:  u.IsVerified,
 		IsAdult:     u.IsAdult,
@@ -150,4 +153,5 @@ func (u *User) ToResponse() *UserResponse {
 		LastLoginAt: u.LastLoginAt,
 	}
 }
+
 

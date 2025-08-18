@@ -166,18 +166,6 @@
                 </h2>
                 
                 <div class="space-y-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <span class="font-medium">NSFW 內容</span>
-                            <p class="text-sm">允許顯示成人內容</p>
-                        </div>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="nsfwEnabled" class="sr-only peer">
-                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                    </div>
-                    
-                    
                     <div>
                         <label class="block font-medium mb-2">預設角色</label>
                         <select 
@@ -475,8 +463,6 @@
         async function loadPreferences() {
             const preferences = AppState.preferences;
             
-            document.getElementById('nsfwEnabled').checked = preferences.nsfw_enabled;
-            
             // 載入角色列表並設置當前選中角色
             await loadCharacterOptions();
         }
@@ -536,7 +522,7 @@
         // 設置事件監聽器
         function setupEventListeners() {
             // 監聽表單變更
-            const inputs = ['displayName', 'email', 'bio', 'nsfwEnabled', 'defaultCharacter'];
+            const inputs = ['displayName', 'email', 'bio', 'defaultCharacter'];
             
             inputs.forEach(id => {
                 const element = document.getElementById(id);
@@ -606,7 +592,6 @@
             };
             
             const updatedPreferences = {
-                nsfw_enabled: document.getElementById('nsfwEnabled').checked,
                 default_character: document.getElementById('defaultCharacter').value
             };
             

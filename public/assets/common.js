@@ -23,7 +23,6 @@ const AppState = {
     
     // 用戶偏好
     preferences: {
-        nsfw_enabled: true,
         theme: 'dark',
         auto_scroll: true
     }
