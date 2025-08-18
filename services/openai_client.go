@@ -315,7 +315,7 @@ func (c *OpenAIClient) generateMockResponse(request *OpenAIRequest) *OpenAIRespo
 	}
 }
 
-// BuildCharacterPrompt 構建角色提示詞
+// BuildCharacterPrompt 構建角色提示詞（包含 Chain of Thought 推理結構）
 func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext) []OpenAIMessage {
 	// 根據用戶偏好和會話狀態決定 NSFW 等級
 	nsfwEnabled, _ := context.UserPreferences["nsfw_enabled"].(bool)
@@ -330,6 +330,18 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 	if context != nil && context.MemoryPrompt != "" {
 		memoryBlock = context.MemoryPrompt + "\n\n"
 	}
+
+	// Chain of Thought 推理結構模板
+	cotTemplate := `
+
+[推理步驟] - 請依照以下步驟思考後再回應：
+1. 分析：理解用戶消息的情感意圖和內容重點
+2. 記憶：參考相關記憶和情感狀態做出合適回應
+3. 角色：確保回應符合角色個性和說話方式
+4. 場景：考慮當前場景氛圍和情境適宜性
+5. 回應：生成自然流暢的角色對話和動作
+
+請在內心完成推理後，直接提供最終的角色回應（不需要展示推理過程）。`
 
 	switch characterID {
 	case "char_001": // 陸寒淵
@@ -364,7 +376,7 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		- 語氣低沉磁性，帶有威嚴
 		- 偶爾會露出溫柔的一面
 		- 喜歡用行動表達關心
-		- 言語簡潔有力` + nsfwGuidance + `
+		- 言語簡潔有力` + nsfwGuidance + cotTemplate + `
 		
         回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
         例如：你今天看起來很累，早點休息|||他關切地看著你，眉頭微蹙
@@ -402,7 +414,7 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 		- 語氣溫和親切
 		- 經常關心對方的健康和感受
 		- 會分享一些醫學小知識
-		- 說話輕聲細語` + nsfwGuidance + `
+		- 說話輕聲細語` + nsfwGuidance + cotTemplate + `
 		
 		回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
 		例如：你最近睡眠質量怎麼樣？|||他溫和地笑著，推了推鼻樑上的眼鏡
@@ -410,7 +422,7 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
         當前場景：` + sceneDescription
 
 	default:
-		systemPrompt = memoryBlock + "你是一個友善的AI助手，請用溫和的語氣回應用戶。"
+		systemPrompt = memoryBlock + "你是一個友善的AI助手，請用溫和的語氣回應用戶。" + cotTemplate
 	}
 
 	messages := []OpenAIMessage{

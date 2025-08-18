@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="zh-TW" class="h-full">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flowbite Toast 測試 - Thewavess AI Core</title>
+    
+    <!-- Tailwind CSS 3.4.17 -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    
+    <!-- Moment.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
+    
+    <!-- Flowbite -->
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.js"></script>
+    
+</head>
+<body class="h-full flex items-center justify-center p-4 bg-gray-50 text-gray-900">
+    
+    <!-- Flowbite Toast 容器 -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2"></div>
+    
+    <!-- 測試控制面板 -->
+    <div class="w-full max-w-lg mx-auto">
+        <div class="bg-white border rounded-lg p-6">
+            <div class="text-center mb-8">
+                <h1 class="text-3xl font-bold mb-2">
+                    <i class="fas fa-bell text-blue-400 mr-3"></i>
+                    Flowbite Toast 測試
+                </h1>
+                <p class="text-gray-600">
+                    測試不同類型的 Toast 通知
+                </p>
+            </div>
+            
+            <!-- 測試按鈕 -->
+            <div class="space-y-4">
+                <button 
+                    class="w-full bg-green-600 hover:bg-green-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors"
+                    onclick="showTestToast('success')"
+                >
+                    <i class="fas fa-check-circle mr-2"></i>
+                    測試成功 Toast
+                </button>
+                
+                <button 
+                    class="w-full bg-red-600 hover:bg-red-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors"
+                    onclick="showTestToast('error')"
+                >
+                    <i class="fas fa-exclamation-circle mr-2"></i>
+                    測試錯誤 Toast
+                </button>
+                
+                <button 
+                    class="w-full bg-orange-600 hover:bg-orange-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors"
+                    onclick="showTestToast('warning')"
+                >
+                    <i class="fas fa-exclamation-triangle mr-2"></i>
+                    測試警告 Toast
+                </button>
+                
+                <button 
+                    class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors"
+                    onclick="showTestToast('info')"
+                >
+                    <i class="fas fa-info-circle mr-2"></i>
+                    測試信息 Toast
+                </button>
+                
+                <hr class="my-6">
+                
+                <button 
+                    class="w-full bg-gray-600 hover:bg-gray-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors"
+                    onclick="showMultipleToasts()"
+                >
+                    <i class="fas fa-layer-group mr-2"></i>
+                    測試多個 Toast
+                </button>
+                
+                <button 
+                    class="w-full bg-purple-600 hover:bg-purple-700 text-white py-3 px-4 rounded-lg font-semibold transition-colors"
+                    onclick="Router.navigate('/')"
+                >
+                    <i class="fas fa-home mr-2"></i>
+                    返回首頁
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- JavaScript -->
+    <script src="/public/assets/common.js"></script>
+    <script>
+        // 初始化應用
+        document.addEventListener('DOMContentLoaded', async function() {
+            await App.init();
+        });
+        
+        // 測試不同類型的 Toast
+        function showTestToast(type) {
+            const messages = {
+                success: '操作成功完成！',
+                error: '發生了一個錯誤！',
+                warning: '請注意這個警告。',
+                info: '這是一條信息通知。'
+            };
+            
+            UI.showToast(messages[type], type, 5000);
+        }
+        
+        // 測試多個 Toast
+        function showMultipleToasts() {
+            UI.showToast('第一個通知', 'info', 6000);
+            
+            setTimeout(() => {
+                UI.showToast('第二個通知', 'success', 5000);
+            }, 500);
+            
+            setTimeout(() => {
+                UI.showToast('第三個通知', 'warning', 4000);
+            }, 1000);
+            
+            setTimeout(() => {
+                UI.showToast('最後一個通知', 'error', 3000);
+            }, 1500);
+        }
+    </script>
+</body>
+</html>

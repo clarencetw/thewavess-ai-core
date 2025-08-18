@@ -35,11 +35,13 @@ type ShortTermMemory struct {
 
 // MessageSummary 消息摘要
 type MessageSummary struct {
-	Role      string    `json:"role"`      // user/assistant
-	Summary   string    `json:"summary"`    // 摘要內容（限100字）
-	Emotion   string    `json:"emotion"`    // 情緒標記
-	Keywords  []string  `json:"keywords"`   // 關鍵詞
-	Timestamp time.Time `json:"timestamp"`
+	Role        string    `json:"role"`        // user/assistant
+	Summary     string    `json:"summary"`     // 摘要內容（限100字）
+	Emotion     string    `json:"emotion"`     // 情緒標記
+	Keywords    []string  `json:"keywords"`    // 關鍵詞
+	Importance  float64   `json:"importance"`  // 重要性分數 0.0-1.0
+	TokenCount  int       `json:"token_count"` // 估算 token 數
+	Timestamp   time.Time `json:"timestamp"`
 }
 
 // LongTermMemory 長期記憶 - 跨會話持久化
@@ -87,6 +89,28 @@ type Dislike struct {
 	Severity   int       `json:"severity"`    // 嚴重程度 1-5
 	Evidence   string    `json:"evidence"`    // 證據
 	RecordedAt time.Time `json:"recorded_at"`
+}
+
+// MemoryCompressionConfig 記憶壓縮配置
+type MemoryCompressionConfig struct {
+	MaxRecentMessages   int     `json:"max_recent_messages"`    // 最大保存最近消息數
+	MaxPromptTokens     int     `json:"max_prompt_tokens"`      // 最大 prompt token 數
+	ImportanceThreshold float64 `json:"importance_threshold"`   // 重要性闾值
+	KeywordWeight       float64 `json:"keyword_weight"`         // 關鍵詞權重
+	EmotionWeight       float64 `json:"emotion_weight"`         // 情感權重
+	RecencyWeight       float64 `json:"recency_weight"`         // 時間權重
+}
+
+// GetDefaultCompressionConfig 獲取預設壓縮配置
+func GetDefaultCompressionConfig() *MemoryCompressionConfig {
+	return &MemoryCompressionConfig{
+		MaxRecentMessages:   8,      // 最多保存 8 條最近消息
+		MaxPromptTokens:     2000,   // 最大 2000 tokens
+		ImportanceThreshold: 0.3,    // 重要性闾值 0.3
+		KeywordWeight:       0.4,    // 關鍵詞權重 40%
+		EmotionWeight:       0.3,    // 情感權重 30%
+		RecencyWeight:       0.3,    // 時間權重 30%
+	}
 }
 
 // NewMemoryManager 創建記憶管理器
@@ -247,6 +271,228 @@ func (mm *MemoryManager) extractTopic(keywords []string) string {
 	}
 	
 	return "日常對話"
+}
+
+// CalculateMessageImportance 計算消息重要性分數
+func (mm *MemoryManager) CalculateMessageImportance(msg *MessageSummary, config *MemoryCompressionConfig) float64 {
+	importance := 0.0
+	
+	// 1. 關鍵詞重要性（40%）
+	keywordScore := 0.0
+	importantKeywords := []string{
+		"愛", "喜歡", "想念", "生日", "紀念日", "約會", "家人", "朋友",
+		"工作", "夢想", "秘密", "害怕", "擔心", "開心", "難過",
+	}
+	
+	for _, keyword := range msg.Keywords {
+		for _, important := range importantKeywords {
+			if keyword == important {
+				keywordScore += 1.0
+			}
+		}
+	}
+	keywordScore = keywordScore / float64(len(importantKeywords)) * config.KeywordWeight
+	
+	// 2. 情感重要性（30%）
+	emotionScore := 0.0
+	emotionWeights := map[string]float64{
+		"excited":  1.0,
+		"happy":    0.8,
+		"sad":      0.9,
+		"angry":    0.7,
+		"worried":  0.8,
+		"shy":      0.6,
+		"neutral":  0.2,
+	}
+	if weight, exists := emotionWeights[msg.Emotion]; exists {
+		emotionScore = weight * config.EmotionWeight
+	}
+	
+	// 3. 時間重要性（30%）- 越新越重要，但不是線性關係
+	hoursAgo := time.Since(msg.Timestamp).Hours()
+	recencyScore := 0.0
+	if hoursAgo <= 1 {
+		recencyScore = 1.0 // 1小時內滿分
+	} else if hoursAgo <= 24 {
+		recencyScore = 0.8 // 24小時內高分
+	} else if hoursAgo <= 168 { // 7天內
+		recencyScore = 0.5
+	} else {
+		recencyScore = 0.2 // 超過7天低分
+	}
+	recencyScore *= config.RecencyWeight
+	
+	importance = keywordScore + emotionScore + recencyScore
+	
+	// 確保分數在 0-1 範圍內
+	if importance > 1.0 {
+		importance = 1.0
+	}
+	if importance < 0.0 {
+		importance = 0.0
+	}
+	
+	return importance
+}
+
+// CompressMemories 壓縮記憶，保留最重要的內容
+func (mm *MemoryManager) CompressMemories(messages []MessageSummary, config *MemoryCompressionConfig) []MessageSummary {
+	if len(messages) <= config.MaxRecentMessages {
+		return messages
+	}
+	
+	// 計算每條消息的重要性
+	type scoredMessage struct {
+		message    MessageSummary
+		importance float64
+	}
+	
+	scored := make([]scoredMessage, len(messages))
+	for i, msg := range messages {
+		// 先估算 token 數 - 中文字符約 1.5 tokens，英文單詞約 1 token
+		tokenCount := len([]rune(msg.Summary)) * 3 / 2 // 粗略估算
+		messages[i].TokenCount = tokenCount
+		
+		importance := mm.CalculateMessageImportance(&messages[i], config)
+		scored[i] = scoredMessage{
+			message:    messages[i],
+			importance: importance,
+		}
+	}
+	
+	// 按重要性排序
+	for i := 0; i < len(scored)-1; i++ {
+		for j := i + 1; j < len(scored); j++ {
+			if scored[i].importance < scored[j].importance {
+				scored[i], scored[j] = scored[j], scored[i]
+			}
+		}
+	}
+	
+	// 選擇最重要的消息，控制總 token 數
+	compressed := []MessageSummary{}
+	totalTokens := 0
+	
+	for _, item := range scored {
+		if len(compressed) >= config.MaxRecentMessages {
+			break
+		}
+		if totalTokens+item.message.TokenCount > config.MaxPromptTokens {
+			break
+		}
+		if item.importance >= config.ImportanceThreshold {
+			compressed = append(compressed, item.message)
+			totalTokens += item.message.TokenCount
+		}
+	}
+	
+	// 按時間順序重新排列
+	for i := 0; i < len(compressed)-1; i++ {
+		for j := i + 1; j < len(compressed); j++ {
+			if compressed[i].Timestamp.After(compressed[j].Timestamp) {
+				compressed[i], compressed[j] = compressed[j], compressed[i]
+			}
+		}
+	}
+	
+	utils.Logger.WithFields(logrus.Fields{
+		"original_count":  len(messages),
+		"compressed_count": len(compressed),
+		"total_tokens":    totalTokens,
+		"max_tokens":      config.MaxPromptTokens,
+	}).Info("記憶壓縮完成")
+	
+	return compressed
+}
+
+// GenerateOptimizedMemoryPrompt 生成優化的記憶提示詞
+func (mm *MemoryManager) GenerateOptimizedMemoryPrompt(userID, characterID string) string {
+	config := GetDefaultCompressionConfig()
+	
+	// 獲取短期記憶
+	sessionKey := fmt.Sprintf("%s_%s", userID, characterID)
+	shortTerm := mm.GetShortTermMemory(sessionKey)
+	if shortTerm == nil || len(shortTerm.RecentMessages) == 0 {
+		return ""
+	}
+	
+	// 壓縮記憶
+	compressedMessages := mm.CompressMemories(shortTerm.RecentMessages, config)
+	
+	// 獲取長期記憶
+	longTerm := mm.GetLongTermMemory(userID, characterID)
+	
+	// 構建優化的提示詞
+	var promptBuilder strings.Builder
+	
+	// 1. 重要的長期記憶
+	if longTerm != nil {
+		if len(longTerm.Preferences) > 0 {
+			promptBuilder.WriteString("【用戶偏好】\n")
+			count := 0
+			for _, pref := range longTerm.Preferences {
+				if pref.Importance >= 3 && count < 3 { // 只顯示重要的偏好
+					promptBuilder.WriteString(fmt.Sprintf("- %s: %s\n", pref.Category, pref.Content))
+					count++
+				}
+			}
+		}
+		
+		if len(longTerm.Nicknames) > 0 {
+			mostUsed := longTerm.Nicknames[0]
+			for _, nickname := range longTerm.Nicknames {
+				if nickname.Frequency > mostUsed.Frequency {
+					mostUsed = nickname
+				}
+			}
+			promptBuilder.WriteString(fmt.Sprintf("【常用稱呼】%s\n", mostUsed.Name))
+		}
+		
+		if len(longTerm.Dislikes) > 0 {
+			promptBuilder.WriteString("【注意事項】")
+			for i, dislike := range longTerm.Dislikes {
+				if i >= 2 { // 最多2個禁忌
+					break
+				}
+				promptBuilder.WriteString(fmt.Sprintf("避免談論%s; ", dislike.Topic))
+			}
+			promptBuilder.WriteString("\n")
+		}
+	}
+	
+	// 2. 壓縮後的重要對話記憶
+	if len(compressedMessages) > 0 {
+		promptBuilder.WriteString("【重要對話記憶】\n")
+		for _, msg := range compressedMessages {
+			emotion := ""
+			if msg.Emotion != "neutral" {
+				emotion = fmt.Sprintf("[%s] ", msg.Emotion)
+			}
+			promptBuilder.WriteString(fmt.Sprintf("- %s%s: %s\n", emotion, msg.Role, msg.Summary))
+		}
+	}
+	
+	// 3. 當前話題和情緒狀態
+	if shortTerm.CurrentTopic != "" {
+		promptBuilder.WriteString(fmt.Sprintf("【當前話題】%s\n", shortTerm.CurrentTopic))
+	}
+	if shortTerm.LastEmotion != "" && shortTerm.LastEmotion != "neutral" {
+		promptBuilder.WriteString(fmt.Sprintf("【當前情緒】%s\n", shortTerm.LastEmotion))
+	}
+	if shortTerm.UnfinishedTask != "" {
+		promptBuilder.WriteString(fmt.Sprintf("【待處理】%s\n", shortTerm.UnfinishedTask))
+	}
+	
+	result := promptBuilder.String()
+	
+	utils.Logger.WithFields(logrus.Fields{
+		"user_id":      userID,
+		"character_id": characterID,
+		"prompt_length": len(result),
+		"compressed_messages": len(compressedMessages),
+	}).Info("生成優化記憶提示詞")
+	
+	return result
 }
 
 // GetLongTermMemory 獲取長期記憶

@@ -23,10 +23,10 @@ type ChatMessage struct {
 
 // ChatService 對話服務
 type ChatService struct {
-	db             *bun.DB
-	openaiClient   *OpenAIClient
-	grokClient     *GrokClient
-	config         *ChatConfig
+	db           *bun.DB
+	openaiClient *OpenAIClient
+	grokClient   *GrokClient
+	config       *ChatConfig
 	// TODO: 未來可考慮重新實現評分系統
 	// evaluator      *ScoringEvaluator  // 性能監控、質量評估、A/B測試
 	memoryManager  *MemoryManager
@@ -138,25 +138,29 @@ type ConversationContext struct {
 
 // NewChatService 創建新的對話服務
 func NewChatService() *ChatService {
-	config := &ChatConfig{
-		OpenAI: struct {
-			Model       string  `json:"model"`
-			MaxTokens   int     `json:"max_tokens"`
-			Temperature float64 `json:"temperature"`
-		}{
-			Model:       "gpt-4o",
-			MaxTokens:   800,
-			Temperature: 0.8,
-		},
-		Grok: struct {
-			Model       string  `json:"model"`
-			MaxTokens   int     `json:"max_tokens"`
-			Temperature float64 `json:"temperature"`
-		}{
-			Model:       "grok-beta",
-			MaxTokens:   1000,
-			Temperature: 0.9,
-		},
+    // 載入環境變數（非 production 會載入 .env）
+    utils.LoadEnv()
+
+    config := &ChatConfig{
+        OpenAI: struct {
+            Model       string  `json:"model"`
+            MaxTokens   int     `json:"max_tokens"`
+            Temperature float64 `json:"temperature"`
+        }{
+            Model:       utils.GetEnvWithDefault("OPENAI_MODEL", "gpt-4o"),
+            MaxTokens:   utils.GetEnvIntWithDefault("OPENAI_MAX_TOKENS", 800),
+            Temperature: utils.GetEnvFloatWithDefault("OPENAI_TEMPERATURE", 0.8),
+        },
+        Grok: struct {
+            Model       string  `json:"model"`
+            MaxTokens   int     `json:"max_tokens"`
+            Temperature float64 `json:"temperature"`
+        }{
+            // 預設使用 grok-3；若需回退可在環境改為 grok-beta
+            Model:       utils.GetEnvWithDefault("GROK_MODEL", "grok-3"),
+            MaxTokens:   utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 1000),
+            Temperature: utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.9),
+        },
 		NSFW: struct {
 			DetectionThreshold float64 `json:"detection_threshold"`
 			MaxIntensityLevel  int     `json:"max_intensity_level"`
@@ -176,10 +180,10 @@ func NewChatService() *ChatService {
 	}
 
 	return &ChatService{
-		db:             database.GetDB(),
-		openaiClient:   NewOpenAIClient(),
-		grokClient:     NewGrokClient(),
-		config:         config,
+		db:           database.GetDB(),
+		openaiClient: NewOpenAIClient(),
+		grokClient:   NewGrokClient(),
+		config:       config,
 		// TODO: 未來可考慮重新實現評分系統
 		// evaluator:      NewScoringEvaluator(),
 		memoryManager:  NewMemoryManager(),
@@ -190,7 +194,7 @@ func NewChatService() *ChatService {
 
 // ProcessMessage 處理用戶消息並生成回應 - 女性向AI聊天系統
 func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessageRequest) (*ChatResponse, error) {
-    startTime := time.Now()
+	startTime := time.Now()
 
 	utils.Logger.WithFields(logrus.Fields{
 		"session_id":   request.SessionID,
@@ -201,29 +205,29 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 
 	// TODO: 未來可考慮重新實現評分系統 - 會話開始評估
 
-    // 1. NSFW內容智能分析（5級分級系統）
-    analysis, err := s.analyzeContent(request.UserMessage)
-    if err != nil {
-        return nil, fmt.Errorf("failed to analyze content: %w", err)
-    }
+	// 1. NSFW內容智能分析（5級分級系統）
+	analysis, err := s.analyzeContent(request.UserMessage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to analyze content: %w", err)
+	}
 
-    // 預先生成成對的 Message ID（先持久化用戶訊息，確保上下文包含當前輪）
-    messageID := generateMessageID()                   // 助手訊息 ID
-    userMessageID := fmt.Sprintf("user_%s", messageID) // 用戶訊息 ID 與本輪綁定
+	// 預先生成成對的 Message ID（先持久化用戶訊息，確保上下文包含當前輪）
+	messageID := generateMessageID()                   // 助手訊息 ID
+	userMessageID := fmt.Sprintf("user_%s", messageID) // 用戶訊息 ID 與本輪綁定
 
-    // 1.5 保存用戶消息（確保稍後載入歷史能包含本輪用戶訊息）
-    if err := s.saveUserMessageToDB(ctx, request, userMessageID, analysis); err != nil {
-        utils.Logger.WithError(err).Error("保存用戶消息失敗：將降級為臨時上下文")
-        // 不中斷：稍後上下文將降級為僅使用內存與提示詞
-    }
+	// 1.5 保存用戶消息（確保稍後載入歷史能包含本輪用戶訊息）
+	if err := s.saveUserMessageToDB(ctx, request, userMessageID, analysis); err != nil {
+		utils.Logger.WithError(err).Error("保存用戶消息失敗：將降級為臨時上下文")
+		// 不中斷：稍後上下文將降級為僅使用內存與提示詞
+	}
 
 	// TODO: 未來評分系統可追蹤情感狀態變化用於評估
 
-    // 2. 構建女性向對話上下文（已包含本次用戶訊息，若上一步失敗則只會包含歷史）
-    conversationContext, err := s.buildFemaleOrientedContext(ctx, request)
-    if err != nil {
-        return nil, fmt.Errorf("failed to build female-oriented context: %w", err)
-    }
+	// 2. 構建女性向對話上下文（已包含本次用戶訊息，若上一步失敗則只會包含歷史）
+	conversationContext, err := s.buildFemaleOrientedContext(ctx, request)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build female-oriented context: %w", err)
+	}
 
 	// 3. 智能引擎選擇（OpenAI vs Grok）
 	engine := s.selectAIEngine(analysis, conversationContext.UserPreferences)
@@ -240,6 +244,25 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		return nil, fmt.Errorf("failed to generate personalized response: %w", err)
 	}
 
+	// 5.1 角色一致性檢查和優化
+	consistencyResult := s.checkAndOptimizeCharacterConsistency(request.CharacterID, response.Dialogue, conversationContext)
+	if !consistencyResult.IsConsistent {
+		utils.Logger.WithFields(logrus.Fields{
+			"character_id": request.CharacterID,
+			"score":        consistencyResult.Score,
+			"violations":   len(consistencyResult.Violations),
+		}).Warn("角色一致性檢查發現問題")
+
+		// 記錄違規詳情用於改進
+		for _, violation := range consistencyResult.Violations {
+			utils.Logger.WithFields(logrus.Fields{
+				"type":        violation.Type,
+				"severity":    violation.Severity,
+				"description": violation.Description,
+			}).Debug("一致性違規詳情")
+		}
+	}
+
 	// 6. 情感狀態智能更新（好感度、關係發展）
 	newEmotionState := s.updateEmotionStateAdvanced(conversationContext.EmotionState, request.UserID, request.CharacterID, request.UserMessage, response, analysis)
 
@@ -252,12 +275,12 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	// TODO: 未來可考慮重新實現評分系統 - 實時評估所有功能
 	// 可包含：AI引擎性能、NSFW系統準確性、情感管理、角色一致性評估
 
-    // 9. 保存 AI 回應到資料庫（用先前生成的 messageID）
-    err = s.saveAssistantMessageToDB(ctx, request, messageID, response, sceneDescription, newEmotionState, engine, analysis, time.Since(startTime))
-    if err != nil {
-        utils.Logger.WithError(err).Error("保存對話到資料庫失敗")
-        // 不中斷流程，但記錄錯誤
-    }
+	// 9. 保存 AI 回應到資料庫（用先前生成的 messageID）
+	err = s.saveAssistantMessageToDB(ctx, request, messageID, response, sceneDescription, newEmotionState, engine, analysis, time.Since(startTime))
+	if err != nil {
+		utils.Logger.WithError(err).Error("保存對話到資料庫失敗")
+		// 不中斷流程，但記錄錯誤
+	}
 
 	// 10. 構建完整回應
 	chatResponse := &ChatResponse{
@@ -336,11 +359,11 @@ func (s *ChatService) buildFemaleOrientedContext(ctx context.Context, request *P
 		userPreferences = s.getUserPreferences(request.UserID)
 	}
 
-    // 生成記憶提示詞（長期記憶：偏好/稱呼/里程碑/禁忌）
-    memoryPrompt := s.memoryManager.GetMemoryPrompt(request.SessionID, request.UserID, request.CharacterID)
+	// 生成優化的記憶提示詞（長期記憶：偏好/稱呼/里程碑/禁忌）
+	memoryPrompt := s.memoryManager.GenerateOptimizedMemoryPrompt(request.UserID, request.CharacterID)
 
-    // 確保會話存在
-    err = s.ensureSessionExists(ctx, request.SessionID, request.UserID, request.CharacterID)
+	// 確保會話存在
+	err = s.ensureSessionExists(ctx, request.SessionID, request.UserID, request.CharacterID)
 	if err != nil {
 		utils.Logger.WithError(err).Error("確保會話存在失敗")
 	}
@@ -370,7 +393,7 @@ func (s *ChatService) getAffectionLevel(userID, characterID string) int {
 	if emotionState != nil {
 		return emotionState.Affection
 	}
-	
+
 	// 如果沒有找到，返回模擬值
 	hash := 0
 	for _, c := range userID + characterID {
@@ -968,13 +991,13 @@ func (s *ChatService) generatePersonalizedAction(characterID, dialogue string, e
 
 // updateEmotionStateAdvanced 高級情感狀態更新
 func (s *ChatService) updateEmotionStateAdvanced(currentState *EmotionState, userID, characterID, userMessage string, response *CharacterResponseData, analysis *ContentAnalysis) *EmotionState {
-    // 使用情感管理器更新情感狀態
-    // TODO(擴充說明):
-    // - 可於此處建立「規則命中明細 explanations」：收集 calculateAffectionChange 命中的關鍵字/事件，
-    //   並透過 SaveEmotionSnapshot 一併寫入 context，方便前端或管理後台顯示本輪調整原因。
-    // - 若要支援「事件驅動」更新（如完成任務、節日、簽到），可在呼叫 UpdateEmotion 前後依事件類型額外加權。
-    // - 可在此處注入「動量/冷卻」狀態（例如從 DB 或快取取出最近互動節奏），再傳入 EmotionManager。
-    newState := s.emotionManager.UpdateEmotion(currentState, userMessage, analysis)
+	// 使用情感管理器更新情感狀態
+	// TODO(擴充說明):
+	// - 可於此處建立「規則命中明細 explanations」：收集 calculateAffectionChange 命中的關鍵字/事件，
+	//   並透過 SaveEmotionSnapshot 一併寫入 context，方便前端或管理後台顯示本輪調整原因。
+	// - 若要支援「事件驅動」更新（如完成任務、節日、簽到），可在呼叫 UpdateEmotion 前後依事件類型額外加權。
+	// - 可在此處注入「動量/冷卻」狀態（例如從 DB 或快取取出最近互動節奏），再傳入 EmotionManager。
+	newState := s.emotionManager.UpdateEmotion(currentState, userMessage, analysis)
 
 	// 保存情感快照到歷史記錄
 	if currentState != nil && userID != "" && characterID != "" {
@@ -982,15 +1005,15 @@ func (s *ChatService) updateEmotionStateAdvanced(currentState *EmotionState, use
 		if analysis.IsNSFW {
 			trigger = fmt.Sprintf("nsfw_level_%d", analysis.Intensity)
 		}
-		
-        // 構建上下文信息
-        // TODO(擴充): 若實作了規則命中明細 explanations，建議將其序列化後附在 context 內，
-        // 例如：context += " | reasons: ..."，或改為使用 SaveEmotionSnapshot 的 Context 欄位(JSON)存放。
-        context := fmt.Sprintf("用戶消息: %s", userMessage)
-        if response != nil {
-            context += fmt.Sprintf(" | AI回應: %s", response.Dialogue)
-        }
-		
+
+		// 構建上下文信息
+		// TODO(擴充): 若實作了規則命中明細 explanations，建議將其序列化後附在 context 內，
+		// 例如：context += " | reasons: ..."，或改為使用 SaveEmotionSnapshot 的 Context 欄位(JSON)存放。
+		context := fmt.Sprintf("用戶消息: %s", userMessage)
+		if response != nil {
+			context += fmt.Sprintf(" | AI回應: %s", response.Dialogue)
+		}
+
 		s.emotionManager.SaveEmotionSnapshot(
 			userID,
 			characterID,
@@ -999,10 +1022,10 @@ func (s *ChatService) updateEmotionStateAdvanced(currentState *EmotionState, use
 			currentState,
 			newState,
 		)
-		
+
 		utils.Logger.WithFields(logrus.Fields{
-			"user_id":      userID,
-			"character_id": characterID,
+			"user_id":       userID,
+			"character_id":  characterID,
 			"old_affection": currentState.Affection,
 			"new_affection": newState.Affection,
 			"trigger":       trigger,
@@ -1071,10 +1094,10 @@ func (s *ChatService) generateRomanticScene(convContext *ConversationContext, ns
 		Model(&scene).
 		Where("character_id = ?", characterID).
 		Where("is_active = ?", true).
-		Order("weight DESC", "id").  // 按權重排序，取權重最高的場景
+		Order("weight DESC", "id"). // 按權重排序，取權重最高的場景
 		Limit(1).
 		Scan(context.Background())
-	
+
 	if err != nil {
 		utils.Logger.WithFields(logrus.Fields{
 			"character_id": characterID,
@@ -1082,7 +1105,7 @@ func (s *ChatService) generateRomanticScene(convContext *ConversationContext, ns
 			"nsfw_level":   nsfwLevel,
 			"error":        err,
 		}).Warn("無法從資料庫獲取角色固定場景，使用默認場景")
-		
+
 		// 使用默認場景作為備選
 		return s.getDefaultSceneDescription(characterID, "")
 	}
@@ -1135,6 +1158,32 @@ func (s *ChatService) getDefaultSceneDescription(characterID, timeOfDay string) 
 }
 
 // updateMemorySystem 更新記憶系統
+// checkAndOptimizeCharacterConsistency 檢查並優化角色一致性
+func (s *ChatService) checkAndOptimizeCharacterConsistency(characterID, response string, context *ConversationContext) *ConsistencyCheckResult {
+	consistencyChecker := GetConsistencyChecker()
+	result := consistencyChecker.CheckCharacterConsistency(characterID, response, context)
+
+	// 記錄一致性檢查結果到日誌，用於持續改進
+	utils.Logger.WithFields(logrus.Fields{
+		"character_id":      characterID,
+		"consistency_score": result.Score,
+		"is_consistent":     result.IsConsistent,
+		"violations_count":  len(result.Violations),
+		"suggestions_count": len(result.Suggestions),
+	}).Info("角色一致性檢查完成")
+
+	// 如果一致性分數太低，可以考慮在未來版本中重新生成回應
+	if result.Score < 0.5 {
+		utils.Logger.WithFields(logrus.Fields{
+			"character_id": characterID,
+			"score":        result.Score,
+			"suggestions":  result.Suggestions,
+		}).Warn("角色一致性分數過低，建議改進")
+	}
+
+	return result
+}
+
 func (s *ChatService) updateMemorySystem(userID, characterID, sessionID, userMessage, aiResponse string, emotion *EmotionState) {
 	// 更新短期記憶
 	messages := []ChatMessage{
@@ -1188,7 +1237,7 @@ func (s *ChatService) detectSpecialEvents(newEmotion, oldEmotion *EmotionState) 
 
 // generateMessageID 生成消息 ID
 func generateMessageID() string {
-    return fmt.Sprintf("msg_%d", time.Now().UnixNano())
+	return fmt.Sprintf("msg_%d", time.Now().UnixNano())
 }
 
 // ==================== 資料庫操作方法 ====================
@@ -1201,7 +1250,7 @@ func (s *ChatService) ensureSessionExists(ctx context.Context, sessionID, userID
 		Model(&existingSession).
 		Where("user_id = ? AND character_id = ?", userID, characterID).
 		Scan(ctx)
-	
+
 	if err == nil {
 		// 會話已存在，更新為活躍狀態並使用現有ID
 		_, updateErr := s.db.NewUpdate().
@@ -1210,18 +1259,18 @@ func (s *ChatService) ensureSessionExists(ctx context.Context, sessionID, userID
 			Set("updated_at = ?", time.Now()).
 			Where("id = ?", existingSession.ID).
 			Exec(ctx)
-		
+
 		if updateErr != nil {
 			utils.Logger.WithError(updateErr).Warn("更新現有會話狀態失敗")
 		}
 
 		utils.Logger.WithFields(logrus.Fields{
-			"existing_session_id": existingSession.ID,
+			"existing_session_id":  existingSession.ID,
 			"requested_session_id": sessionID,
-			"user_id":             userID,
-			"character_id":        characterID,
+			"user_id":              userID,
+			"character_id":         characterID,
 		}).Info("使用現有的用戶-角色對話會話")
-		
+
 		return nil
 	}
 
@@ -1239,11 +1288,10 @@ func (s *ChatService) ensureSessionExists(ctx context.Context, sessionID, userID
 	_, err = s.db.NewInsert().
 		Model(session).
 		Exec(ctx)
-	
+
 	if err != nil {
 		return fmt.Errorf("創建會話失敗: %w", err)
 	}
-
 
 	utils.Logger.WithFields(logrus.Fields{
 		"session_id":   sessionID,
@@ -1256,133 +1304,133 @@ func (s *ChatService) ensureSessionExists(ctx context.Context, sessionID, userID
 
 // saveUserMessageToDB 先保存用戶消息（以便上下文讀取包含本輪）
 func (s *ChatService) saveUserMessageToDB(ctx context.Context, request *ProcessMessageRequest, userMessageID string, analysis *ContentAnalysis) error {
-    // 開始事務
-    tx, err := s.db.BeginTx(ctx, nil)
-    if err != nil {
-        return fmt.Errorf("開始用戶消息事務失敗: %w", err)
-    }
-    defer func() {
-        if r := recover(); r != nil {
-            tx.Rollback()
-            panic(r)
-        }
-    }()
+	// 開始事務
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("開始用戶消息事務失敗: %w", err)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
 
-    userMessage := &models.Message{
-        ID:        userMessageID,
-        SessionID: request.SessionID,
-        Role:      "user",
-        Content:   request.UserMessage,
-        NSFWLevel: analysis.Intensity,
-        CreatedAt: time.Now(),
-    }
+	userMessage := &models.Message{
+		ID:        userMessageID,
+		SessionID: request.SessionID,
+		Role:      "user",
+		Content:   request.UserMessage,
+		NSFWLevel: analysis.Intensity,
+		CreatedAt: time.Now(),
+	}
 
-    if _, err := tx.NewInsert().Model(userMessage).Exec(ctx); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("保存用戶消息失敗: %w", err)
-    }
+	if _, err := tx.NewInsert().Model(userMessage).Exec(ctx); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("保存用戶消息失敗: %w", err)
+	}
 
-    // 更新會話統計（只加用戶部分）
-    if _, err := tx.NewUpdate().
-        Model((*models.ChatSession)(nil)).
-        Set("message_count = message_count + 1").
-        Set("total_characters = total_characters + ?", len(request.UserMessage)).
-        Set("last_message_at = ?", time.Now()).
-        Set("updated_at = ?", time.Now()).
-        Where("id = ?", request.SessionID).
-        Exec(ctx); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("更新會話統計(用戶)失敗: %w", err)
-    }
+	// 更新會話統計（只加用戶部分）
+	if _, err := tx.NewUpdate().
+		Model((*models.ChatSession)(nil)).
+		Set("message_count = message_count + 1").
+		Set("total_characters = total_characters + ?", len(request.UserMessage)).
+		Set("last_message_at = ?", time.Now()).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", request.SessionID).
+		Exec(ctx); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("更新會話統計(用戶)失敗: %w", err)
+	}
 
-    // 提交事務
-    if err := tx.Commit(); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("提交用戶消息事務失敗: %w", err)
-    }
+	// 提交事務
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("提交用戶消息事務失敗: %w", err)
+	}
 
-    return nil
+	return nil
 }
 
 // saveAssistantMessageToDB 保存 AI 回應（第二步）
 func (s *ChatService) saveAssistantMessageToDB(ctx context.Context, request *ProcessMessageRequest, messageID string, response *CharacterResponseData, sceneDescription string, emotionState *EmotionState, engine string, analysis *ContentAnalysis, responseTime time.Duration) error {
-    // 開始事務
-    tx, err := s.db.BeginTx(ctx, nil)
-    if err != nil {
-        return fmt.Errorf("開始AI消息事務失敗: %w", err)
-    }
-    defer func() {
-        if r := recover(); r != nil {
-            tx.Rollback()
-            panic(r)
-        }
-    }()
+	// 開始事務
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("開始AI消息事務失敗: %w", err)
+	}
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
 
-    aiMessage := &models.Message{
-        ID:               messageID,
-        SessionID:        request.SessionID,
-        Role:             "assistant",
-        Content:          response.Dialogue,
-        SceneDescription: sceneDescription,
-        CharacterAction:  response.Action,
-        EmotionalState: map[string]interface{}{
-            "affection":      emotionState.Affection,
-            "mood":           emotionState.Mood,
-            "relationship":   emotionState.Relationship,
-            "intimacy_level": emotionState.IntimacyLevel,
-        },
-        AIEngine:       engine,
-        ResponseTimeMs: int(responseTime.Milliseconds()),
-        NSFWLevel:      analysis.Intensity,
-        CreatedAt:      time.Now(),
-    }
+	aiMessage := &models.Message{
+		ID:               messageID,
+		SessionID:        request.SessionID,
+		Role:             "assistant",
+		Content:          response.Dialogue,
+		SceneDescription: sceneDescription,
+		CharacterAction:  response.Action,
+		EmotionalState: map[string]interface{}{
+			"affection":      emotionState.Affection,
+			"mood":           emotionState.Mood,
+			"relationship":   emotionState.Relationship,
+			"intimacy_level": emotionState.IntimacyLevel,
+		},
+		AIEngine:       engine,
+		ResponseTimeMs: int(responseTime.Milliseconds()),
+		NSFWLevel:      analysis.Intensity,
+		CreatedAt:      time.Now(),
+	}
 
-    if _, err := tx.NewInsert().Model(aiMessage).Exec(ctx); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("保存AI消息失敗: %w", err)
-    }
+	if _, err := tx.NewInsert().Model(aiMessage).Exec(ctx); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("保存AI消息失敗: %w", err)
+	}
 
-    // 更新會話統計（再加助手部分）
-    if _, err := tx.NewUpdate().
-        Model((*models.ChatSession)(nil)).
-        Set("message_count = message_count + 1").
-        Set("total_characters = total_characters + ?", len(response.Dialogue)).
-        Set("last_message_at = ?", time.Now()).
-        Set("updated_at = ?", time.Now()).
-        Where("id = ?", request.SessionID).
-        Exec(ctx); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("更新會話統計(AI)失敗: %w", err)
-    }
+	// 更新會話統計（再加助手部分）
+	if _, err := tx.NewUpdate().
+		Model((*models.ChatSession)(nil)).
+		Set("message_count = message_count + 1").
+		Set("total_characters = total_characters + ?", len(response.Dialogue)).
+		Set("last_message_at = ?", time.Now()).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", request.SessionID).
+		Exec(ctx); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("更新會話統計(AI)失敗: %w", err)
+	}
 
-    // 提交事務
-    if err := tx.Commit(); err != nil {
-        tx.Rollback()
-        return fmt.Errorf("提交AI消息事務失敗: %w", err)
-    }
+	// 提交事務
+	if err := tx.Commit(); err != nil {
+		tx.Rollback()
+		return fmt.Errorf("提交AI消息事務失敗: %w", err)
+	}
 
-    utils.Logger.WithFields(logrus.Fields{
-        "session_id":   request.SessionID,
-        "message_id":   messageID,
-        "ai_msg_len":   len(response.Dialogue),
-        "nsfw_level":   analysis.Intensity,
-        "ai_engine":    engine,
-    }).Info("AI 消息已保存到資料庫")
+	utils.Logger.WithFields(logrus.Fields{
+		"session_id": request.SessionID,
+		"message_id": messageID,
+		"ai_msg_len": len(response.Dialogue),
+		"nsfw_level": analysis.Intensity,
+		"ai_engine":  engine,
+	}).Info("AI 消息已保存到資料庫")
 
-    return nil
+	return nil
 }
 
 // getRecentMemoriesFromDB 從資料庫獲取最近的對話記憶
 func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, sessionID string, limit int) ([]ChatMessage, error) {
 	var messages []models.Message
-	
+
 	err := s.db.NewSelect().
 		Model(&messages).
 		Where("session_id = ?", sessionID).
 		Order("created_at DESC").
 		Limit(limit * 2). // 獲取用戶和AI的消息
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("查詢會話歷史失敗: %w", err)
 	}
@@ -1415,16 +1463,16 @@ func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, sessionID str
 func (s *ChatService) getOrCreateEmotionStateFromDB(ctx context.Context, userID, characterID string) (*EmotionState, error) {
 	// 從最近的消息中獲取情感狀態
 	var message models.Message
-    err := s.db.NewSelect().
-        Model(&message).
-        Join("JOIN chat_sessions cs ON cs.id = m.session_id").
-        Where("cs.user_id = ? AND cs.character_id = ?", userID, characterID).
-        Where("m.role = 'assistant'").
-        Where("m.emotional_state IS NOT NULL").
-        Order("m.created_at DESC").
-        Limit(1).
-        Scan(ctx)
-	
+	err := s.db.NewSelect().
+		Model(&message).
+		Join("JOIN chat_sessions cs ON cs.id = m.session_id").
+		Where("cs.user_id = ? AND cs.character_id = ?", userID, characterID).
+		Where("m.role = 'assistant'").
+		Where("m.emotional_state IS NOT NULL").
+		Order("m.created_at DESC").
+		Limit(1).
+		Scan(ctx)
+
 	if err != nil {
 		// 如果沒有找到歷史情感狀態，創建新的
 		return &EmotionState{
@@ -1437,22 +1485,22 @@ func (s *ChatService) getOrCreateEmotionStateFromDB(ctx context.Context, userID,
 
 	// 解析情感狀態
 	emotionalState := message.EmotionalState
-	
+
 	affection := 30
 	if val, ok := emotionalState["affection"].(float64); ok {
 		affection = int(val)
 	}
-	
+
 	mood := "neutral"
 	if val, ok := emotionalState["mood"].(string); ok {
 		mood = val
 	}
-	
+
 	relationship := "stranger"
 	if val, ok := emotionalState["relationship"].(string); ok {
 		relationship = val
 	}
-	
+
 	intimacyLevel := "distant"
 	if val, ok := emotionalState["intimacy_level"].(string); ok {
 		intimacyLevel = val
@@ -1473,7 +1521,7 @@ func (s *ChatService) getUserPreferencesFromDB(ctx context.Context, userID strin
 		Model(&user).
 		Where("id = ?", userID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("查詢用戶偏好失敗: %w", err)
 	}
@@ -1500,7 +1548,7 @@ func (s *ChatService) generateSessionTitle(characterID string) string {
 		"char_001": "與陸寒淵的對話",
 		"char_002": "與沈言墨的對話",
 	}
-	
+
 	if title, exists := characterNames[characterID]; exists {
 		return title
 	}
@@ -1515,7 +1563,7 @@ func (s *ChatService) GetOrCreateUserCharacterSession(ctx context.Context, userI
 		Model(&session).
 		Where("user_id = ? AND character_id = ?", userID, characterID).
 		Scan(ctx)
-	
+
 	if err == nil {
 		// 會話存在，更新活躍時間
 		session.UpdatedAt = time.Now()
@@ -1523,11 +1571,11 @@ func (s *ChatService) GetOrCreateUserCharacterSession(ctx context.Context, userI
 			Model(&session).
 			Where("id = ?", session.ID).
 			Exec(ctx)
-		
+
 		if updateErr != nil {
 			utils.Logger.WithError(updateErr).Warn("更新會話活躍時間失敗")
 		}
-		
+
 		return &session, nil
 	}
 
@@ -1545,11 +1593,10 @@ func (s *ChatService) GetOrCreateUserCharacterSession(ctx context.Context, userI
 	_, err = s.db.NewInsert().
 		Model(newSession).
 		Exec(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("創建用戶-角色會話失敗: %w", err)
 	}
-
 
 	utils.Logger.WithFields(logrus.Fields{
 		"session_id":   newSession.ID,
@@ -1563,14 +1610,14 @@ func (s *ChatService) GetOrCreateUserCharacterSession(ctx context.Context, userI
 // GetUserCharacterSessions 獲取用戶的所有角色對話會話
 func (s *ChatService) GetUserCharacterSessions(ctx context.Context, userID string) ([]*models.ChatSession, error) {
 	var sessions []*models.ChatSession
-	
+
 	err := s.db.NewSelect().
 		Model(&sessions).
 		Relation("Character").
 		Where("user_id = ?", userID).
 		Order("updated_at DESC").
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("查詢用戶會話失敗: %w", err)
 	}
@@ -1590,7 +1637,7 @@ func (s *ChatService) GetSessionStatistics(ctx context.Context, sessionID string
 		Model(&session).
 		Where("id = ?", sessionID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("查詢會話失敗: %w", err)
 	}
@@ -1611,7 +1658,7 @@ func (s *ChatService) GetSessionStatistics(ctx context.Context, sessionID string
 		ColumnExpr("AVG(response_time_ms) FILTER (WHERE role = 'assistant') as avg_response_time").
 		Where("session_id = ?", sessionID).
 		Scan(ctx, &messageStats)
-	
+
 	if err != nil {
 		return nil, fmt.Errorf("查詢消息統計失敗: %w", err)
 	}
@@ -1629,11 +1676,11 @@ func (s *ChatService) GetSessionStatistics(ctx context.Context, sessionID string
 
 // SessionStatistics 會話統計結構
 type SessionStatistics struct {
-	SessionID       string     `json:"session_id"`
-	TotalMessages   int        `json:"total_messages"`
-	UserMessages    int        `json:"user_messages"`
-	AIMessages      int        `json:"ai_messages"`
+	SessionID       string        `json:"session_id"`
+	TotalMessages   int           `json:"total_messages"`
+	UserMessages    int           `json:"user_messages"`
+	AIMessages      int           `json:"ai_messages"`
 	AvgResponseTime time.Duration `json:"avg_response_time"`
-	CreatedAt       time.Time  `json:"created_at"`
-	LastMessageAt   *time.Time `json:"last_message_at"`
+	CreatedAt       time.Time     `json:"created_at"`
+	LastMessageAt   *time.Time    `json:"last_message_at"`
 }

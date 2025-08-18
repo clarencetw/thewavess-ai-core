@@ -318,35 +318,76 @@ const ApiClient = {
 
 // UI 工具函數
 const UI = {
-    // Toast 通知
+    // Flowbite Toast 通知
     showToast(message, type = 'info', duration = 3000) {
-        const toast = document.createElement('div');
-        toast.className = `fixed top-4 right-4 z-50 px-6 py-3 rounded-lg shadow-lg text-white`;
-        
-        switch (type) {
-            case 'success':
-                toast.className += ' bg-green-600 text-white';
-                break;
-            case 'error':
-                toast.className += ' bg-red-600 text-white';
-                break;
-            case 'warning':
-                toast.className += ' bg-yellow-600 text-white';
-                break;
-            default:
-                toast.className += ' bg-blue-500';
+        // 確保 toast 容器存在
+        let container = document.getElementById('toast-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'toast-container';
+            container.className = 'fixed top-5 right-5 z-50 space-y-2';
+            document.body.appendChild(container);
         }
         
-        toast.textContent = message;
-        document.body.appendChild(toast);
+        const toastId = 'toast-' + Date.now();
         
+        const typeConfig = {
+            success: {
+                bgColor: 'bg-green-100',
+                textColor: 'text-green-500',
+                darkBg: 'dark:bg-green-800',
+                darkText: 'dark:text-green-200',
+                icon: '<svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5Zm3.707 8.207-4 4a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L9 10.586l3.293-3.293a1 1 0 0 1 1.414 1.414Z"/></svg>'
+            },
+            error: {
+                bgColor: 'bg-red-100',
+                textColor: 'text-red-500',
+                darkBg: 'dark:bg-red-800',
+                darkText: 'dark:text-red-200',
+                icon: '<svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5Zm3.707 11.793a1 1 0 1 1-1.414 1.414L10 11.414l-2.293 2.293a1 1 0 0 1-1.414-1.414L8.586 10 6.293 7.707a1 1 0 0 1 1.414-1.414L10 8.586l2.293-2.293a1 1 0 0 1 1.414 1.414L11.414 10l2.293 2.293Z"/></svg>'
+            },
+            warning: {
+                bgColor: 'bg-orange-100',
+                textColor: 'text-orange-500',
+                darkBg: 'dark:bg-orange-700',
+                darkText: 'dark:text-orange-200',
+                icon: '<svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM10 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm1-4a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v5Z"/></svg>'
+            },
+            info: {
+                bgColor: 'bg-blue-100',
+                textColor: 'text-blue-500',
+                darkBg: 'dark:bg-blue-800',
+                darkText: 'dark:text-blue-200',
+                icon: '<svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>'
+            }
+        };
+        
+        const config = typeConfig[type] || typeConfig.info;
+        
+        const toastHTML = `
+            <div id="${toastId}" class="flex items-center w-full max-w-xs p-4 mb-4 text-gray-500 bg-white rounded-lg shadow ${config.darkBg} ${config.darkText}" role="alert">
+                <div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 ${config.textColor} ${config.bgColor} rounded-lg ${config.darkBg} ${config.darkText}">
+                    ${config.icon}
+                    <span class="sr-only">${type} icon</span>
+                </div>
+                <div class="ms-3 text-sm font-normal">${message}</div>
+                <button type="button" class="ms-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex items-center justify-center h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700" data-dismiss-target="#${toastId}" aria-label="Close">
+                    <span class="sr-only">Close</span>
+                    <svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/>
+                    </svg>
+                </button>
+            </div>
+        `;
+        
+        container.insertAdjacentHTML('beforeend', toastHTML);
+        
+        // 自動關閉
         setTimeout(() => {
-            toast.style.opacity = '0';
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    toast.parentNode.removeChild(toast);
-                }
-            }, 300);
+            const toastElement = document.getElementById(toastId);
+            if (toastElement) {
+                toastElement.remove();
+            }
         }, duration);
     },
     

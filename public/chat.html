@@ -15,12 +15,36 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
     
+    <!-- Flowbite -->
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.js"></script>
+    
+    <!-- 最小化自定義樣式 -->
+    <style>
+        /* 文字行數限制 - Tailwind 不支援 */
+        .line-clamp-1 {
+            display: -webkit-box;
+            -webkit-line-clamp: 1;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+        
+        .line-clamp-none {
+            display: block;
+        }
+        
+        
+        /* 防止水平滾動 */
+        body {
+            overflow-x: hidden;
+        }
+    </style>
+    
 </head>
 <body class="h-full flex flex-col bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
-    <nav class="bg-white border rounded-lg m-4 mb-0 p-4 flex-shrink-0">
+    <nav class="bg-white border rounded-lg mx-2 md:mx-4 mb-0 p-2 md:p-4 flex-shrink-0">
         <div class="flex items-center justify-between">
-            <div class="flex items-center space-x-4">
+            <div class="flex items-center space-x-2 md:space-x-4">
                 <button 
                     class="bg-gray-600 hover:bg-gray-700 text-white p-2 rounded"
                     onclick="Router.navigate('/character')"
@@ -28,33 +52,51 @@
                     <i class="fas fa-arrow-left"></i>
                 </button>
                 
-                <div class="flex items-center space-x-3">
+                <div class="flex items-center space-x-2 md:space-x-3">
                     <img 
                         id="characterAvatar"
-                        class="w-10 h-10 rounded-full border-2 border-purple-400"
+                        class="w-8 h-8 md:w-10 md:h-10 rounded-full border-2 border-purple-400"
                         src=""
                         alt="角色頭像"
                     >
-                    <div>
-                        <h1 class="text-lg font-bold" id="characterName">--</h1>
-                        <div class="text-sm" id="characterStatus">正在輸入...</div>
+                    <div class="min-w-0 flex-1">
+                        <h1 class="text-base md:text-lg font-bold truncate" id="characterName">--</h1>
+                        <div class="text-xs md:text-sm text-gray-600" id="characterStatus">正在輸入...</div>
                     </div>
                 </div>
             </div>
             
-            <div class="flex items-center space-x-2">
-                <!-- 情感狀態 -->
-                <div class="bg-pink-50 border border-pink-200 rounded px-3 py-2 text-sm">
-                    <i class="fas fa-heart text-pink-500 mr-1"></i>
-                    <span id="affectionLevel">50</span>
-                    <span class="text-pink-600 ml-1">♥</span>
+            <div class="flex items-center space-x-1 md:space-x-2">
+                <!-- 手機版簡化狀態顯示 -->
+                <div class="hidden md:flex items-center space-x-2">
+                    <!-- 情感狀態 -->
+                    <div class="bg-pink-50 border border-pink-200 rounded px-3 py-2 text-sm">
+                        <i class="fas fa-heart text-pink-500 mr-1"></i>
+                        <span id="affectionLevel">50</span>
+                        <span class="text-pink-600 ml-1">♥</span>
+                    </div>
+                    
+                    <!-- 對話狀態 -->
+                    <div class="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-sm">
+                        <i class="fas fa-comment text-blue-500 mr-1"></i>
+                        <span class="text-blue-600">對話中</span>
+                    </div>
                 </div>
                 
-                <!-- 對話狀態 -->
-                <div class="bg-blue-50 border border-blue-200 rounded px-3 py-2 text-sm">
-                    <i class="fas fa-comment text-blue-500 mr-1"></i>
-                    <span class="text-blue-600">對話中</span>
+                <!-- 手機版簡化好感度顯示 -->
+                <div class="md:hidden bg-pink-50 border border-pink-200 rounded px-2 py-1 text-xs">
+                    <i class="fas fa-heart text-pink-500 mr-1"></i>
+                    <span id="affectionLevelMobile">50</span>
                 </div>
+                
+                <!-- 手機版側邊欄切換按鈕 -->
+                <button 
+                    id="mobileSidebarToggle"
+                    class="lg:hidden bg-purple-600 hover:bg-purple-700 text-white p-2 rounded"
+                    onclick="toggleMobileSidebar()"
+                >
+                    <i class="fas fa-chart-line"></i>
+                </button>
                 
                 <!-- 功能菜單 -->
                 <div class="relative">
@@ -94,40 +136,46 @@
     </nav>
     
     <!-- 聊天區域 -->
-    <div class="flex-1 flex mx-4 mb-4 space-x-4 min-h-0">
+    <div class="flex-1 flex mx-2 md:mx-4 mb-2 md:mb-4 space-x-0 md:space-x-4 min-h-0">
         <!-- 主聊天區 -->
         <div class="flex-1 flex flex-col bg-white border rounded-lg overflow-hidden">
-            <!-- 場景描述 -->
-            <div id="sceneDescription" class="bg-blue-50 border-b border-gray-200 p-4 text-sm italic text-gray-700">
-                <i class="fas fa-image mr-2"></i>
-                <span id="sceneText">準備開始對話...</span>
+            <!-- 場景描述 - 手機版可隱藏 -->
+            <div id="sceneDescription" class="bg-blue-50 border-b border-gray-200 p-2 md:p-4 text-xs md:text-sm italic text-gray-700">
+                <i class="fas fa-image mr-1 md:mr-2"></i>
+                <span id="sceneText" class="line-clamp-1 md:line-clamp-none">準備開始對話...</span>
+                <button 
+                    class="md:hidden ml-2 text-gray-500 hover:text-gray-700"
+                    onclick="toggleSceneDescription()"
+                >
+                    <i class="fas fa-chevron-down" id="sceneToggle"></i>
+                </button>
             </div>
             
             <!-- 消息區域 -->
-            <div class="flex-1 p-4 overflow-y-auto overflow-y-auto" id="messagesArea">
-                <div class="space-y-4" id="messagesList">
+            <div class="flex-1 p-2 md:p-4 overflow-y-auto" id="messagesArea">
+                <div class="space-y-2 md:space-y-4" id="messagesList">
                     <!-- 歡迎消息 -->
-                    <div class="flex items-start space-x-3">
+                    <div class="flex items-start space-x-2 md:space-x-3">
                         <img 
                             id="welcomeAvatar"
-                            class="w-8 h-8 rounded-full"
+                            class="w-6 h-6 md:w-8 md:h-8 rounded-full flex-shrink-0"
                             src=""
                             alt="AI"
                         >
-                        <div class="bg-white border rounded p-3 max-w-[80%]">
-                            <p id="welcomeMessage">歡迎來到 AI 對話！正在為您創建專屬會話...</p>
+                        <div class="bg-white border rounded p-2 md:p-3 max-w-[85%] md:max-w-[80%]">
+                            <p id="welcomeMessage" class="text-sm md:text-base">歡迎來到 AI 對話！正在為您創建專屬會話...</p>
                         </div>
                     </div>
                 </div>
             </div>
             
             <!-- 輸入區域 -->
-            <div class="border-t border-gray-600 p-4">
-                <div class="flex space-x-3">
+            <div class="border-t border-gray-600 p-2 md:p-4">
+                <div class="flex space-x-2 md:space-x-3">
                     <div class="flex-1 relative">
                         <textarea 
                             id="messageInput"
-                            class="w-full px-4 py-3 rounded bg-white border border-gray-300 text-gray-900 resize-none"
+                            class="w-full px-3 py-2 md:px-4 md:py-3 rounded bg-white border border-gray-300 text-gray-900 resize-none text-sm md:text-base"
                             placeholder="輸入您的訊息..."
                             rows="1"
                             disabled
@@ -136,14 +184,14 @@
                         <!-- 輸入增強功能 -->
                         <div class="absolute right-2 top-2 flex space-x-1">
                             <button 
-                                class="hover:opacity-80 p-1 transition-colors"
+                                class="hover:opacity-80 p-1 transition-colors text-xs md:text-sm"
                                 onclick="insertEmoji()"
                                 title="表情符號"
                             >
                                 <i class="fas fa-smile"></i>
                             </button>
                             <button 
-                                class="hover:opacity-80 p-1 transition-colors"
+                                class="hover:opacity-80 p-1 transition-colors text-xs md:text-sm"
                                 onclick="clearInput()"
                                 title="清空輸入"
                             >
@@ -154,23 +202,23 @@
                     
                     <button 
                         id="sendButton"
-                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 md:px-6 md:py-3 rounded font-semibold disabled:opacity-50 disabled:cursor-not-allowed"
                         onclick="sendMessage()"
                         disabled
                     >
-                        <i class="fas fa-paper-plane"></i>
+                        <i class="fas fa-paper-plane text-sm md:text-base"></i>
                     </button>
                 </div>
                 
                 <!-- 快速回復 -->
-                <div class="mt-3 flex flex-wrap gap-2" id="quickReplies">
+                <div class="mt-2 md:mt-3 flex flex-wrap gap-1 md:gap-2" id="quickReplies">
                     <!-- 快速回復按鈕會動態生成 -->
                 </div>
             </div>
         </div>
         
-        <!-- 側邊欄 -->
-        <div class="w-80 flex flex-col space-y-4">
+        <!-- 側邊欄 - 桌面版顯示 -->
+        <div id="desktopSidebar" class="hidden lg:flex w-80 flex-col space-y-4">
             <!-- 情感狀態卡片 -->
             <div class="bg-white border rounded-lg p-4">
                 <h3 class="text-lg font-semibold mb-3">
@@ -241,6 +289,98 @@
             </div>
         </div>
     </div>
+    
+    <!-- 手機版側邊欄遮罩 -->
+    <div id="sidebarOverlay" class="fixed inset-0 bg-black/50 z-40 opacity-0 pointer-events-none transition-opacity duration-300 lg:hidden [&.show]:opacity-100 [&.show]:pointer-events-auto" onclick="closeMobileSidebar()"></div>
+    
+    <!-- 手機版側邊欄 -->
+    <div id="mobileSidebar" class="fixed top-0 right-0 h-screen w-80 bg-white z-50 transform translate-x-full transition-transform duration-300 ease-out overflow-y-auto shadow-2xl lg:hidden [&.show]:translate-x-0">
+        <div class="p-4 border-b border-gray-200">
+            <div class="flex items-center justify-between">
+                <h3 class="text-lg font-semibold text-gray-900">資訊面板</h3>
+                <button 
+                    class="bg-gray-500 hover:bg-gray-600 text-white p-2 rounded"
+                    onclick="closeMobileSidebar()"
+                >
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        </div>
+        
+        <div class="p-4 space-y-4 overflow-y-auto">
+            <!-- 情感狀態卡片 -->
+            <div class="bg-white border rounded-lg p-4">
+                <h3 class="text-lg font-semibold mb-3">
+                    <i class="fas fa-heart text-red-400 mr-2"></i>
+                    情感狀態
+                </h3>
+                
+                <div class="space-y-3">
+                    <div>
+                        <div class="flex justify-between text-sm mb-1">
+                            <span>好感度</span>
+                            <span id="mobileAffectionDisplay">50/100</span>
+                        </div>
+                        <div class="w-full bg-gray-600 rounded-full h-2">
+                            <div id="mobileAffectionBar" class="bg-gradient-to-r from-green-400 to-green-500 h-2 rounded-full" style="width: 50%"></div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid grid-cols-2 gap-2 text-sm">
+                        <div class="text-center">
+                            <div class="text-blue-400 font-medium" id="mobileCurrentMood">中性</div>
+                            <div>心情</div>
+                        </div>
+                        <div class="text-center">
+                            <div class="text-green-400 font-medium" id="mobileRelationshipStatus">陌生人</div>
+                            <div>關係</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- NSFW 檢測 -->
+            <div class="bg-white border rounded-lg p-4">
+                <h3 class="text-lg font-semibold mb-3">
+                    <i class="fas fa-shield-alt text-green-400 mr-2"></i>
+                    內容分析
+                </h3>
+                
+                <div class="space-y-3">
+                    <div class="flex items-center justify-between">
+                        <span class="text-sm">當前級別</span>
+                        <span id="mobileCurrentNsfwLevel" class="bg-green-600 text-white px-2 py-1 rounded text-xs font-medium">Level 1</span>
+                    </div>
+                    
+                    <div class="text-xs" id="mobileNsfwDescription">
+                        日常對話內容，安全適宜
+                    </div>
+                    
+                    <div class="text-xs">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        AI 引擎: <span id="mobileCurrentEngine">OpenAI</span>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- 對話歷史 -->
+            <div class="bg-white border border-gray-200 shadow-lg rounded-xl p-4 flex-1 min-h-0">
+                <h3 class="text-lg font-semibold mb-3">
+                    <i class="fas fa-history text-yellow-400 mr-2"></i>
+                    對話記錄
+                </h3>
+                
+                <div class="space-y-2 overflow-y-auto overflow-y-auto max-h-40" id="mobileChatHistory">
+                    <div class="text-sm text-center py-4">
+                        暫無歷史記錄
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Flowbite Toast 容器 -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2"></div>
     
     <!-- 會話列表模態框 -->
     <div id="sessionListModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -369,7 +509,7 @@
             
             const container = document.getElementById('quickReplies');
             container.innerHTML = quickReplies.map(reply => 
-                `<button class="bg-gray-600 bg-opacity-70 border border-gray-500 px-3 py-1 rounded-full text-sm transition-all hover:bg-opacity-90" onclick="sendQuickReply('${reply.value}')">${reply.text}</button>`
+                `<button class="bg-gray-600 bg-opacity-70 border border-gray-500 px-2 py-1 md:px-3 md:py-1 rounded-full text-xs md:text-sm transition-all hover:bg-opacity-90" onclick="sendQuickReply('${reply.value}')">${reply.text}</button>`
             ).join('');
         }
         
@@ -654,12 +794,12 @@
             if (sender === 'user') {
                 messageDiv.className = 'flex items-start space-x-3 justify-end';
                 messageDiv.innerHTML = `
-                    <div class="bg-blue-600 text-white rounded p-3 max-w-[80%]">
-                        <p>${content}</p>
+                    <div class="bg-blue-600 text-white rounded p-2 md:p-3 max-w-[85%] md:max-w-[80%]">
+                        <p class="text-sm md:text-base">${content}</p>
                         <div class="text-xs opacity-75 mt-1">${Utils.formatShortTime(new Date())}</div>
                     </div>
-                    <div class="w-8 h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0">
-                        U
+                    <div class="w-6 h-6 md:w-8 md:h-8 rounded-full bg-blue-500 flex items-center justify-center text-white font-bold flex-shrink-0">
+                        <span class="text-xs md:text-sm">U</span>
                     </div>
                 `;
             } else {
@@ -672,10 +812,10 @@
                     `<div class="text-xs italic text-gray-600 mt-2">${metadata.character_action}</div>` : '';
                 
                 messageDiv.innerHTML = `
-                    <img class="w-8 h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
-                    <div class="bg-white border border-gray-200 shadow-xl rounded-lg p-3 max-w-[80%]">
+                    <img class="w-6 h-6 md:w-8 md:h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                    <div class="bg-white border border-gray-200 shadow-xl rounded-lg p-2 md:p-3 max-w-[85%] md:max-w-[80%]">
                         ${sceneHtml}
-                        <p>${content}</p>
+                        <p class="text-sm md:text-base">${content}</p>
                         ${actionHtml}
                         <div class="text-xs opacity-75 mt-1 flex items-center justify-between">
                             <span>${metadata.timestamp ? Utils.formatShortTime(metadata.timestamp) : Utils.formatShortTime(new Date())}</span>
@@ -1216,12 +1356,303 @@
             }
         }
         
+        // 手機版專屬功能初始化
+        function initMobileFeatures() {
+            // 同步手機版好感度顯示
+            updateMobileAffectionDisplay();
+            
+            // 場景描述切換功能
+            setupSceneToggle();
+            
+            // 手機版狀態欄顯示
+            setupMobileStatusBar();
+        }
+        
+        // 同步手機版好感度顯示
+        function updateMobileAffectionDisplay() {
+            const mobileElement = document.getElementById('affectionLevelMobile');
+            const desktopElement = document.getElementById('affectionLevel');
+            if (mobileElement && desktopElement) {
+                mobileElement.textContent = desktopElement.textContent;
+            }
+        }
+        
+        // 場景描述切換功能
+        function setupSceneToggle() {
+            window.toggleSceneDescription = function() {
+                const sceneText = document.getElementById('sceneText');
+                const toggleIcon = document.getElementById('sceneToggle');
+                
+                if (sceneText.classList.contains('line-clamp-1')) {
+                    sceneText.classList.remove('line-clamp-1');
+                    sceneText.classList.add('line-clamp-none');
+                    toggleIcon.classList.remove('fa-chevron-down');
+                    toggleIcon.classList.add('fa-chevron-up');
+                } else {
+                    sceneText.classList.add('line-clamp-1');
+                    sceneText.classList.remove('line-clamp-none');
+                    toggleIcon.classList.remove('fa-chevron-up');
+                    toggleIcon.classList.add('fa-chevron-down');
+                }
+            };
+        }
+        
+        // 手機版狀態欄顯示
+        function setupMobileStatusBar() {
+            // 可以添加更多手機版專屬的狀態顯示邏輯
+            console.log('Mobile status bar initialized');
+        }
+        
+        // 覆寫原有的更新情感顯示功能，支援手機版
+        function updateEmotionDisplay() {
+            document.getElementById('affectionLevel').textContent = emotionState.affection;
+            document.getElementById('affectionDisplay').textContent = `${emotionState.affection}/100`;
+            document.getElementById('affectionBar').style.width = `${emotionState.affection}%`;
+            document.getElementById('currentMood').textContent = getMoodText(emotionState.mood);
+            document.getElementById('relationshipStatus').textContent = getRelationshipText(emotionState.relationship);
+            
+            // 更新手機版好感度顯示
+            updateMobileAffectionDisplay();
+            
+            // 同步手機版側邊欄顯示
+            syncMobileSidebar();
+        }
+        
+        // 同步手機版側邊欄數據
+        function syncMobileSidebar() {
+            // 同步好感度
+            const mobileAffectionDisplay = document.getElementById('mobileAffectionDisplay');
+            const mobileAffectionBar = document.getElementById('mobileAffectionBar');
+            if (mobileAffectionDisplay && mobileAffectionBar) {
+                mobileAffectionDisplay.textContent = `${emotionState.affection}/100`;
+                mobileAffectionBar.style.width = `${emotionState.affection}%`;
+            }
+            
+            // 同步心情和關係
+            const mobileMood = document.getElementById('mobileCurrentMood');
+            const mobileRelationship = document.getElementById('mobileRelationshipStatus');
+            if (mobileMood) mobileMood.textContent = getMoodText(emotionState.mood);
+            if (mobileRelationship) mobileRelationship.textContent = getRelationshipText(emotionState.relationship);
+        }
+        
         // 初始化情感顯示
         updateEmotionDisplay();
         updateNSFWDisplay(1, 'OpenAI');
         
         // 載入情感狀態
         loadEmotionStatus();
+        
+        // 手機版專屬功能
+        initMobileFeatures();
+        
+        // 初始化 Flowbite Toast 系統
+        initFlowbiteToastSystem();
+        
+        // 初始化側邊欄功能
+        initSidebarFunctions();
+        
+        // Flowbite Toast 系統初始化
+        function initFlowbiteToastSystem() {
+            // 覆寫全局 UI.showToast 函數使用 Flowbite
+            if (window.UI) {
+                window.UI.showToast = function(message, type = 'info', duration = 3000) {
+                    showFlowbiteToast(message, type, duration);
+                };
+            }
+        }
+        
+        // Flowbite Toast 實現
+        function showFlowbiteToast(message, type = 'info', duration = 3000) {
+            const container = document.getElementById('toast-container');
+            if (!container) return;
+            
+            const toastId = 'toast-' + Date.now();
+            
+            const typeConfig = {
+                success: {
+                    bgColor: 'bg-green-100',
+                    textColor: 'text-green-500',
+                    darkBg: 'dark:bg-green-800',
+                    darkText: 'dark:text-green-200',
+                    icon: '<svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5Zm3.707 8.207-4 4a1 1 0 0 1-1.414 0l-2-2a1 1 0 0 1 1.414-1.414L9 10.586l3.293-3.293a1 1 0 0 1 1.414 1.414Z"/></svg>'
+                },
+                error: {
+                    bgColor: 'bg-red-100',
+                    textColor: 'text-red-500',
+                    darkBg: 'dark:bg-red-800',
+                    darkText: 'dark:text-red-200',
+                    icon: '<svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5Zm3.707 11.793a1 1 0 1 1-1.414 1.414L10 11.414l-2.293 2.293a1 1 0 0 1-1.414-1.414L8.586 10 6.293 7.707a1 1 0 0 1 1.414-1.414L10 8.586l2.293-2.293a1 1 0 0 1 1.414 1.414L11.414 10l2.293 2.293Z"/></svg>'
+                },
+                warning: {
+                    bgColor: 'bg-orange-100',
+                    textColor: 'text-orange-500',
+                    darkBg: 'dark:bg-orange-700',
+                    darkText: 'dark:text-orange-200',
+                    icon: '<svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM10 15a1 1 0 1 1 0-2 1 1 0 0 1 0 2Zm1-4a1 1 0 0 1-2 0V6a1 1 0 0 1 2 0v5Z"/></svg>'
+                },
+                info: {
+                    bgColor: 'bg-blue-100',
+                    textColor: 'text-blue-500',
+                    darkBg: 'dark:bg-blue-800',
+                    darkText: 'dark:text-blue-200',
+                    icon: '<svg class="w-5 h-5" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 20 20"><path d="M10 .5a9.5 9.5 0 1 0 9.5 9.5A9.51 9.51 0 0 0 10 .5ZM9.5 4a1.5 1.5 0 1 1 0 3 1.5 1.5 0 0 1 0-3ZM12 15H8a1 1 0 0 1 0-2h1v-3H8a1 1 0 0 1 0-2h2a1 1 0 0 1 1 1v4h1a1 1 0 0 1 0 2Z"/></svg>'
+                }
+            };
+            
+            const config = typeConfig[type] || typeConfig.info;
+            
+            const toastHTML = `
+                <div id="${toastId}" class="flex items-center w-full max-w-xs p-4 mb-4 text-gray-500 bg-white rounded-lg shadow ${config.darkBg} ${config.darkText}" role="alert">
+                    <div class="inline-flex items-center justify-center flex-shrink-0 w-8 h-8 ${config.textColor} ${config.bgColor} rounded-lg ${config.darkBg} ${config.darkText}">
+                        ${config.icon}
+                        <span class="sr-only">${type} icon</span>
+                    </div>
+                    <div class="ms-3 text-sm font-normal">${message}</div>
+                    <button type="button" class="ms-auto -mx-1.5 -my-1.5 bg-white text-gray-400 hover:text-gray-900 rounded-lg focus:ring-2 focus:ring-gray-300 p-1.5 hover:bg-gray-100 inline-flex items-center justify-center h-8 w-8 dark:text-gray-500 dark:hover:text-white dark:bg-gray-800 dark:hover:bg-gray-700" data-dismiss-target="#${toastId}" aria-label="Close">
+                        <span class="sr-only">Close</span>
+                        <svg class="w-3 h-3" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 14 14">
+                            <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="m1 1 6 6m0 0 6 6M7 7l6-6M7 7l-6 6"/>
+                        </svg>
+                    </button>
+                </div>
+            `;
+            
+            container.insertAdjacentHTML('beforeend', toastHTML);
+            
+            // 自動關閉
+            setTimeout(() => {
+                const toastElement = document.getElementById(toastId);
+                if (toastElement) {
+                    toastElement.remove();
+                }
+            }, duration);
+        }
+        
+        // 側邊欄功能初始化
+        function initSidebarFunctions() {
+            // 確保桌面版側邊欄可見
+            const desktopSidebar = document.getElementById('desktopSidebar');
+            if (desktopSidebar) {
+                // 立即檢查螢幕寬度並顯示桌面版側邊欄
+                if (window.innerWidth >= 1024) {
+                    desktopSidebar.classList.remove('hidden');
+                    desktopSidebar.classList.add('flex');
+                    console.log('桌面版側邊欄已顯示');
+                } else {
+                    desktopSidebar.classList.add('hidden');
+                    desktopSidebar.classList.remove('flex');
+                }
+                
+                // 監聽窗口大小變化
+                window.addEventListener('resize', function() {
+                    if (window.innerWidth >= 1024) {
+                        desktopSidebar.classList.remove('hidden');
+                        desktopSidebar.classList.add('flex');
+                        // 關閉手機版側邊欄（如果開啟的話）
+                        closeMobileSidebar();
+                    } else {
+                        desktopSidebar.classList.add('hidden');
+                        desktopSidebar.classList.remove('flex');
+                    }
+                });
+            }
+        }
+        
+        // 切換手機版側邊欄
+        function toggleMobileSidebar() {
+            const sidebar = document.getElementById('mobileSidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            if (sidebar && overlay) {
+                const isOpen = sidebar.classList.contains('show');
+                
+                if (isOpen) {
+                    closeMobileSidebar();
+                } else {
+                    openMobileSidebar();
+                }
+            }
+        }
+        
+        // 打開手機版側邊欄
+        function openMobileSidebar() {
+            const sidebar = document.getElementById('mobileSidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            if (sidebar && overlay) {
+                sidebar.classList.add('show');
+                overlay.classList.add('show');
+                document.body.style.overflow = 'hidden'; // 防止背景滾動
+                
+                // 同步數據到手機版側邊欄
+                syncMobileSidebar();
+                syncMobileNSFWDisplay();
+                syncMobileChatHistory();
+            }
+        }
+        
+        // 關閉手機版側邊欄
+        function closeMobileSidebar() {
+            const sidebar = document.getElementById('mobileSidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+            
+            if (sidebar && overlay) {
+                sidebar.classList.remove('show');
+                overlay.classList.remove('show');
+                document.body.style.overflow = ''; // 恢復背景滾動
+            }
+        }
+        
+        // 同步手機版 NSFW 顯示
+        function syncMobileNSFWDisplay() {
+            const mobileLevel = document.getElementById('mobileCurrentNsfwLevel');
+            const mobileDescription = document.getElementById('mobileNsfwDescription');
+            const mobileEngine = document.getElementById('mobileCurrentEngine');
+            
+            const desktopLevel = document.getElementById('currentNsfwLevel');
+            const desktopDescription = document.getElementById('nsfwDescription');
+            const desktopEngine = document.getElementById('currentEngine');
+            
+            if (mobileLevel && desktopLevel) mobileLevel.textContent = desktopLevel.textContent;
+            if (mobileDescription && desktopDescription) mobileDescription.textContent = desktopDescription.textContent;
+            if (mobileEngine && desktopEngine) mobileEngine.textContent = desktopEngine.textContent;
+        }
+        
+        // 同步手機版聊天歷史
+        function syncMobileChatHistory() {
+            const mobileHistory = document.getElementById('mobileChatHistory');
+            const desktopHistory = document.getElementById('chatHistory');
+            
+            if (mobileHistory && desktopHistory) {
+                mobileHistory.innerHTML = desktopHistory.innerHTML;
+            }
+        }
+        
+        // 更新 NSFW 顯示函數，同步到手機版
+        const originalUpdateNSFWDisplay = updateNSFWDisplay;
+        updateNSFWDisplay = function(level, engine) {
+            // 調用原始函數
+            originalUpdateNSFWDisplay(level, engine);
+            
+            // 同步到手機版
+            syncMobileNSFWDisplay();
+        };
+        
+        // 更新側邊欄歷史記錄函數，同步到手機版
+        const originalUpdateChatHistorySidebar = updateChatHistorySidebar;
+        updateChatHistorySidebar = function() {
+            // 調用原始函數
+            originalUpdateChatHistorySidebar();
+            
+            // 同步到手機版
+            syncMobileChatHistory();
+        };
+        
+        // 將函數暴露到全局範圍
+        window.toggleMobileSidebar = toggleMobileSidebar;
+        window.openMobileSidebar = openMobileSidebar;
+        window.closeMobileSidebar = closeMobileSidebar;
+        window.showFlowbiteToast = showFlowbiteToast;
     </script>
 </body>
 </html>
