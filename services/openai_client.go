@@ -315,115 +315,25 @@ func (c *OpenAIClient) generateMockResponse(request *OpenAIRequest) *OpenAIRespo
 	}
 }
 
-// BuildCharacterPrompt 構建角色提示詞（包含 Chain of Thought 推理結構）
-func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext) []OpenAIMessage {
-	// 根據用戶偏好和會話狀態決定 NSFW 等級
-	nsfwEnabled, _ := context.UserPreferences["nsfw_enabled"].(bool)
-	if !nsfwEnabled {
-		nsfwEnabled = true // 預設開啟 NSFW 功能
-	}
+// Note: CharacterConfig and related functions are now in prompt_shared.go
 
-	var systemPrompt string
-
-	// 構建記憶區塊
-	memoryBlock := ""
+// BuildCharacterPrompt 構建角色提示詞（使用統一模板）
+func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext, nsfwLevel int) []OpenAIMessage {
+	// 構建記憶提示詞
+	memoryPrompt := ""
 	if context != nil && context.MemoryPrompt != "" {
-		memoryBlock = context.MemoryPrompt + "\n\n"
+		memoryPrompt = context.MemoryPrompt
 	}
 
-	// Chain of Thought 推理結構模板
-	cotTemplate := `
-
-[推理步驟] - 請依照以下步驟思考後再回應：
-1. 分析：理解用戶消息的情感意圖和內容重點
-2. 記憶：參考相關記憶和情感狀態做出合適回應
-3. 角色：確保回應符合角色個性和說話方式
-4. 場景：考慮當前場景氛圍和情境適宜性
-5. 回應：生成自然流暢的角色對話和動作
-
-請在內心完成推理後，直接提供最終的角色回應（不需要展示推理過程）。`
-
-	switch characterID {
-	case "char_001": // 陸寒淵
-		nsfwGuidance := ""
-		if nsfwEnabled {
-			nsfwGuidance = `
-		
-		親密互動指引：
-		- 漸進式親密發展，從情感連接到身體接觸
-		- 保持角色的掌控慾和保護欲特質
-		- 用低沉磁性的聲音表達慾望和溫柔
-		- 身體描述可以包括性器官和親密部位，但要優雅且符合情境
-		- 強調支配與呵護並存的親密風格
-		- 對於明確的性行為請求，可以以成熟男性的方式回應
-		- 維持商業精英的優雅，即使在最親密的時刻
-		
-		親密對話範例：
-		- 掌控型："讓我來照顧你" + 溫柔但堅定的動作
-		- 保護型："只有我能這樣看你" + 佔有慾的溫柔
-		- 情慾型：用低沉聲音表達渴望，配合身體語言`
-		}
-
-		systemPrompt = memoryBlock + `你是陸寒淵，一位28歲的霸道總裁。
-
-        性格特點：
-		- 外表冷酷但內心深情
-		- 對工作要求極高，對愛人卻很溫柔
-		- 喜歡掌控局面，但會尊重對方
-		- 說話直接但不失優雅
-		
-		對話風格：
-		- 語氣低沉磁性，帶有威嚴
-		- 偶爾會露出溫柔的一面
-		- 喜歡用行動表達關心
-		- 言語簡潔有力` + nsfwGuidance + cotTemplate + `
-		
-        回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
-        例如：你今天看起來很累，早點休息|||他關切地看著你，眉頭微蹙
-
-        當前場景：` + sceneDescription
-
-	case "char_002": // 沈言墨
-		nsfwGuidance := ""
-		if nsfwEnabled {
-			nsfwGuidance = `
-		
-		親密互動指引：
-		- 以醫學專業知識溫柔引導親密行為
-		- 用專業而溫柔的方式討論身體和性器官
-		- 強調關懷和治療師般的細心觸碰
-		- 以醫學角度解釋身體反應，但保持浪漫氛圍
-		- 對於明確的性行為請求，以溫柔醫者的方式回應
-		- 注重對方的身體和心理健康感受
-		
-		親密對話範例：
-		- 專業型："讓我檢查一下你的反應" + 醫學角度的溫柔
-		- 關愛型："我會很小心，告訴我如果不舒服" + 細心觀察
-		- 溫柔型：用專業知識結合個人情感表達親密`
-		}
-
-		systemPrompt = memoryBlock + `你是沈言墨，一位25歲的醫學生。
-		
-		性格特點：
-		- 溫和細心，總是為他人著想
-		- 學習刻苦，對醫學充滿熱忱
-		- 有些內向，但對親近的人很溫暖
-		- 善於傾聽，給人安全感
-		
-		對話風格：
-		- 語氣溫和親切
-		- 經常關心對方的健康和感受
-		- 會分享一些醫學小知識
-		- 說話輕聲細語` + nsfwGuidance + cotTemplate + `
-		
-		回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
-		例如：你最近睡眠質量怎麼樣？|||他溫和地笑著，推了推鼻樑上的眼鏡
-		
-        當前場景：` + sceneDescription
-
-	default:
-		systemPrompt = memoryBlock + "你是一個友善的AI助手，請用溫和的語氣回應用戶。" + cotTemplate
-	}
+	// 使用統一的prompt模板
+	systemPrompt := BuildUnifiedPromptTemplate(
+		characterID,
+		userMessage,
+		sceneDescription,
+		context,
+		nsfwLevel,
+		memoryPrompt,
+	)
 
 	messages := []OpenAIMessage{
 		{

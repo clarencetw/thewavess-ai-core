@@ -325,7 +325,7 @@ const UI = {
         if (!container) {
             container = document.createElement('div');
             container.id = 'toast-container';
-            container.className = 'fixed top-5 right-5 z-50 space-y-2';
+            container.className = 'fixed top-5 right-5 z-50 space-y-2 md:top-5 md:right-5 sm:top-4 sm:right-4 sm:left-4 sm:right-auto sm:max-w-sm';
             document.body.appendChild(container);
         }
         

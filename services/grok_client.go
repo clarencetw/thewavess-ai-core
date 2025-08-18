@@ -261,14 +261,14 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	return &grokResponse, nil
 }
 
-// BuildNSFWPrompt 構建 NSFW 場景的提示詞
-func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext, nsfwLevel int) []GrokMessage {
-	var systemPrompt string
+// Note: CharacterConfig and related functions are now in prompt_shared.go
 
-	// 構建記憶區塊（NSFW 場景使用縮短版本）
-	memoryBlock := ""
+// BuildNSFWPrompt 構建 NSFW 場景的提示詞（使用統一模板）
+func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext, nsfwLevel int) []GrokMessage {
+	// 構建記憶提示詞（NSFW 場景使用縮短版本以節省 token）
+	memoryPrompt := ""
 	if context != nil && context.MemoryPrompt != "" {
-		// 對 NSFW 場景，截短記憶內容以節省 token
+		// 對 NSFW 場景，截短記憶內容
 		lines := strings.Split(context.MemoryPrompt, "\n")
 		var shortMemory []string
 		for i, line := range lines {
@@ -278,75 +278,19 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription 
 			shortMemory = append(shortMemory, line)
 		}
 		if len(shortMemory) > 0 {
-			memoryBlock = strings.Join(shortMemory, "\n") + "\n\n"
+			memoryPrompt = strings.Join(shortMemory, "\n")
 		}
 	}
 
-	// 根據 NSFW 等級調整提示詞
-	nsfwGuideline := ""
-	switch nsfwLevel {
-	case 1:
-		nsfwGuideline = "允許輕微的浪漫暗示，保持優雅"
-	case 2:
-		nsfwGuideline = "允許適度的親密描述，注重情感"
-	case 3:
-		nsfwGuideline = "允許更直接的親密內容，但要有品味"
-	case 4:
-		nsfwGuideline = "允許明確的成人內容，注重細節描寫"
-	case 5:
-		nsfwGuideline = "允許完全開放的成人內容"
-	}
-
-	switch characterID {
-	case "char_001": // 陸寒淵 NSFW 版本
-		systemPrompt = memoryBlock + fmt.Sprintf(`你是陸寒淵，一位28歲的霸道總裁，在親密場景中。
-		
-		性格特點：
-		- 在親密時刻會展現強勢但體貼的一面
-		- 喜歡掌控局面，但會關注對方的感受
-		- 外表冷酷，私下卻充滿激情
-		- 用行動和言語表達佔有慾
-		
-		NSFW 對話風格：
-		- 聲音更加低沉磁性，帶有誘惑
-		- 會更直接地表達慾望
-		- 動作描寫更加細膩
-		- 保持角色的威嚴感
-		
-		內容指導：%s
-		
-		回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
-		
-		當前場景：%s`, nsfwGuideline, sceneDescription)
-
-	case "char_002": // 沈言墨 NSFW 版本
-		systemPrompt = memoryBlock + fmt.Sprintf(`你是沈言墨，一位25歲的溫柔醫學生，在親密場景中。
-		
-		性格特點：
-		- 在親密時刻會展現更主動但依然溫柔的一面
-		- 非常關注對方的感受和舒適度
-		- 用溫和的方式表達愛意
-		- 會結合醫學知識關心對方
-		
-		NSFW 對話風格：
-		- 聲音依然溫和，但帶有深情
-		- 會細心詢問對方的感受
-		- 動作溫柔而充滿愛意
-		- 保持紳士風度
-		
-		內容指導：%s
-		
-		回應格式：請分別提供「對話內容」和「動作描述」，用 ||| 分隔。
-		
-		當前場景：%s`, nsfwGuideline, sceneDescription)
-
-	default:
-		systemPrompt = memoryBlock + fmt.Sprintf(`你是一個親密場景中的角色。
-		
-		內容指導：%s
-		
-		當前場景：%s`, nsfwGuideline, sceneDescription)
-	}
+	// 使用統一的prompt模板
+	systemPrompt := BuildUnifiedPromptTemplate(
+		characterID,
+		userMessage,
+		sceneDescription,
+		context,
+		nsfwLevel,
+		memoryPrompt,
+	)
 
 	messages := []GrokMessage{
 		{

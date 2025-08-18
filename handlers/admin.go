@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"runtime"
@@ -9,6 +10,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/crypto/bcrypt"
+	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
@@ -50,7 +53,7 @@ var (
 // @Success 200 {object} models.APIResponse{data=AdminStatsResponse} "統計數據"
 // @Failure 401 {object} models.APIResponse "未授權"
 // @Failure 500 {object} models.APIResponse "服務器錯誤"
-// @Router /api/v1/admin/stats [get]
+// @Router /admin/stats [get]
 func GetAdminStats(c *gin.Context) {
 	// 計算系統運行時間
 	uptime := time.Since(startTime)
@@ -125,7 +128,7 @@ func GetAdminStats(c *gin.Context) {
 // @Success 200 {object} models.APIResponse{data=AdminLogsResponse} "日誌數據"
 // @Failure 401 {object} models.APIResponse "未授權"
 // @Failure 500 {object} models.APIResponse "服務器錯誤"
-// @Router /api/v1/admin/logs [get]
+// @Router /admin/logs [get]
 func GetAdminLogs(c *gin.Context) {
 	// 獲取查詢參數
 	page := 1
@@ -224,4 +227,537 @@ func IncrementRequestCount(isError bool, responseTime int64) {
 	if isError {
 		errorCount++
 	}
+}
+
+// GetAdminUsers godoc
+// @Summary      管理員獲取用戶列表
+// @Description  獲取所有用戶列表，包含分頁和篩選功能
+// @Tags         Admin
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        page query int false "頁碼" default(1)
+// @Param        limit query int false "每頁數量" default(10)
+// @Param        status query string false "用戶狀態篩選" Enums(active,inactive,banned)
+// @Param        search query string false "搜索關鍵字（用戶名、郵箱）"
+// @Success      200 {object} models.APIResponse{data=object} "獲取成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Failure      403 {object} models.APIResponse{error=models.APIError} "權限不足"
+// @Router       /admin/users [get]
+func GetAdminUsers(c *gin.Context) {
+	ctx := context.Background()
+
+	// TODO: 檢查管理員權限
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	// 獲取查詢參數
+	page := 1
+	if pageStr := c.Query("page"); pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+	
+	limit := 10
+	if limitStr := c.Query("limit"); limitStr != "" {
+		if l, err := strconv.Atoi(limitStr); err == nil && l > 0 {
+			limit = l
+		}
+	}
+	status := c.Query("status")
+	search := c.Query("search")
+
+	// 設置分頁限制
+	if limit > 100 {
+		limit = 100
+	}
+	if page < 1 {
+		page = 1
+	}
+
+	// 構建查詢
+	query := database.DB.NewSelect().Model((*models.User)(nil))
+
+	// 狀態篩選
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+
+	// 搜索篩選
+	if search != "" {
+		query = query.Where("(username ILIKE ? OR email ILIKE ?)", "%"+search+"%", "%"+search+"%")
+	}
+
+	// 計算總數
+	total, err := query.Count(ctx)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to count users")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "獲取用戶總數失敗",
+			},
+		})
+		return
+	}
+
+	// 分頁查詢
+	var users []models.User
+	err = query.
+		Order("created_at DESC").
+		Offset((page - 1) * limit).
+		Limit(limit).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("admin_id", userID).Error("Failed to query users")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "獲取用戶列表失敗",
+			},
+		})
+		return
+	}
+
+	// 轉換為響應格式
+	var userResponses []*models.UserResponse
+	for _, user := range users {
+		userResponses = append(userResponses, user.ToResponse())
+	}
+
+	// 計算分頁信息
+	totalPages := (total + limit - 1) / limit
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "獲取用戶列表成功",
+		Data: gin.H{
+			"users": userResponses,
+			"pagination": gin.H{
+				"current_page": page,
+				"total_pages":  totalPages,
+				"total_count":  total,
+				"limit":        limit,
+			},
+		},
+	})
+}
+
+// UpdateAdminUser godoc
+// @Summary      管理員更新用戶資料
+// @Description  管理員更新指定用戶的資料信息
+// @Tags         Admin
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path string true "用戶ID"
+// @Param        user body models.AdminUserUpdateRequest true "更新資料"
+// @Success      200 {object} models.APIResponse{data=models.UserResponse} "更新成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Failure      403 {object} models.APIResponse{error=models.APIError} "權限不足"
+// @Failure      404 {object} models.APIResponse{error=models.APIError} "用戶不存在"
+// @Router       /admin/users/{id} [put]
+func UpdateAdminUser(c *gin.Context) {
+	ctx := context.Background()
+
+	// TODO: 檢查管理員權限
+	adminID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	// 獲取用戶ID
+	userID := c.Param("id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_USER_ID",
+				Message: "用戶ID不能為空",
+			},
+		})
+		return
+	}
+
+	var req models.AdminUserUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_INPUT",
+				Message: "輸入參數錯誤: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 檢查用戶是否存在
+	var user models.User
+	err := database.DB.NewSelect().
+		Model(&user).
+		Where("id = ?", userID).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("User not found")
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: "用戶不存在",
+			},
+		})
+		return
+	}
+
+	// 檢查郵箱和用戶名唯一性（如果有更新）
+	if req.Email != "" && req.Email != user.Email {
+		var existingUser models.User
+		exists, err := database.DB.NewSelect().
+			Model(&existingUser).
+			Where("email = ? AND id != ?", req.Email, userID).
+			Exists(ctx)
+
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to check email uniqueness")
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "DATABASE_ERROR",
+					Message: "檢查郵箱唯一性失敗",
+				},
+			})
+			return
+		}
+
+		if exists {
+			c.JSON(http.StatusConflict, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "EMAIL_EXISTS",
+					Message: "郵箱已被其他用戶使用",
+				},
+			})
+			return
+		}
+	}
+
+	if req.Username != "" && req.Username != user.Username {
+		var existingUser models.User
+		exists, err := database.DB.NewSelect().
+			Model(&existingUser).
+			Where("username = ? AND id != ?", req.Username, userID).
+			Exists(ctx)
+
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to check username uniqueness")
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "DATABASE_ERROR",
+					Message: "檢查用戶名唯一性失敗",
+				},
+			})
+			return
+		}
+
+		if exists {
+			c.JSON(http.StatusConflict, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "USERNAME_EXISTS",
+					Message: "用戶名已被其他用戶使用",
+				},
+			})
+			return
+		}
+	}
+
+	// 構建更新數據
+	updateData := models.User{
+		UpdatedAt: time.Now(),
+	}
+
+	// 構建動態更新查詢
+	updateQuery := database.DB.NewUpdate().Model(&updateData)
+	hasUpdates := false
+
+	if req.Username != "" {
+		updateData.Username = req.Username
+		updateQuery = updateQuery.Column("username")
+		hasUpdates = true
+	}
+	if req.Email != "" {
+		updateData.Email = req.Email
+		updateQuery = updateQuery.Column("email")
+		hasUpdates = true
+	}
+	if req.DisplayName != nil {
+		updateData.DisplayName = req.DisplayName
+		updateQuery = updateQuery.Column("display_name")
+		hasUpdates = true
+	}
+	if req.Bio != nil {
+		updateData.Bio = req.Bio
+		updateQuery = updateQuery.Column("bio")
+		hasUpdates = true
+	}
+	if req.Status != "" {
+		updateData.Status = req.Status
+		updateQuery = updateQuery.Column("status")
+		hasUpdates = true
+	}
+	if req.Nickname != "" {
+		updateData.Nickname = req.Nickname
+		updateQuery = updateQuery.Column("nickname")
+		hasUpdates = true
+	}
+	if req.Gender != "" {
+		updateData.Gender = req.Gender
+		updateQuery = updateQuery.Column("gender")
+		hasUpdates = true
+	}
+	if req.BirthDate != nil {
+		updateData.BirthDate = req.BirthDate
+		updateQuery = updateQuery.Column("birth_date")
+		hasUpdates = true
+	}
+	if req.AvatarURL != "" {
+		updateData.AvatarURL = req.AvatarURL
+		updateQuery = updateQuery.Column("avatar_url")
+		hasUpdates = true
+	}
+	if req.IsVerified != nil {
+		updateData.IsVerified = *req.IsVerified
+		updateQuery = updateQuery.Column("is_verified")
+		hasUpdates = true
+	}
+	if req.IsAdult != nil {
+		updateData.IsAdult = *req.IsAdult
+		updateQuery = updateQuery.Column("is_adult")
+		hasUpdates = true
+	}
+	if req.Preferences != nil {
+		updateData.Preferences = req.Preferences
+		updateQuery = updateQuery.Column("preferences")
+		hasUpdates = true
+	}
+
+	if !hasUpdates {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "NO_UPDATES",
+				Message: "沒有要更新的字段",
+			},
+		})
+		return
+	}
+
+	// 總是更新 updated_at
+	updateQuery = updateQuery.Column("updated_at").Where("id = ?", userID)
+
+	// 執行更新
+	result, err := updateQuery.Exec(ctx)
+	if err != nil {
+		utils.Logger.WithError(err).WithFields(map[string]interface{}{
+			"admin_id": adminID,
+			"user_id":  userID,
+		}).Error("Failed to update user")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "更新用戶資料失敗",
+			},
+		})
+		return
+	}
+
+	// 檢查是否有行被更新
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: "用戶不存在或未發生更新",
+			},
+		})
+		return
+	}
+
+	// 獲取更新後的用戶信息
+	err = database.DB.NewSelect().
+		Model(&user).
+		Where("id = ?", userID).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to fetch updated user")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "獲取更新後用戶信息失敗",
+			},
+		})
+		return
+	}
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"admin_id": adminID,
+		"user_id":  userID,
+	}).Info("Admin updated user profile")
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "用戶資料更新成功",
+		Data:    user.ToResponse(),
+	})
+}
+
+// UpdateAdminUserPassword godoc
+// @Summary      管理員重置用戶密碼
+// @Description  管理員重置指定用戶的密碼
+// @Tags         Admin
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path string true "用戶ID"
+// @Param        password body models.AdminPasswordUpdateRequest true "新密碼"
+// @Success      200 {object} models.APIResponse "更新成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Failure      403 {object} models.APIResponse{error=models.APIError} "權限不足"
+// @Failure      404 {object} models.APIResponse{error=models.APIError} "用戶不存在"
+// @Router       /admin/users/{id}/password [put]
+func UpdateAdminUserPassword(c *gin.Context) {
+	ctx := context.Background()
+
+	// TODO: 檢查管理員權限
+	adminID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	// 獲取用戶ID
+	userID := c.Param("id")
+	if userID == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_USER_ID",
+				Message: "用戶ID不能為空",
+			},
+		})
+		return
+	}
+
+	var req models.AdminPasswordUpdateRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_INPUT",
+				Message: "輸入參數錯誤: " + err.Error(),
+			},
+		})
+		return
+	}
+
+	// 檢查用戶是否存在
+	var user models.User
+	err := database.DB.NewSelect().
+		Model(&user).
+		Where("id = ?", userID).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("User not found")
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: "用戶不存在",
+			},
+		})
+		return
+	}
+
+	// 加密新密碼
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to hash password")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "ENCRYPTION_ERROR",
+				Message: "密碼加密失敗",
+			},
+		})
+		return
+	}
+
+	// 更新密碼
+	_, err = database.DB.NewUpdate().
+		Model(&user).
+		Set("password_hash = ?", string(hashedPassword)).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", userID).
+		Exec(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithFields(map[string]interface{}{
+			"admin_id": adminID,
+			"user_id":  userID,
+		}).Error("Failed to update user password")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "更新用戶密碼失敗",
+			},
+		})
+		return
+	}
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"admin_id": adminID,
+		"user_id":  userID,
+	}).Info("Admin updated user password")
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "用戶密碼更新成功",
+	})
 }

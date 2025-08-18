@@ -147,6 +147,11 @@ func SetupRoutes(router *gin.RouterGroup) {
 	{
 		admin.GET("/stats", handlers.GetAdminStats)
 		admin.GET("/logs", handlers.GetAdminLogs)
+		
+		// 用戶管理路由
+		admin.GET("/users", handlers.GetAdminUsers)
+		admin.PUT("/users/:id", handlers.UpdateAdminUser)
+		admin.PUT("/users/:id/password", handlers.UpdateAdminUserPassword)
 	}
 
 	// TODO: 添加其他模組路由

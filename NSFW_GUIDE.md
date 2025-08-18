@@ -23,8 +23,8 @@
 
 ### 引擎路由規則
 
-- **Level 1-4** → OpenAI
-- **Level 5** → Grok（極度明確內容）
+- **Level 1-3** → OpenAI
+- **Level 4-5** → Grok（明確和極度成人內容）
 
 ## 觸發規則與關鍵詞
 
@@ -183,8 +183,8 @@ Assistant（示例）：
 ## 引擎路由策略
 
 - **路由**：`selectAIEngine` 純粹基於 `ContentAnalysis.ShouldUseGrok` 判斷
-- **Level 1-4** → OpenAI
-- **Level 5** → Grok
+- **Level 1-3** → OpenAI
+- **Level 4-5** → Grok
 - **備援處理**：若 AI 引擎出錯，提供備用回應並記錄錯誤
 - **提示詞護欄**：在 System 明確禁止粗俗詞、要求優雅語彙、強調尊重與同意
 
@@ -222,7 +222,7 @@ Assistant（示例）：
   - [待完成] 記憶檢索與 Prompt 注入功能
 - [x] **引擎路由**：
   - [完成] `selectAIEngine` 基於 `ContentAnalysis.ShouldUseGrok`
-  - [完成] Level 1-4 → OpenAI，Level 5 → Grok
+  - [完成] Level 1-3 → OpenAI，Level 4-5 → Grok
   - [完成] NSFW 預設啟用，無需使用者設定
 - [x] **輸出處理**：
   - [完成] `對話|||動作` 格式解析

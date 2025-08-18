@@ -212,7 +212,7 @@ func (em *EmotionManager) getInitialAffection(userID, characterID string) int {
 
 // calculateAffectionChange 計算好感度變化
 func (em *EmotionManager) calculateAffectionChange(userMessage string, analysis *ContentAnalysis) int {
-    change := 1 // 基礎增長（每次互動）
+    change := 2 // 基礎增長（每次互動）
 
     // 正面詞彙影響
     // TODO(關鍵字擴充):
@@ -227,7 +227,7 @@ func (em *EmotionManager) calculateAffectionChange(userMessage string, analysis 
 	
 	for _, word := range positiveWords {
 		if strings.Contains(strings.ToLower(userMessage), word) {
-			change += 2
+			change += 3
 			break
 		}
 	}
@@ -255,7 +255,7 @@ func (em *EmotionManager) calculateAffectionChange(userMessage string, analysis 
 	
 	for _, word := range negativeWords {
 		if strings.Contains(strings.ToLower(userMessage), word) {
-			change -= 3
+			change -= 2
 			break
 		}
 	}

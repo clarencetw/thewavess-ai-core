@@ -439,6 +439,11 @@ func (s *ChatService) getRecentMemories(sessionID, userID, characterID string, l
 	// 轉換為 ChatMessage 格式
 	messages := make([]ChatMessage, 0, len(shortTermMemory.RecentMessages))
 	for _, msg := range shortTermMemory.RecentMessages {
+		// 檢查Summary是否為空，避免產生空內容的消息
+		if strings.TrimSpace(msg.Summary) == "" {
+			continue // 跳過空Summary的消息
+		}
+		
 		messages = append(messages, ChatMessage{
 			Role:      msg.Role,
 			Content:   msg.Summary,
@@ -631,8 +636,8 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 		return nil, fmt.Errorf("unknown AI engine: %s", engine)
 	}
 
-	// 解析或生成動作描述
-	action := s.generatePersonalizedAction(context.CharacterID, dialogue, context.EmotionState, analysis.Intensity)
+	// 解析AI回應中的對話和動作
+	dialogue, action := s.parseDialogueAndAction(dialogue, context.CharacterID, context.EmotionState, analysis.Intensity)
 
 	return &CharacterResponseData{
 		Dialogue: dialogue,
@@ -640,61 +645,20 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 	}, nil
 }
 
-// buildFemaleOrientedPrompt 構建女性向角色提示詞
+// buildFemaleOrientedPrompt 構建女性向角色提示詞（使用統一模板）
 func (s *ChatService) buildFemaleOrientedPrompt(characterID, userMessage string, context *ConversationContext, sceneDescription string, nsfwLevel int) string {
-	character := s.getCharacterProfile(characterID)
-	emotion := context.EmotionState
-
-	// 獲取記憶摘要
+	// 獲取記憶提示詞
 	memoryPrompt := s.memoryManager.GetMemoryPrompt(context.SessionID, context.UserID, context.CharacterID)
 
-	// 女性向特化的提示詞模板
-	prompt := fmt.Sprintf(`你是 %s，%s。這是專為女性用戶設計的AI角色互動系統。
-
-# 角色設定
-%s
-
-%s
-
-# 當前情感狀態
-- 好感度：%d/100 (%s)
-- 當前心情：%s
-- 關係狀態：%s
-- 親密程度：%s
-
-# 場景環境
-%s
-
-# 女性向互動指導 (NSFW Level %d)
-%s
-
-# 女性用戶喜好要點
-- 重視情感連結和細節關懷
-- 喜歡被保護和被理解的感覺
-- 欣賞優雅而非粗俗的表達
-- 期待關係的逐步發展和深化
-
-用戶說："%s"
-
-請以 %s 的身份回應，必須：
-1. 保持角色的獨特個性和說話風格
-2. 體現對用戶的關心和注意
-3. 根據NSFW級別調整親密度
-4. 展現男性角色的魅力和溫柔
-5. 回應要自然流暢，富有情感
-6. 參考記憶內容，體現連續性和個性化
-
-直接回應內容（不要JSON格式）：`,
-		character.Name, character.Description,
-		character.FemaleOrientedPersonality,
-		memoryPrompt,
-		emotion.Affection, s.getAffectionDescription(emotion.Affection),
-		emotion.Mood, emotion.Relationship, emotion.IntimacyLevel,
+	// 使用統一的prompt模板確保一致性
+	return BuildUnifiedPromptTemplate(
+		characterID,
+		userMessage,
 		sceneDescription,
-		nsfwLevel, s.getFemaleOrientedNSFWGuidance(nsfwLevel),
-		userMessage, character.Name)
-
-	return prompt
+		context,
+		nsfwLevel,
+		memoryPrompt,
+	)
 }
 
 // getCharacterProfile 獲取女性向角色檔案
@@ -799,6 +763,11 @@ func (s *ChatService) generateGrokResponse(ctx context.Context, prompt string, c
 	// 添加最近的對話歷史作為上下文
 	if context.RecentMessages != nil && len(context.RecentMessages) > 0 {
 		for _, msg := range context.RecentMessages {
+			// 檢查內容是否為空，避免傳遞空內容到API
+			if strings.TrimSpace(msg.Content) == "" {
+				continue // 跳過空內容的消息
+			}
+			
 			role := "user"
 			if msg.Role == "assistant" {
 				role = "assistant"
@@ -863,6 +832,11 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, prompt string,
 	// 添加最近的對話歷史作為上下文
 	if context.RecentMessages != nil && len(context.RecentMessages) > 0 {
 		for _, msg := range context.RecentMessages {
+			// 檢查內容是否為空，避免傳遞空內容到API
+			if strings.TrimSpace(msg.Content) == "" {
+				continue // 跳過空內容的消息
+			}
+			
 			role := "user"
 			if msg.Role == "assistant" {
 				role = "assistant"
@@ -959,34 +933,88 @@ type FemaleOrientedCharacterProfile struct {
 	FemaleOrientedPersonality string `json:"female_oriented_personality"`
 }
 
-// generatePersonalizedAction 生成個性化動作
-func (s *ChatService) generatePersonalizedAction(characterID, dialogue string, emotion *EmotionState, nsfwLevel int) string {
-	// 基於角色、對話內容、情感狀態和NSFW級別生成動作
-	actions := map[string]map[int][]string{
-		"char_001": {
-			1: {"他深邃的眼眸注視著你", "他的聲音低沉磁性", "他優雅地調整姿勢"},
-			2: {"他溫柔地看著你，眼中閃爍著愛意", "他伸手輕撫你的臉頰", "他的聲音帶著寵溺"},
-			3: {"他將你拉入懷中，緊緊擁抱", "他的手輕撫著你的髮絲", "他低頭在你耳邊輕語"},
-			4: {"他的呼吸變得急促，眼神變得炙熱", "他的手開始遊走在你的身體上", "他吻向你的唇瓣"},
-			5: {"他的動作變得更加大膽和炙熱", "他完全沉浸在對你的渴望中", "他用盡全力愛撫著你"},
-		},
-		"char_002": {
-			1: {"他溫和地笑著，推了推眼鏡", "他關切地看著你", "他輕聲細語地說話"},
-			2: {"他的眼中滿含溫柔", "他小心翼翼地觸碰你的手", "他的聲音更加輕柔"},
-			3: {"他溫柔地將你擁入懷中", "他輕撫你的後背", "他在你額頭印下輕吻"},
-			4: {"他的動作變得更加親密但依然溫柔", "他專業而溫柔地探索你的身體", "他小心地詢問你的感受"},
-			5: {"他用最溫柔的方式愛撫你", "他專注地照顧你的每一個反應", "他溫柔而深情地愛著你"},
-		},
-	}
-
-	if charActions, exists := actions[characterID]; exists {
-		if levelActions, exists := charActions[nsfwLevel]; exists {
-			index := rand.Intn(len(levelActions))
-			return levelActions[index]
+// parseDialogueAndAction 解析AI回應中的對話和動作
+func (s *ChatService) parseDialogueAndAction(response, characterID string, emotion *EmotionState, nsfwLevel int) (string, string) {
+	// 嘗試解析 "對話|||動作" 格式
+	if strings.Contains(response, "|||") {
+		parts := strings.SplitN(response, "|||", 2)
+		if len(parts) == 2 {
+			dialogue := strings.TrimSpace(parts[0])
+			action := strings.TrimSpace(parts[1])
+			
+			// 驗證解析結果不為空
+			if dialogue != "" && action != "" {
+				return dialogue, action
+			}
 		}
 	}
 
-	return "他溫柔地看著你"
+	// 如果無法解析或格式不正確，使用AI完整回應作為對話，並生成備用動作
+	dialogue := strings.TrimSpace(response)
+	action := s.generateFallbackAction(characterID, dialogue, emotion, nsfwLevel)
+	
+	utils.Logger.WithFields(logrus.Fields{
+		"character_id": characterID,
+		"response_len": len(response),
+		"parsed_format": false,
+	}).Debug("AI回應格式解析失敗，使用備用動作")
+	
+	return dialogue, action
+}
+
+// generateFallbackAction 生成備用動作（當AI未按格式回應時）
+func (s *ChatService) generateFallbackAction(characterID, dialogue string, emotion *EmotionState, nsfwLevel int) string {
+	// 基於對話內容智能生成動作
+	dialogue = strings.ToLower(dialogue)
+	
+	// 根據角色特質生成基礎動作
+	var baseActions []string
+	switch characterID {
+	case "char_001": // 陸寒淵
+		baseActions = []string{
+			"他深邃的眼眸注視著你", 
+			"他的聲音低沉磁性", 
+			"他優雅而威嚴地看著你",
+		}
+	case "char_002": // 沈言墨  
+		baseActions = []string{
+			"他溫和地笑著，推了推眼鏡", 
+			"他關切地看著你", 
+			"他輕聲細語地回應",
+		}
+	default:
+		baseActions = []string{"他溫柔地看著你"}
+	}
+
+	// 基於對話內容調整動作
+	if strings.Contains(dialogue, "累") || strings.Contains(dialogue, "疲憊") {
+		if characterID == "char_001" {
+			return "他關切地看著你，眉頭微蹙"
+		} else {
+			return "他露出關心的表情，聲音輕柔"
+		}
+	}
+	
+	if strings.Contains(dialogue, "休息") || strings.Contains(dialogue, "睡") {
+		if characterID == "char_001" {
+			return "他溫柔地伸手，想要撫摸你的頭"
+		} else {
+			return "他輕聲提醒，眼中滿含關懷"
+		}
+	}
+
+	// 根據NSFW級別調整親密度
+	if nsfwLevel >= 3 && emotion.Affection >= 60 {
+		if characterID == "char_001" {
+			return "他步向你，眼神中閃爍著溫柔的光芒"
+		} else {
+			return "他輕柔地靠近，動作充滿溫暖"
+		}
+	}
+
+	// 默認返回基礎動作
+	index := rand.Intn(len(baseActions))
+	return baseActions[index]
 }
 
 // updateEmotionStateAdvanced 高級情感狀態更新

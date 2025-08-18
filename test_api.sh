@@ -30,7 +30,7 @@ done
 
 echo "🚀 Testing Thewavess AI Core API - Complete Test Suite"
 echo "======================================================"
-echo "Testing all 63 API endpoints"
+echo "Testing all 68 API endpoints"
 if [ "$REGISTER_NEW_USER" = true ]; then
     echo "Mode: Register new test user"
 else
@@ -559,6 +559,42 @@ else
     echo -e "${RED}❌ No JWT token available, skipping TTS tests${NC}"
 fi
 
+# 14. ADMIN SYSTEM (5 endpoints) - User Management & System Administration
+echo -e "\n${PURPLE}⚙️ ADMIN SYSTEM (5 endpoints) - User Management & System Administration${NC}"
+echo "================================================================================"
+
+if [ -n "$TOKEN" ]; then
+    # System monitoring endpoints
+    test_endpoint "GET" "/admin/stats" "" "Get Admin System Statistics" "true"
+    test_endpoint "GET" "/admin/logs?page=1&limit=10&level=info" "" "Get System Logs with Filters" "true"
+    
+    # User management endpoints  
+    test_endpoint "GET" "/admin/users?page=1&limit=5" "" "Get Admin Users List" "true"
+    test_endpoint "GET" "/admin/users?status=active&search=test&page=1&limit=10" "" "Get Admin Users with Filters" "true"
+    
+    # Get a test user ID for update/password tests
+    users_response=$(curl -s -X GET \
+        -H "Content-Type: application/json" \
+        -H "Authorization: Bearer $TOKEN" \
+        "${BASE_URL}/admin/users?limit=1")
+    
+    TEST_USER_ID=$(echo "$users_response" | grep -o '"id":"[^"]*"' | head -1 | cut -d'"' -f4)
+    
+    if [ -n "$TEST_USER_ID" ]; then
+        # Test user update
+        admin_update_data='{"nickname":"Admin Updated User","status":"active","is_verified":true}'
+        test_endpoint "PUT" "/admin/users/${TEST_USER_ID}" "$admin_update_data" "Update User Profile (Admin)" "true"
+        
+        # Test password reset
+        password_reset_data='{"new_password":"newAdminPassword123"}'
+        test_endpoint "PUT" "/admin/users/${TEST_USER_ID}/password" "$password_reset_data" "Reset User Password (Admin)" "true"
+    else
+        echo -e "${YELLOW}⚠️ No test user available for admin update/password tests${NC}"
+    fi
+else
+    echo -e "${RED}❌ No JWT token available, skipping admin tests${NC}"
+fi
+
 # Final summary
 echo -e "\n${PURPLE}🎉 API TESTING COMPLETED!${NC}"
 echo "========================="
@@ -586,8 +622,9 @@ echo "• Memory System: 8 endpoints ✅ (all authenticated)"
 echo "• Novel Mode: 8 endpoints ✅ (all authenticated)"
 echo "• Search System: 2 endpoints ✅ (all authenticated)"
 echo "• TTS Voice System: 6 endpoints ✅ (2 public + 4 auth) [OpenAI TTS API]"
+echo "• Admin System: 5 endpoints ✅ (all authenticated) - User Management"
 echo ""
-echo "Total: 63 API endpoints tested"
+echo "Total: 68 API endpoints tested"
 echo ""
 echo -e "${CYAN}Note: Some static endpoints return mock data for prototyping purposes.${NC}"
 echo -e "${CYAN}Management endpoints require authentication to access.${NC}"

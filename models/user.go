@@ -132,6 +132,26 @@ type LogoutRequest struct {
 	Token string `json:"token,omitempty"`
 }
 
+// Admin 管理相關請求結構
+type AdminUserUpdateRequest struct {
+	Username    string                 `json:"username,omitempty" binding:"omitempty,min=3,max=50"`
+	Email       string                 `json:"email,omitempty" binding:"omitempty,email"`
+	DisplayName *string                `json:"display_name,omitempty"`
+	Bio         *string                `json:"bio,omitempty"`
+	Status      string                 `json:"status,omitempty" binding:"omitempty,oneof=active inactive banned"`
+	Nickname    string                 `json:"nickname,omitempty"`
+	Gender      string                 `json:"gender,omitempty" binding:"omitempty,oneof=male female other"`
+	BirthDate   *time.Time             `json:"birth_date,omitempty"`
+	AvatarURL   string                 `json:"avatar_url,omitempty"`
+	IsVerified  *bool                  `json:"is_verified,omitempty"`
+	IsAdult     *bool                  `json:"is_adult,omitempty"`
+	Preferences map[string]interface{} `json:"preferences,omitempty"`
+}
+
+type AdminPasswordUpdateRequest struct {
+	NewPassword string `json:"new_password" binding:"required,min=8"`
+}
+
 // ToResponse 轉換為響應格式
 func (u *User) ToResponse() *UserResponse {
 	return &UserResponse{

@@ -16,7 +16,7 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
     
     <!-- Flowbite -->
-    <script src="https://cdn.jsdelivr.net/npm/flowbite@2.5.2/dist/flowbite.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
 </head>
 <body class="min-h-full p-4 bg-gray-50 text-gray-900">
@@ -72,12 +72,12 @@
                 
                 <!-- 標籤篩選 -->
                 <div class="mb-4 flex flex-wrap gap-2">
-                    <button class="tag-filter-btn active" data-category="all">全部</button>
-                    <button class="tag-filter-btn" data-category="emotion">情感</button>
-                    <button class="tag-filter-btn" data-category="scene">場景</button>
-                    <button class="tag-filter-btn" data-category="character">角色</button>
-                    <button class="tag-filter-btn" data-category="style">風格</button>
-                    <button class="tag-filter-btn" data-category="content">內容</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-blue-600 text-white border-blue-600 hover:bg-blue-700 transition-colors cursor-pointer" data-category="all" id="filter-all">全部</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="emotion" id="filter-emotion">情感</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="scene" id="filter-scene">場景</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="character" id="filter-character">角色</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="style" id="filter-style">風格</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="content" id="filter-content">內容</button>
                 </div>
                 
                 <!-- 標籤搜尋 -->
@@ -143,14 +143,14 @@
                 <div class="mt-4">
                     <label class="block font-medium mb-2">標籤顏色</label>
                     <div class="flex space-x-2">
-                        <button class="tag-color-btn bg-blue-500" data-color="blue" onclick="selectTagColor('blue')"></button>
-                        <button class="tag-color-btn bg-green-500" data-color="green" onclick="selectTagColor('green')"></button>
-                        <button class="tag-color-btn bg-red-500" data-color="red" onclick="selectTagColor('red')"></button>
-                        <button class="tag-color-btn bg-yellow-500" data-color="yellow" onclick="selectTagColor('yellow')"></button>
-                        <button class="tag-color-btn bg-purple-500" data-color="purple" onclick="selectTagColor('purple')"></button>
-                        <button class="tag-color-btn bg-pink-500" data-color="pink" onclick="selectTagColor('pink')"></button>
-                        <button class="tag-color-btn bg-indigo-500" data-color="indigo" onclick="selectTagColor('indigo')"></button>
-                        <button class="tag-color-btn bg-gray-500" data-color="gray" onclick="selectTagColor('gray')"></button>
+                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-blue-500" data-color="blue" id="color-blue" onclick="selectTagColor('blue')"></button>
+                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-green-500" data-color="green" id="color-green" onclick="selectTagColor('green')"></button>
+                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-red-500" data-color="red" id="color-red" onclick="selectTagColor('red')"></button>
+                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-yellow-500" data-color="yellow" id="color-yellow" onclick="selectTagColor('yellow')"></button>
+                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-purple-500" data-color="purple" id="color-purple" onclick="selectTagColor('purple')"></button>
+                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-pink-500" data-color="pink" id="color-pink" onclick="selectTagColor('pink')"></button>
+                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-indigo-500" data-color="indigo" id="color-indigo" onclick="selectTagColor('indigo')"></button>
+                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-gray-500" data-color="gray" id="color-gray" onclick="selectTagColor('gray')"></button>
                     </div>
                 </div>
                 
@@ -257,27 +257,6 @@
         </div>
     </div>
     
-    <!-- CSS -->
-    <style>
-        .tag-filter-btn {
-            @apply px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer;
-        }
-        .tag-filter-btn.active {
-            @apply bg-blue-600 text-white border-blue-600;
-        }
-        .tag-color-btn {
-            @apply w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform;
-        }
-        .tag-color-btn.selected {
-            @apply border-gray-800;
-        }
-        .tag-item {
-            @apply inline-block px-3 py-1 rounded-full text-sm font-medium cursor-pointer transition-all hover:scale-105;
-        }
-        .tag-list-item {
-            @apply flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors;
-        }
-    </style>
     
     <!-- JavaScript -->
     <script src="/public/assets/common.js"></script>
@@ -300,11 +279,17 @@
         // 設置事件監聽器
         function setupEventListeners() {
             // 標籤類別篩選
-            document.querySelectorAll('.tag-filter-btn').forEach(btn => {
+            document.querySelectorAll('[data-category]').forEach(btn => {
                 btn.addEventListener('click', function() {
                     // 更新活動狀態
-                    document.querySelectorAll('.tag-filter-btn').forEach(b => b.classList.remove('active'));
-                    this.classList.add('active');
+                    document.querySelectorAll('[data-category]').forEach(b => {
+                        if (b.dataset.category === 'all') {
+                            b.className = 'px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer';
+                        } else {
+                            b.className = 'px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer';
+                        }
+                    });
+                    this.className = 'px-3 py-1 rounded-full text-sm border border-gray-300 bg-blue-600 text-white border-blue-600 hover:bg-blue-700 transition-colors cursor-pointer';
                     
                     // 更新篩選條件
                     currentFilter = this.dataset.category;
@@ -380,7 +365,7 @@
         // 創建標籤元素
         function createTagElement(tag, showUsage = false) {
             const span = document.createElement('span');
-            span.className = `tag-item bg-${tag.color || 'blue'}-100 text-${tag.color || 'blue'}-800`;
+            span.className = `inline-block px-3 py-1 rounded-full text-sm font-medium cursor-pointer transition-all hover:scale-105 bg-${tag.color || 'blue'}-100 text-${tag.color || 'blue'}-800`;
             span.onclick = () => selectTag(tag);
             
             let content = tag.name;
@@ -395,7 +380,7 @@
         // 創建標籤列表項目
         function createTagListItem(tag) {
             const div = document.createElement('div');
-            div.className = 'tag-list-item';
+            div.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors';
             
             div.innerHTML = `
                 <div class="flex-1">
@@ -462,10 +447,11 @@
             selectedTagColor = color;
             
             // 更新按鈕狀態
-            document.querySelectorAll('.tag-color-btn').forEach(btn => {
-                btn.classList.remove('selected');
+            document.querySelectorAll('[data-color]').forEach(btn => {
+                btn.className = 'w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-' + btn.dataset.color + '-500';
             });
-            document.querySelector(`[data-color="${color}"]`).classList.add('selected');
+            const selectedBtn = document.querySelector(`[data-color="${color}"]`);
+            selectedBtn.className = 'w-8 h-8 rounded-full border-2 border-gray-800 shadow-lg cursor-pointer hover:scale-110 transition-transform bg-' + color + '-500';
         }
         
         // 創建新標籤
@@ -699,5 +685,8 @@
             selectTagColor('blue');
         });
     </script>
+    
+    <!-- Flowbite Toast 容器 -->
+    <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2 md:top-5 md:right-5 sm:top-4 sm:right-4 sm:left-4 sm:right-auto sm:max-w-sm"></div>
 </body>
 </html>

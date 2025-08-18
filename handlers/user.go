@@ -22,7 +22,7 @@ import (
 // @Success      201 {object} models.APIResponse{data=models.UserResponse} "註冊成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
 // @Failure      409 {object} models.APIResponse{error=models.APIError} "用戶已存在"
-// @Router       /user/register [post]
+// @Router       /auth/register [post]
 func RegisterUser(c *gin.Context) {
 	ctx := context.Background()
 
@@ -124,7 +124,7 @@ func RegisterUser(c *gin.Context) {
 // @Success      200 {object} models.APIResponse{data=models.LoginResponse} "登入成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "認證失敗"
-// @Router       /user/login [post]
+// @Router       /auth/login [post]
 func LoginUser(c *gin.Context) {
 	ctx := context.Background()
 
@@ -507,7 +507,7 @@ func UpdateUserPreferences(c *gin.Context) {
 // @Param        logout body models.LogoutRequest false "登出請求"
 // @Success      200 {object} models.APIResponse "登出成功"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /user/logout [post]
+// @Router       /auth/logout [post]
 func LogoutUser(c *gin.Context) {
 	// 從中間件獲取用戶ID
 	userID, exists := c.Get("user_id")
@@ -547,7 +547,7 @@ func LogoutUser(c *gin.Context) {
 // @Success      200 {object} models.APIResponse{data=models.RefreshTokenResponse} "刷新成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "Token 無效"
-// @Router       /user/refresh [post]
+// @Router       /auth/refresh [post]
 func RefreshToken(c *gin.Context) {
 	ctx := context.Background()
 
