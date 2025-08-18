@@ -112,18 +112,12 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		}).Info("🔥 Grok Request Details")
 
 		for i, msg := range request.Messages {
-			// 截斷過長的內容以便閱讀
-			content := msg.Content
-			if len(content) > 1000 {
-				content = content[:1000] + "...(truncated)"
-			}
-
 			utils.Logger.WithFields(map[string]interface{}{
 				"service":        "grok",
 				"message_index":  i,
 				"role":           msg.Role,
 				"content_length": len(msg.Content),
-			}).Info(fmt.Sprintf("📝 Prompt [%s]: %s", strings.ToUpper(msg.Role), content))
+			}).Info(fmt.Sprintf("📝 Prompt [%s]: %s", strings.ToUpper(msg.Role), msg.Content))
 		}
 	}
 
@@ -254,19 +248,13 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		}).Info("🎯 Grok Response Details")
 
 		for i, choice := range grokResponse.Choices {
-			// 截斷過長的回應以便閱讀
-			content := choice.Message.Content
-			if len(content) > 500 {
-				content = content[:500] + "...(truncated)"
-			}
-
 			utils.Logger.WithFields(map[string]interface{}{
 				"service":        "grok",
 				"choice_index":   i,
 				"finish_reason":  choice.FinishReason,
 				"content_length": len(choice.Message.Content),
 				"is_mock":        false,
-			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, content))
+			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, choice.Message.Content))
 		}
 	}
 

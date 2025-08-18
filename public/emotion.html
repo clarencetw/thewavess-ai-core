@@ -324,9 +324,7 @@
                     emotionData = emotionResult.data;
                     updateEmotionDisplay(emotionData);
                 } else {
-                    // 使用模擬數據
-                    emotionData = generateMockEmotionData();
-                    updateEmotionDisplay(emotionData);
+                    throw new Error('載入情感狀態失敗');
                 }
                 
                 // 載入好感度數據
@@ -338,9 +336,7 @@
                     affectionData = affectionResult.data;
                     updateAffectionDisplay(affectionData);
                 } else {
-                    // 使用模擬數據
-                    affectionData = generateMockAffectionData();
-                    updateAffectionDisplay(affectionData);
+                    throw new Error('載入好感度失敗');
                 }
                 
                 // 載入里程碑
@@ -352,15 +348,15 @@
             } catch (error) {
                 console.error('載入情感數據失敗:', error);
                 
-                // 使用模擬數據
-                emotionData = generateMockEmotionData();
-                affectionData = generateMockAffectionData();
-                updateEmotionDisplay(emotionData);
-                updateAffectionDisplay(affectionData);
+                // 顯示錯誤狀態
+                emotionData = null;
+                affectionData = null;
+                updateEmotionDisplay({ emotion: '未知', intensity: 0, duration: '--', trigger: '--', nsfw_level: 1 });
+                updateAffectionDisplay({ characters: [] });
                 await loadMilestones();
-                updateStatistics(emotionData, affectionData);
+                updateStatistics(null, null);
                 
-                UI.showToast('使用模擬數據', 'warning');
+                UI.showToast('載入情感數據失敗', 'error');
             }
         }
         
@@ -513,15 +509,14 @@
                 if (result.success && result.data) {
                     milestones = result.data.milestones || [];
                 } else {
-                    // 使用模擬數據
-                    milestones = generateMockMilestones();
+                    milestones = [];
                 }
                 
                 displayMilestones(milestones);
                 
             } catch (error) {
                 console.warn('載入里程碑失敗:', error);
-                displayMilestones(generateMockMilestones());
+                displayMilestones([]);
             }
         }
         
@@ -551,7 +546,7 @@
         // 觸發情感事件
         async function triggerEmotionEvent(eventType) {
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
                 const result = await ApiClient.post('/api/v1/emotion/event', {
                     event_type: eventType,
@@ -573,19 +568,10 @@
             } catch (error) {
                 console.error('觸發情感事件失敗:', error);
                 
-                // 模擬觸發效果
-                UI.showToast(`模擬觸發${getEventName(eventType)}事件`, 'info');
-                
-                // 模擬更新情感狀態
-                if (emotionData) {
-                    emotionData.emotion = getEventName(eventType);
-                    emotionData.intensity = Math.floor(Math.random() * 3) + 6;
-                    emotionData.trigger = `${getEventName(eventType)}事件`;
-                    updateEmotionDisplay(emotionData);
-                }
+                UI.showToast(`觸發事件失敗: ${error.message}`, 'error');
                 
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -610,65 +596,6 @@
             UI.showToast('情感數據已刷新', 'success');
         }
         
-        // 生成模擬情感數據
-        function generateMockEmotionData() {
-            const emotions = ['開心', '興奮', '害羞', '溫柔', '神秘', '調皮'];
-            const triggers = ['親密對話', '浪漫互動', '溫柔對待', '特殊話題', '深度交流'];
-            
-            return {
-                emotion: emotions[Math.floor(Math.random() * emotions.length)],
-                intensity: Math.floor(Math.random() * 4) + 6, // 6-9
-                duration: `${Math.floor(Math.random() * 30) + 10} 分鐘`,
-                trigger: triggers[Math.floor(Math.random() * triggers.length)],
-                nsfw_level: Math.floor(Math.random() * 3) + 2, // 2-4
-                created_at: moment().toISOString()
-            };
-        }
-        
-        // 生成模擬好感度數據
-        function generateMockAffectionData() {
-            return {
-                characters: [
-                    {
-                        id: 'char_001',
-                        name: '陸寒淵',
-                        avatar: 'https://placehold.co/40x40/6366f1/ffffff?text=陸',
-                        affection: 78,
-                        max_affection: 100,
-                        change: '+3'
-                    },
-                    {
-                        id: 'char_002',
-                        name: '沈言墨',
-                        avatar: 'https://placehold.co/40x40/10b981/ffffff?text=沈',
-                        affection: 65,
-                        max_affection: 100,
-                        change: '+1'
-                    }
-                ]
-            };
-        }
-        
-        // 生成模擬里程碑
-        function generateMockMilestones() {
-            return [
-                {
-                    id: 'milestone_001',
-                    title: '第一次親密對話',
-                    achieved_at: moment().subtract(1, "day").toISOString()
-                },
-                {
-                    id: 'milestone_002',
-                    title: '好感度達到70',
-                    achieved_at: moment().subtract(2, "days").toISOString()
-                },
-                {
-                    id: 'milestone_003',
-                    title: '深度情感交流',
-                    achieved_at: moment().subtract(3, "days").toISOString()
-                }
-            ];
-        }
         
         // 返回上一頁
         function goBack() {

@@ -495,6 +495,7 @@ const Router = {
         '/novel': '/public/novel.html',
         '/tts': '/public/tts.html',
         '/tags': '/public/tags.html',
+        '/chat-test': '/public/chat-test.html',
         '/admin': '/public/admin.html'
     },
     

@@ -87,44 +87,6 @@
                 </div>
             </div>
             
-            <!-- 系統狀態監控 -->
-            <div class="bg-white border rounded-lg p-6">
-                <h2 class="text-xl font-semibold mb-4">
-                    <i class="fas fa-chart-line text-blue-400 mr-2"></i>
-                    系統狀態監控
-                </h2>
-                
-                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
-                        <div class="text-2xl font-bold text-blue-600" id="cpuUsage">--</div>
-                        <div class="text-sm text-gray-600">CPU 使用率</div>
-                    </div>
-                    
-                    <div class="bg-green-50 border border-green-200 rounded-lg p-4 text-center">
-                        <div class="text-2xl font-bold text-green-600" id="memoryUsage">--</div>
-                        <div class="text-sm text-gray-600">記憶體使用</div>
-                    </div>
-                    
-                    <div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 text-center">
-                        <div class="text-2xl font-bold text-yellow-600" id="diskUsage">--</div>
-                        <div class="text-sm text-gray-600">磁碟使用</div>
-                    </div>
-                    
-                    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 text-center">
-                        <div class="text-2xl font-bold text-purple-600" id="networkLoad">--</div>
-                        <div class="text-sm text-gray-600">網路負載</div>
-                    </div>
-                </div>
-                
-                <!-- 系統性能圖表 -->
-                <div class="bg-gray-50 rounded-lg p-4 h-64 flex items-center justify-center">
-                    <div class="text-center text-gray-500">
-                        <i class="fas fa-chart-area text-4xl mb-2"></i>
-                        <div>系統性能監控圖表</div>
-                        <div class="text-sm">(可集成監控圖表庫)</div>
-                    </div>
-                </div>
-            </div>
             
             <!-- API 狀態監控 -->
             <div class="bg-white border rounded-lg p-6">
@@ -175,55 +137,6 @@
         
         <!-- 右側 - 快速操作與統計 -->
         <div class="space-y-6">
-            <!-- 快速操作 -->
-            <div class="bg-white border rounded-lg p-6">
-                <h3 class="text-lg font-semibold mb-4">
-                    <i class="fas fa-bolt text-yellow-400 mr-2"></i>
-                    快速操作
-                </h3>
-                
-                <div class="space-y-3">
-                    <button 
-                        class="w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded text-left"
-                        onclick="restartService()"
-                    >
-                        <i class="fas fa-redo mr-2"></i>
-                        重啟服務
-                    </button>
-                    
-                    <button 
-                        class="w-full bg-blue-600 hover:bg-blue-700 text-white py-2 px-4 rounded text-left"
-                        onclick="clearCache()"
-                    >
-                        <i class="fas fa-broom mr-2"></i>
-                        清理快取
-                    </button>
-                    
-                    <button 
-                        class="w-full bg-purple-600 hover:bg-purple-700 text-white py-2 px-4 rounded text-left"
-                        onclick="optimizeDatabase()"
-                    >
-                        <i class="fas fa-database mr-2"></i>
-                        優化資料庫
-                    </button>
-                    
-                    <button 
-                        class="w-full bg-orange-600 hover:bg-orange-700 text-white py-2 px-4 rounded text-left"
-                        onclick="backupSystem()"
-                    >
-                        <i class="fas fa-save mr-2"></i>
-                        系統備份
-                    </button>
-                    
-                    <button 
-                        class="w-full bg-red-600 hover:bg-red-700 text-white py-2 px-4 rounded text-left"
-                        onclick="emergencyShutdown()"
-                    >
-                        <i class="fas fa-power-off mr-2"></i>
-                        緊急停機
-                    </button>
-                </div>
-            </div>
             
             <!-- 系統統計 -->
             <div class="bg-white border rounded-lg p-6">
@@ -295,39 +208,6 @@
                 </div>
             </div>
             
-            <!-- 警報設定 -->
-            <div class="bg-white border rounded-lg p-6">
-                <h3 class="text-lg font-semibold mb-4">
-                    <i class="fas fa-bell text-red-400 mr-2"></i>
-                    警報設定
-                </h3>
-                
-                <div class="space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">CPU 高使用率警報</span>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="cpuAlert" class="sr-only peer" checked>
-                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                    </div>
-                    
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">記憶體不足警報</span>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="memoryAlert" class="sr-only peer" checked>
-                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                    </div>
-                    
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">API 錯誤率警報</span>
-                        <label class="relative inline-flex items-center cursor-pointer">
-                            <input type="checkbox" id="apiErrorAlert" class="sr-only peer" checked>
-                            <div class="w-11 h-6 bg-gray-600 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
-                        </label>
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
     
@@ -345,7 +225,6 @@
             await loadSystemData();
             
             // 設置定時刷新
-            setInterval(updateSystemMetrics, 30000); // 30秒刷新一次
             setInterval(updateSystemLogs, 10000);    // 10秒刷新一次日誌
         });
         
@@ -354,9 +233,6 @@
             try {
                 // 載入健康檢查
                 await loadHealthChecks();
-                
-                // 載入系統狀態
-                await loadSystemStatus();
                 
                 // 載入 API 狀態
                 await loadAPIStatus();
@@ -455,34 +331,6 @@
             }
         }
         
-        // 載入系統狀態
-        async function loadSystemStatus() {
-            try {
-                const result = await ApiClient.get('/api/v1/status');
-                
-                if (result.success && result.data) {
-                    updateSystemMetrics(result.data);
-                } else {
-                    updateSystemMetrics(generateMockSystemMetrics());
-                }
-                
-            } catch (error) {
-                console.warn('載入系統狀態失敗:', error);
-                updateSystemMetrics(generateMockSystemMetrics());
-            }
-        }
-        
-        // 更新系統指標
-        function updateSystemMetrics(data = null) {
-            if (!data) {
-                data = generateMockSystemMetrics();
-            }
-            
-            document.getElementById('cpuUsage').textContent = data.cpu_usage || '--';
-            document.getElementById('memoryUsage').textContent = data.memory_usage || '--';
-            document.getElementById('diskUsage').textContent = data.disk_usage || '--';
-            document.getElementById('networkLoad').textContent = data.network_load || '--';
-        }
         
         // 載入 API 狀態
         async function loadAPIStatus() {
@@ -528,21 +376,31 @@
         
         // 載入系統統計
         async function loadSystemStats() {
-            const stats = {
-                uptime: '15天 8小時 32分鐘',
-                total_requests: '1,234,567',
-                error_rate: '0.02%',
-                avg_response_time: '125ms',
-                active_users: '42',
-                db_connections: '8/20'
-            };
-            
-            document.getElementById('uptime').textContent = stats.uptime;
-            document.getElementById('totalRequests').textContent = stats.total_requests;
-            document.getElementById('errorRate').textContent = stats.error_rate;
-            document.getElementById('avgResponseTime').textContent = stats.avg_response_time;
-            document.getElementById('activeUsers').textContent = stats.active_users;
-            document.getElementById('dbConnections').textContent = stats.db_connections;
+            try {
+                const result = await ApiClient.get('/api/v1/admin/stats');
+                
+                if (result.success && result.data) {
+                    const stats = result.data;
+                    document.getElementById('uptime').textContent = stats.uptime || '--';
+                    document.getElementById('totalRequests').textContent = stats.total_requests || '--';
+                    document.getElementById('errorRate').textContent = stats.error_rate || '--';
+                    document.getElementById('avgResponseTime').textContent = stats.avg_response_time || '--';
+                    document.getElementById('activeUsers').textContent = stats.active_users || '--';
+                    document.getElementById('dbConnections').textContent = stats.db_connections || '--';
+                } else {
+                    throw new Error('載入統計失敗');
+                }
+            } catch (error) {
+                console.warn('載入系統統計失敗:', error);
+                
+                // 顯示默認值
+                document.getElementById('uptime').textContent = '--';
+                document.getElementById('totalRequests').textContent = '--';
+                document.getElementById('errorRate').textContent = '--';
+                document.getElementById('avgResponseTime').textContent = '--';
+                document.getElementById('activeUsers').textContent = '--';
+                document.getElementById('dbConnections').textContent = '--';
+            }
         }
         
         // 載入版本信息
@@ -565,16 +423,28 @@
         
         // 載入系統日誌
         async function loadSystemLogs() {
-            const mockLogs = [
-                { level: 'info', timestamp: moment().toISOString(), message: '系統啟動完成' },
-                { level: 'info', timestamp: moment().subtract(1, "minute").toISOString(), message: 'API 服務開始監聽端口 8080' },
-                { level: 'warning', timestamp: moment().subtract(2, "minutes").toISOString(), message: '記憶體使用率超過 80%' },
-                { level: 'info', timestamp: moment().subtract(3, "minutes").toISOString(), message: '資料庫連接建立成功' },
-                { level: 'error', timestamp: moment().subtract(4, "minutes").toISOString(), message: 'OpenAI API 請求失敗，正在重試' }
-            ];
-            
-            systemLogs = mockLogs;
-            displaySystemLogs();
+            try {
+                const result = await ApiClient.get('/api/v1/admin/logs');
+                
+                if (result.success && result.data) {
+                    systemLogs = result.data.logs || [];
+                    displaySystemLogs();
+                } else {
+                    throw new Error('載入日誌失敗');
+                }
+            } catch (error) {
+                console.warn('載入系統日誌失敗:', error);
+                
+                // 使用模擬日誌
+                const mockLogs = [
+                    { level: 'info', timestamp: moment().toISOString(), message: '系統啟動完成' },
+                    { level: 'info', timestamp: moment().subtract(1, "minute").toISOString(), message: 'API 服務開始監聽端口 8080' },
+                    { level: 'info', timestamp: moment().subtract(3, "minutes").toISOString(), message: '資料庫連接建立成功' }
+                ];
+                
+                systemLogs = mockLogs;
+                displaySystemLogs();
+            }
         }
         
         // 更新系統日誌
@@ -628,7 +498,7 @@
         
         // 執行健康檢查
         async function runHealthCheck() {
-            UI.showLoading();
+            UI.showGlobalLoading(true);
             
             try {
                 // 模擬檢查過程
@@ -640,7 +510,7 @@
             } catch (error) {
                 UI.showToast('健康檢查失敗: ' + error.message, 'error');
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -662,7 +532,7 @@
         // 測試 API
         async function testAPI(endpoint) {
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
                 // 模擬 API 測試
                 await new Promise(resolve => setTimeout(resolve, 1000));
@@ -672,42 +542,10 @@
             } catch (error) {
                 UI.showToast(`API ${endpoint} 測試失敗`, 'error');
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
-        // 快速操作函數
-        function restartService() {
-            if (confirm('確定要重啟服務嗎？這將中斷所有當前連接。')) {
-                UI.showToast('服務重啟功能開發中', 'info');
-            }
-        }
-        
-        function clearCache() {
-            if (confirm('確定要清理所有快取嗎？')) {
-                UI.showToast('快取已清理', 'success');
-            }
-        }
-        
-        function optimizeDatabase() {
-            if (confirm('確定要優化資料庫嗎？這可能需要幾分鐘時間。')) {
-                UI.showToast('資料庫優化功能開發中', 'info');
-            }
-        }
-        
-        function backupSystem() {
-            if (confirm('確定要開始系統備份嗎？')) {
-                UI.showToast('系統備份功能開發中', 'info');
-            }
-        }
-        
-        function emergencyShutdown() {
-            if (confirm('⚠️ 警告：確定要執行緊急停機嗎？這將立即停止所有服務！')) {
-                if (confirm('這是最終確認，緊急停機將無法撤銷！')) {
-                    UI.showToast('緊急停機功能已禁用（安全考量）', 'warning');
-                }
-            }
-        }
         
         function exportHealthReport() {
             const report = {
@@ -742,18 +580,9 @@
             };
         }
         
-        function generateMockSystemMetrics() {
-            return {
-                cpu_usage: `${Math.floor(Math.random() * 30 + 20)}%`,
-                memory_usage: `${Math.floor(Math.random() * 40 + 40)}%`,
-                disk_usage: `${Math.floor(Math.random() * 20 + 60)}%`,
-                network_load: `${Math.floor(Math.random() * 50 + 10)}Mbps`
-            };
-        }
         
         function loadMockSystemData() {
             displayHealthChecks(generateMockHealthData());
-            updateSystemMetrics(generateMockSystemMetrics());
             loadAPIStatus();
             loadSystemStats();
             loadSystemLogs();

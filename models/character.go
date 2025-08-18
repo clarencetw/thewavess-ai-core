@@ -27,6 +27,7 @@ type Character struct {
 
 	// 關聯
 	Sessions []*ChatSession `bun:"rel:has-many,join:id=character_id" json:"sessions,omitempty"`
+	Scenes   []*Scene       `bun:"rel:has-many,join:id=character_id" json:"scenes,omitempty"`
 }
 
 // TableName 返回數據庫表名
@@ -112,7 +113,7 @@ type CharacterInteractionStats struct {
 	TotalConversations int           `json:"total_conversations"`
 	TotalMessages      int           `json:"total_messages"`
 	TotalUsers         int           `json:"total_users"`
-	AvgSessionLength   time.Duration `json:"avg_session_length"`
+	AvgSessionLength   int64         `json:"avg_session_length"` // Duration in seconds
 	LastInteraction    *time.Time    `json:"last_interaction"`
 	ActiveDays         int           `json:"active_days"`
 	MessagesByRole     map[string]int `json:"messages_by_role"`
@@ -156,4 +157,76 @@ type EmotionalMilestone struct {
 	Affection   int       `json:"affection"`
 	Relationship string   `json:"relationship"`
 	UsersCount  int       `json:"users_count"`
+}
+
+// Scene 場景模型
+type Scene struct {
+	bun.BaseModel `bun:"table:scenes,alias:s"`
+
+	ID               string    `bun:"id,pk" json:"id"`
+	CharacterID      string    `bun:"character_id,notnull" json:"character_id"`
+	TimeOfDay        string    `bun:"time_of_day,notnull" json:"time_of_day"`
+	AffectionMin     int       `bun:"affection_min,default:0" json:"affection_min"`
+	AffectionMax     int       `bun:"affection_max,default:100" json:"affection_max"`
+	NSFWLevelMin     int       `bun:"nsfw_level_min,default:1" json:"nsfw_level_min"`
+	NSFWLevelMax     int       `bun:"nsfw_level_max,default:5" json:"nsfw_level_max"`
+	Description      string    `bun:"description,notnull" json:"description"`
+	RomanticAddition string    `bun:"romantic_addition" json:"romantic_addition,omitempty"`
+	Weight           int       `bun:"weight,default:1" json:"weight"`
+	IsActive         bool      `bun:"is_active,default:true" json:"is_active"`
+	CreatedAt        time.Time `bun:"created_at,nullzero,default:now()" json:"created_at"`
+	UpdatedAt        time.Time `bun:"updated_at,nullzero,default:now()" json:"updated_at"`
+
+	// 關聯
+	Character *Character `bun:"rel:belongs-to,join:character_id=id" json:"character,omitempty"`
+}
+
+// TableName 返回數據庫表名
+func (s *Scene) TableName() string {
+	return "scenes"
+}
+
+// BeforeAppendModel 在模型操作前執行
+func (s *Scene) BeforeAppendModel(ctx context.Context, query bun.Query) error {
+	switch query.(type) {
+	case *bun.UpdateQuery:
+		s.UpdatedAt = time.Now()
+	}
+	return nil
+}
+
+// SceneResponse 場景響應格式
+type SceneResponse struct {
+	ID               string    `json:"id"`
+	CharacterID      string    `json:"character_id"`
+	TimeOfDay        string    `json:"time_of_day"`
+	AffectionMin     int       `json:"affection_min"`
+	AffectionMax     int       `json:"affection_max"`
+	NSFWLevelMin     int       `json:"nsfw_level_min"`
+	NSFWLevelMax     int       `json:"nsfw_level_max"`
+	Description      string    `json:"description"`
+	RomanticAddition string    `json:"romantic_addition,omitempty"`
+	Weight           int       `json:"weight"`
+	IsActive         bool      `json:"is_active"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// ToResponse 轉換為響應格式
+func (s *Scene) ToResponse() *SceneResponse {
+	return &SceneResponse{
+		ID:               s.ID,
+		CharacterID:      s.CharacterID,
+		TimeOfDay:        s.TimeOfDay,
+		AffectionMin:     s.AffectionMin,
+		AffectionMax:     s.AffectionMax,
+		NSFWLevelMin:     s.NSFWLevelMin,
+		NSFWLevelMax:     s.NSFWLevelMax,
+		Description:      s.Description,
+		RomanticAddition: s.RomanticAddition,
+		Weight:           s.Weight,
+		IsActive:         s.IsActive,
+		CreatedAt:        s.CreatedAt,
+		UpdatedAt:        s.UpdatedAt,
+	}
 }

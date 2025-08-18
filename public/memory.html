@@ -391,9 +391,7 @@
                     memoryData = timelineResult.data.memories || [];
                     displayMemoryTimeline(memoryData);
                 } else {
-                    // 使用模擬數據
-                    memoryData = generateMockMemoryData();
-                    displayMemoryTimeline(memoryData);
+                    throw new Error('載入記憶時間軸失敗');
                 }
                 
                 // 載入記憶統計
@@ -402,12 +400,17 @@
             } catch (error) {
                 console.error('載入記憶數據失敗:', error);
                 
-                // 使用模擬數據
-                memoryData = generateMockMemoryData();
+                // 顯示錯誤狀態
+                memoryData = [];
                 displayMemoryTimeline(memoryData);
-                loadMockMemoryStats();
+                updateMemoryStats({
+                    total_memories: 0,
+                    important_memories: 0,
+                    recent_memories: 0,
+                    type_distribution: {}
+                });
                 
-                UI.showToast('使用模擬數據', 'warning');
+                UI.showToast('載入記憶數據失敗', 'error');
             }
         }
         
@@ -489,12 +492,17 @@
                 if (statsResult.success && statsResult.data) {
                     updateMemoryStats(statsResult.data);
                 } else {
-                    loadMockMemoryStats();
+                    throw new Error('載入記憶統計失敗');
                 }
                 
             } catch (error) {
                 console.warn('載入記憶統計失敗:', error);
-                loadMockMemoryStats();
+                updateMemoryStats({
+                    total_memories: 0,
+                    important_memories: 0,
+                    recent_memories: 0,
+                    type_distribution: {}
+                });
             }
         }
         
@@ -556,7 +564,7 @@
             }
             
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
                 const params = new URLSearchParams({
                     query: query,
@@ -587,7 +595,7 @@
                 UI.showToast(`本地搜尋找到 ${filteredMemories.length} 個結果`, 'info');
                 
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -667,7 +675,7 @@
         // 備份記憶
         async function backupMemory() {
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
                 const result = await ApiClient.post('/api/v1/memory/backup');
                 
@@ -691,27 +699,10 @@
             } catch (error) {
                 console.error('備份記憶失敗:', error);
                 
-                // 模擬備份
-                const mockBackup = {
-                    version: '1.0',
-                    created_at: moment().toISOString(),
-                    memories: memoryData
-                };
-                
-                const blob = new Blob([JSON.stringify(mockBackup, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = `memory_backup_${moment().format('YYYY-MM-DD')}.json`;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-                
-                UI.showToast('模擬備份完成', 'info');
+                UI.showToast('備份失敗: ' + error.message, 'error');
                 
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -736,7 +727,7 @@
             }
             
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
                 const text = await file.text();
                 const backupData = JSON.parse(text);
@@ -762,7 +753,7 @@
                 console.error('還原記憶失敗:', error);
                 UI.showToast('還原失敗: ' + error.message, 'error');
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -773,19 +764,23 @@
             }
             
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
-                // 模擬整理過程
-                await new Promise(resolve => setTimeout(resolve, 2000));
+                // 實際整理記憶的 API 調用
+                const result = await ApiClient.post('/api/v1/memory/organize');
                 
-                UI.showToast('記憶整理完成', 'success');
-                await loadMemoryData();
+                if (result.success) {
+                    UI.showToast('記憶整理完成', 'success');
+                    await loadMemoryData();
+                } else {
+                    throw new Error(result.error?.message || '整理失敗');
+                }
                 
             } catch (error) {
                 console.error('整理記憶失敗:', error);
                 UI.showToast('整理失敗: ' + error.message, 'error');
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -796,23 +791,25 @@
             }
             
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
-                // 模擬清理過程
-                await new Promise(resolve => setTimeout(resolve, 1500));
+                // 實際清理記憶的 API 調用
+                const result = await ApiClient.post('/api/v1/memory/cleanup', {
+                    min_importance: 3
+                });
                 
-                // 移除重要度低於3的記憶
-                memoryData = memoryData.filter(memory => (memory.importance || 0) >= 3);
-                displayMemoryTimeline(memoryData);
-                
-                UI.showToast('低重要度記憶已清理', 'success');
-                await loadMemoryStats();
+                if (result.success) {
+                    UI.showToast('低重要度記憶已清理', 'success');
+                    await loadMemoryData();
+                } else {
+                    throw new Error(result.error?.message || '清理失敗');
+                }
                 
             } catch (error) {
                 console.error('清理記憶失敗:', error);
                 UI.showToast('清理失敗: ' + error.message, 'error');
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -884,76 +881,10 @@
             } catch (error) {
                 console.error('刪除記憶失敗:', error);
                 
-                // 模擬刪除
-                memoryData = memoryData.filter(memory => memory.id !== selectedMemoryId);
-                displayMemoryTimeline(memoryData);
-                closeMemoryDetailModal();
-                UI.showToast('模擬刪除完成', 'info');
+                UI.showToast('刪除失敗: ' + error.message, 'error');
             }
         }
         
-        // 生成模擬記憶數據
-        function generateMockMemoryData() {
-            return [
-                {
-                    id: 'memory_001',
-                    type: 'preference',
-                    content: '用戶喜歡在晚上進行深度對話，偏好浪漫和溫柔的互動方式。',
-                    importance: 8,
-                    character_name: '陸寒淵',
-                    created_at: moment().toISOString(),
-                    trigger: '深夜對話'
-                },
-                {
-                    id: 'memory_002',
-                    type: 'milestone',
-                    content: '第一次親密對話，建立了深度的情感連結。',
-                    importance: 9,
-                    character_name: '陸寒淵',
-                    created_at: moment().subtract(1, "day").toISOString(),
-                    trigger: '親密互動'
-                },
-                {
-                    id: 'memory_003',
-                    type: 'nickname',
-                    content: '用戶喜歡被稱呼為「寶貝」，這讓他們感到特別和被愛。',
-                    importance: 7,
-                    character_name: '沈言墨',
-                    created_at: moment().subtract(2, "days").toISOString(),
-                    trigger: '親密稱呼'
-                },
-                {
-                    id: 'memory_004',
-                    type: 'dislike',
-                    content: '用戶不喜歡過於直接的表達，偏好含蓄和暗示的方式。',
-                    importance: 6,
-                    character_name: '陸寒淵',
-                    created_at: moment().subtract(3, "days").toISOString(),
-                    trigger: '溝通偏好'
-                }
-            ];
-        }
-        
-        // 載入模擬記憶統計
-        function loadMockMemoryStats() {
-            const stats = {
-                total_memories: memoryData.length,
-                important_memories: memoryData.filter(m => (m.importance || 0) >= 7).length,
-                recent_memories: memoryData.filter(m => {
-                    const created = new Date(m.created_at);
-                    const dayAgo = new Date(Date.now() - 86400000);
-                    return created > dayAgo;
-                }).length,
-                type_distribution: {
-                    preference: memoryData.filter(m => m.type === 'preference').length,
-                    nickname: memoryData.filter(m => m.type === 'nickname').length,
-                    milestone: memoryData.filter(m => m.type === 'milestone').length,
-                    dislike: memoryData.filter(m => m.type === 'dislike').length
-                }
-            };
-            
-            updateMemoryStats(stats);
-        }
         
         // 返回上一頁
         function goBack() {

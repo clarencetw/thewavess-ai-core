@@ -322,6 +322,9 @@ func (mm *MemoryManager) ExtractAndUpdateLongTermMemory(userID, characterID, use
 	// 提取個人信息
 	mm.extractPersonalInfo(memory, userMessage)
 	
+	// 智能記憶提取 - 基於情緒和長度的通用記憶
+	mm.extractSmartMemory(memory, userMessage, aiResponse, emotion)
+	
 	memory.LastUpdated = time.Now()
 	
 	// 保存到資料庫
@@ -341,7 +344,7 @@ func (mm *MemoryManager) ExtractAndUpdateLongTermMemory(userID, characterID, use
 
 // extractPreferences 提取偏好
 func (mm *MemoryManager) extractPreferences(memory *LongTermMemory, message string) {
-	// 偏好模板
+	// 偏好模板 - 擴展更多模式
 	templates := []struct {
 		pattern  string
 		category string
@@ -351,6 +354,17 @@ func (mm *MemoryManager) extractPreferences(memory *LongTermMemory, message stri
 		{"我最喜歡", "strong_preference"},
 		{"我希望", "wish"},
 		{"我想要", "desire"},
+		{"好喜歡", "preference"},
+		{"很愛", "preference"},
+		{"超喜歡", "strong_preference"},
+		{"喜歡", "preference"},
+		{"愛", "preference"},
+		{"想", "wish"},
+		{"希望", "wish"},
+		{"討厭", "dislike"},
+		{"不喜歡", "dislike"},
+		{"偏愛", "preference"},
+		{"鍾意", "preference"},
 	}
 	
 	for _, template := range templates {
@@ -420,7 +434,7 @@ func (mm *MemoryManager) extractNicknames(memory *LongTermMemory, userMessage, a
 
 // detectMilestones 檢測里程碑
 func (mm *MemoryManager) detectMilestones(memory *LongTermMemory, userMessage, aiResponse string, emotion *EmotionState) {
-	// 里程碑關鍵詞
+	// 里程碑關鍵詞 - 擴展更多模式
 	milestoneKeywords := map[string]string{
 		"第一次":  "first_time",
 		"告白":   "confession",
@@ -428,6 +442,20 @@ func (mm *MemoryManager) detectMilestones(memory *LongTermMemory, userMessage, a
 		"我愛你":  "love_declaration",
 		"想見你":  "miss_you",
 		"約會":   "date",
+		"初次":   "first_time",
+		"表白":   "confession",
+		"喜歡你":  "love_declaration",
+		"愛你":   "love_declaration",
+		"想你":   "miss_you",
+		"見面":   "meeting",
+		"出去玩":  "date",
+		"一起":   "together",
+		"交往":   "relationship",
+		"男女朋友": "relationship",
+		"情侶":   "relationship",
+		"親吻":   "kiss",
+		"擁抱":   "hug",
+		"牽手":   "hold_hands",
 	}
 	
 	for keyword, mType := range milestoneKeywords {
@@ -784,10 +812,16 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 	if err != nil {
 		return fmt.Errorf("開始事務失敗: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if r := recover(); r != nil {
+			tx.Rollback()
+			panic(r)
+		}
+	}()
 	
 	// 1. 保存或更新主記錄
 	memoryModel := &models.LongTermMemoryModel{
+		ID:          utils.GenerateID(16), // 生成唯一ID
 		UserID:      memory.UserID,
 		CharacterID: memory.CharacterID,
 		LastUpdated: memory.LastUpdated,
@@ -804,6 +838,7 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 		Exec(ctx)
 		
 	if err != nil {
+		tx.Rollback()
 		return fmt.Errorf("保存記憶主記錄失敗: %w", err)
 	}
 	
@@ -816,6 +851,7 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 		Scan(ctx, &memoryID)
 		
 	if err != nil {
+		tx.Rollback()
 		return fmt.Errorf("獲取記憶ID失敗: %w", err)
 	}
 	
@@ -831,6 +867,7 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 			Where("memory_id = ?", memoryID).
 			Exec(ctx)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("清理表 %s 失敗: %w", table, err)
 		}
 	}
@@ -853,6 +890,7 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 			Model(&preferences).
 			Exec(ctx)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("保存偏好失敗: %w", err)
 		}
 	}
@@ -875,6 +913,7 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 			Model(&nicknames).
 			Exec(ctx)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("保存稱呼失敗: %w", err)
 		}
 	}
@@ -898,6 +937,7 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 			Model(&milestones).
 			Exec(ctx)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("保存里程碑失敗: %w", err)
 		}
 	}
@@ -921,6 +961,7 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 			Model(&dislikes).
 			Exec(ctx)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("保存禁忌失敗: %w", err)
 		}
 	}
@@ -943,12 +984,14 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 			Model(&personalInfo).
 			Exec(ctx)
 		if err != nil {
+			tx.Rollback()
 			return fmt.Errorf("保存個人信息失敗: %w", err)
 		}
 	}
 	
 	// 提交事務
 	if err = tx.Commit(); err != nil {
+		tx.Rollback()
 		return fmt.Errorf("提交事務失敗: %w", err)
 	}
 	
@@ -960,3 +1003,116 @@ func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 	
 	return nil
 }
+
+// extractSmartMemory 智能記憶提取 - 基於上下文和情感的記憶學習
+func (mm *MemoryManager) extractSmartMemory(memory *LongTermMemory, userMessage, aiResponse string, emotion *EmotionState) {
+	// 如果用戶消息較長且包含情感詞彙，視為重要記憶
+	if len(userMessage) > 20 {
+		emotionalWords := []string{
+			"開心", "難過", "生氣", "興奮", "緊張", "害怕", "擔心", "感動", 
+			"高興", "傷心", "煩悶", "焦慮", "放鬆", "壓力", "疲倦", "精神",
+			"美好", "糟糕", "完美", "失望", "滿足", "不安", "舒服", "痛苦",
+		}
+		
+		hasEmotion := false
+		for _, word := range emotionalWords {
+			if strings.Contains(userMessage, word) {
+				hasEmotion = true
+				break
+			}
+		}
+		
+		// 包含情感的長消息作為偏好記憶
+		if hasEmotion {
+			// 提取前50個字作為記憶內容
+			content := userMessage
+			if len(content) > 50 {
+				content = content[:50] + "..."
+			}
+			
+			// 檢查是否已有類似記憶
+			exists := false
+			for _, pref := range memory.Preferences {
+				if strings.Contains(pref.Content, content[:min(len(content), 20)]) {
+					exists = true
+					break
+				}
+			}
+			
+			if !exists {
+				preference := Preference{
+					ID:         utils.GenerateID(8),
+					Category:   "emotional_moment",
+					Content:    content,
+					Importance: 3, // 中等重要度
+					Evidence:   userMessage,
+					CreatedAt:  time.Now(),
+				}
+				memory.Preferences = append(memory.Preferences, preference)
+				
+				utils.Logger.WithFields(logrus.Fields{
+					"type":    "smart_memory",
+					"content": content,
+				}).Info("智能記憶：提取情感時刻")
+			}
+		}
+	}
+	
+	// 檢測特殊對話模式
+	specialPatterns := map[string]string{
+		"謝謝":    "gratitude",
+		"對不起":   "apology", 
+		"再見":    "farewell",
+		"早安":    "greeting",
+		"晚安":    "goodnight",
+		"生日快樂":  "birthday",
+		"新年快樂":  "new_year",
+		"聖誕快樂":  "christmas",
+	}
+	
+	for pattern, mType := range specialPatterns {
+		if strings.Contains(userMessage, pattern) || strings.Contains(aiResponse, pattern) {
+			// 檢查是否已存在同類型里程碑
+			exists := false
+			for _, m := range memory.Milestones {
+				if m.Type == mType {
+					exists = true
+					break
+				}
+			}
+			
+			if !exists {
+				milestone := Milestone{
+					ID:          utils.GenerateID(8),
+					Type:        mType,
+					Description: fmt.Sprintf("特殊對話：%s", pattern),
+					Date:        time.Now(),
+					Affection:   emotion.Affection,
+				}
+				memory.Milestones = append(memory.Milestones, milestone)
+				
+				utils.Logger.WithFields(logrus.Fields{
+					"type":    "smart_milestone",
+					"pattern": pattern,
+				}).Info("智能記憶：檢測到特殊對話模式")
+			}
+		}
+	}
+	
+	// 基於好感度變化檢測重要時刻
+	if emotion.Affection >= 80 && len(memory.Milestones) == 0 {
+		milestone := Milestone{
+			ID:          utils.GenerateID(8),
+			Type:        "high_affection",
+			Description: "達成高好感度",
+			Date:        time.Now(),
+			Affection:   emotion.Affection,
+		}
+		memory.Milestones = append(memory.Milestones, milestone)
+		
+		utils.Logger.WithFields(logrus.Fields{
+			"affection": emotion.Affection,
+		}).Info("智能記憶：檢測到高好感度里程碑")
+	}
+}
+

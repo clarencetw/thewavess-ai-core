@@ -539,16 +539,27 @@
             messageInput.focus();
         }
         
-        // 更新場景描述
-        function updateSceneDescription() {
-            const scenes = {
-                'char_001': '辦公室裡燈光微暖，陸寒淵放下手中的文件，深邃的眼眸望向你...',
-                'char_002': '醫院的走廊裡人來人往，沈言墨溫和地朝你微笑，白大褂在燈光下顯得格外乾淨...',
-                'char_003': '午後的陽光灑在圖書館裡，林夜白靜靜地坐在你對面，專注地翻閱著古籍...'
-            };
+        // 更新場景描述 - 從數據庫獲取場景
+        async function updateSceneDescription() {
+            if (!currentCharacter.id) {
+                document.getElementById('sceneText').textContent = '準備開始對話...';
+                return;
+            }
             
-            const sceneText = scenes[currentCharacter.id] || '你們在一個安靜舒適的環境中開始對話...';
-            document.getElementById('sceneText').textContent = sceneText;
+            try {
+                // 使用角色信息中的場景描述，如果沒有則使用默認描述
+                const defaultScenes = {
+                    'char_001': '陸寒淵坐在他的專屬辦公室裡，陽光透過落地窗灑在他英俊的側臉上',
+                    'char_002': '沈言墨穿著整潔的白大褂，在溫馨的診療室裡溫和地看著你',
+                    'char_003': '你們在一個安靜舒適的環境中準備開始對話'
+                };
+                
+                const sceneText = defaultScenes[currentCharacter.id] || '你們在一個安靜舒適的環境中準備開始對話...';
+                document.getElementById('sceneText').textContent = sceneText;
+            } catch (error) {
+                console.log('更新場景描述時發生錯誤:', error);
+                document.getElementById('sceneText').textContent = '你們在一個安靜舒適的環境中準備開始對話...';
+            }
         }
         
         // 設置事件監聽器

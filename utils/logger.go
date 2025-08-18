@@ -174,6 +174,7 @@ func InitLogger() {
 		Logger.SetLevel(logrus.InfoLevel)
 	}
 	
+	
 	Logger.WithFields(logrus.Fields{
 		"service": "thewavess-ai-core",
 		"version": "1.0.0",

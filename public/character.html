@@ -401,11 +401,7 @@
                 'adult': 'bg-red-500'
             }[character.nsfw_level] || 'bg-gray-500';
             
-            const titleColor = {
-                'char_001': 'bg-blue-600 text-white',
-                'char_002': 'bg-green-600 text-white',
-                'char_003': 'bg-blue-600 text-white'
-            }[character.id] || 'bg-gray-600 text-white';
+            const titleColor = getTitleColorByType(character.type);
             
             card.innerHTML = `
                 <div class="text-center mb-4">
@@ -455,11 +451,23 @@
         // 獲取默認頭像
         function getDefaultAvatar(characterId) {
             const avatars = {
-                'char_001': 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=face',  // 霸道總裁風格
-                'char_002': 'https://images.unsplash.com/photo-1582750433449-648ed127bb54?w=300&h=300&fit=crop&crop=face',  // 溫柔醫生風格
-                'char_003': 'https://images.unsplash.com/photo-1564564321837-a57b7070ac4f?w=300&h=300&fit=crop&crop=face'   // 其他角色
+                'char_001': 'https://placehold.co/300x300/2563eb/ffffff?text=陸燁銘',  // 與數據庫一致的占位圖
+                'char_002': 'https://placehold.co/300x300/10b981/ffffff?text=沈言墨',  // 與數據庫一致的占位圖
+                'char_003': 'https://placehold.co/300x300/8b5cf6/ffffff?text=角色'    // 默認角色
             };
-            return avatars[characterId] || 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=300&h=300&fit=crop&crop=face';
+            return avatars[characterId] || 'https://placehold.co/300x300/6b7280/ffffff?text=角色';
+        }
+        
+        // 根據角色類型獲取標題顏色
+        function getTitleColorByType(type) {
+            const typeColors = {
+                'dominant': 'bg-blue-600 text-white',    // 霸道總裁
+                'gentle': 'bg-green-600 text-white',     // 溫柔醫生
+                'ascetic': 'bg-purple-600 text-white',   // 禁慾系
+                'sunny': 'bg-yellow-600 text-white',     // 陽光系
+                'cunning': 'bg-red-600 text-white'       // 腹黑系
+            };
+            return typeColors[type] || 'bg-gray-600 text-white';
         }
         
         // 顯示角色詳情模態框
@@ -485,11 +493,7 @@
             
             // 設置標題顏色
             const titleElement = document.getElementById('modalTitle');
-            const titleColor = {
-                'char_001': 'bg-blue-600 text-white',
-                'char_002': 'bg-green-600 text-white',
-                'char_003': 'bg-blue-600 text-white'
-            }[character.id] || 'bg-gray-600 text-white';
+            const titleColor = getTitleColorByType(character.type);
             titleElement.className = `px-3 py-1 rounded-full text-sm font-medium ${titleColor}`;
             
             // 設置性格特徵
@@ -564,11 +568,7 @@
             // 設置標題
             const titleElement = document.getElementById('selectedTitle');
             titleElement.textContent = selectedCharacter.title;
-            const titleColor = {
-                'char_001': 'bg-blue-600 text-white',
-                'char_002': 'bg-green-600 text-white', 
-                'char_003': 'bg-blue-600 text-white'
-            }[selectedCharacter.id] || 'bg-gray-600 text-white';
+            const titleColor = getTitleColorByType(selectedCharacter.type);
             titleElement.className = `px-3 py-1 rounded-full text-sm font-medium ${titleColor}`;
             
             // 設置 NSFW 標籤

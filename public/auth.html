@@ -438,9 +438,9 @@
                 if (result.success) {
                     // 保存認證信息
                     AppState.isAuthenticated = true;
-                    AppState.accessToken = result.data.access_token;
+                    AppState.accessToken = result.data.token;
                     AppState.refreshToken = result.data.refresh_token;
-                    AppState.currentUser = { username: username };
+                    AppState.currentUser = result.data.user;
                     
                     // 保存到本地存儲
                     Utils.storage.set('tokens', {
@@ -497,37 +497,24 @@
             try {
                 const result = await ApiClient.post('/api/v1/auth/register', {
                     username: username,
-                    nickname: nickname,
                     email: email,
-                    birth_date: birthDate,
-                    gender: gender,
                     password: password
                 });
                 
                 if (result.success) {
-                    // 保存認證信息
-                    AppState.isAuthenticated = true;
-                    AppState.accessToken = result.data.access_token;
-                    AppState.refreshToken = result.data.refresh_token;
-                    AppState.currentUser = {
-                        username: username,
-                        nickname: nickname,
-                        email: email
-                    };
+                    // 註冊成功，切換到登入頁面
+                    UI.showToast('註冊成功！請登入', 'success');
                     
-                    // 保存到本地存儲
-                    Utils.storage.set('tokens', {
-                        access: AppState.accessToken,
-                        refresh: AppState.refreshToken
-                    });
-                    Utils.storage.set('user', AppState.currentUser);
+                    // 自動填入用戶名
+                    document.getElementById('loginUsername').value = username;
                     
-                    UI.showToast('註冊成功！', 'success');
-                    
-                    // 跳轉到角色選擇頁面
+                    // 切換到登入選項卡
                     setTimeout(() => {
-                        Router.navigate('/character');
+                        switchTab('login');
                     }, 1000);
+                    
+                    return; // 不直接登入，讓用戶手動登入
+                    
                 } else {
                     throw new Error(result.error?.message || '註冊失敗');
                 }

@@ -51,6 +51,7 @@ func SetupRoutes(router *gin.RouterGroup) {
 	{
 		character.POST("", handlers.CreateCharacter)
 		character.PUT("/:id", handlers.UpdateCharacter)
+		character.DELETE("/:id", handlers.DeleteCharacter)
 	}
 
 	// 公開的角色端點
@@ -139,6 +140,13 @@ func SetupRoutes(router *gin.RouterGroup) {
 	publicTTS := router.Group("/tts")
 	{
 		publicTTS.GET("/voices", handlers.GetVoiceList)
+	}
+
+	// 管理系統路由（需要認證）
+	admin := authenticated.Group("/admin")
+	{
+		admin.GET("/stats", handlers.GetAdminStats)
+		admin.GET("/logs", handlers.GetAdminLogs)
 	}
 
 	// TODO: 添加其他模組路由

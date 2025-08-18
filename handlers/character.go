@@ -298,6 +298,108 @@ func UpdateCharacter(c *gin.Context) {
 	})
 }
 
+// DeleteCharacter godoc
+// @Summary      刪除角色
+// @Description  刪除指定角色 (軟刪除，設為非活躍)
+// @Tags         Character
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Param        id path string true "角色ID"
+// @Success      200 {object} models.APIResponse "刪除成功"
+// @Failure      404 {object} models.APIResponse{error=models.APIError} "角色不存在"
+// @Failure      403 {object} models.APIResponse{error=models.APIError} "無法刪除系統預設角色"
+// @Router       /character/{id} [delete]
+func DeleteCharacter(c *gin.Context) {
+	ctx := context.Background()
+	characterID := c.Param("id")
+
+	// 檢查是否為系統預設角色，防止刪除
+	systemCharacters := []string{"char_001", "char_002"}
+	for _, sysChar := range systemCharacters {
+		if characterID == sysChar {
+			c.JSON(http.StatusForbidden, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "SYSTEM_CHARACTER_PROTECTED",
+					Message: "系統預設角色無法刪除",
+				},
+			})
+			return
+		}
+	}
+
+	// 檢查角色是否存在
+	var character models.Character
+	err := database.DB.NewSelect().
+		Model(&character).
+		Where("id = ? AND is_active = ?", characterID, true).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("character_id", characterID).Error("Character not found for deletion")
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "CHARACTER_NOT_FOUND",
+				Message: "角色不存在",
+			},
+		})
+		return
+	}
+
+	// 軟刪除：設為非活躍狀態
+	result, err := database.DB.NewUpdate().
+		Model((*models.Character)(nil)).
+		Set("is_active = ?", false).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ? AND is_active = ?", characterID, true).
+		Exec(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("character_id", characterID).Error("Failed to delete character")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "刪除角色失敗",
+			},
+		})
+		return
+	}
+
+	// 檢查是否有行被更新
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "CHARACTER_NOT_FOUND",
+				Message: "角色不存在或已被刪除",
+			},
+		})
+		return
+	}
+
+	// 記錄刪除事件
+	utils.Logger.WithFields(map[string]interface{}{
+		"character_id":   characterID,
+		"character_name": character.Name,
+		"deleted_by":     "api_user", // 可以從 JWT 中獲取實際用戶ID
+	}).Info("Character deleted successfully")
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "角色刪除成功",
+		Data: map[string]interface{}{
+			"character_id":   characterID,
+			"character_name": character.Name,
+			"deleted_at":     time.Now(),
+			"status":         "deleted",
+		},
+	})
+}
+
 // GetCharacterStats godoc
 // @Summary      獲取角色統計
 // @Description  獲取角色的詳細統計信息
@@ -481,98 +583,6 @@ func SelectCharacter(c *gin.Context) {
 	})
 }
 
-// DeleteCharacter godoc
-// @Summary      刪除角色
-// @Description  刪除角色
-// @Tags         Character
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        id path string true "角色ID"
-// @Success      200 {object} models.APIResponse "刪除成功"
-// @Failure      404 {object} models.APIResponse{error=models.APIError} "角色不存在"
-// @Router       /character/{id} [delete]
-func DeleteCharacter(c *gin.Context) {
-	ctx := context.Background()
-	characterID := c.Param("id")
-
-	// 檢查角色是否存在（包括已軟刪除的角色）
-	var character models.Character
-	err := database.DB.NewSelect().
-		Model(&character).
-		Where("id = ?", characterID).
-		Scan(ctx)
-
-	if err != nil {
-		utils.Logger.WithError(err).WithField("character_id", characterID).Error("Character not found for deletion")
-		c.JSON(http.StatusNotFound, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "CHARACTER_NOT_FOUND",
-				Message: "角色不存在",
-			},
-		})
-		return
-	}
-
-	// 如果角色已經被軟刪除，直接返回成功（冪等操作）
-	if !character.IsActive {
-		c.JSON(http.StatusOK, models.APIResponse{
-			Success: true,
-			Message: "角色已刪除",
-		})
-		return
-	}
-
-	// 軟刪除角色（設置 is_active = false）
-	result, err := database.DB.NewUpdate().
-		Model((*models.Character)(nil)).
-		Set("is_active = ?", false).
-		Set("updated_at = ?", time.Now()).
-		Where("id = ? AND is_active = ?", characterID, true).
-		Exec(ctx)
-
-	if err != nil {
-		utils.Logger.WithError(err).WithField("character_id", characterID).Error("Failed to delete character")
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "DATABASE_ERROR",
-				Message: "刪除角色失敗",
-			},
-		})
-		return
-	}
-
-	// 檢查是否有行被更新
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "CHARACTER_NOT_FOUND",
-				Message: "角色不存在",
-			},
-		})
-		return
-	}
-
-	// 記錄日誌
-	utils.Logger.WithFields(map[string]interface{}{
-		"character_id":   characterID,
-		"character_name": character.Name,
-	}).Info("Character deleted successfully")
-
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Message: "角色刪除成功",
-		Data: gin.H{
-			"character_id": characterID,
-			"deleted_at":   time.Now(),
-		},
-	})
-}
-
 // getCharacterStatistics 獲取角色統計數據
 func getCharacterStatistics(ctx context.Context, characterID string, character *models.Character) (*models.CharacterStatsResponse, error) {
 	// 基本信息
@@ -721,7 +731,7 @@ func getInteractionStats(ctx context.Context, characterID string) (models.Charac
 	// 計算平均會話長度（基於消息數估算，假設每分鐘1條消息）
 	if totalSessions > 0 {
 		avgMessages := totalMessages / totalSessions
-		stats.AvgSessionLength = time.Duration(avgMessages) * time.Minute
+		stats.AvgSessionLength = int64(avgMessages * 60) // Convert to seconds
 	}
 
 	return stats, nil
@@ -888,24 +898,32 @@ func getUserPreferencesStats(ctx context.Context, characterID string) (models.Ch
 		}
 	}
 
-	// 查詢熱門標籤
+	// 查詢角色的標籤（從角色表獲取）
+	var character models.Character
+	err = database.DB.NewSelect().
+		Model(&character).
+		Where("id = ?", characterID).
+		Scan(ctx)
+
 	var tagStats []struct {
 		Tag   string `bun:"tag"`
 		Count int    `bun:"count"`
 	}
-	err = database.DB.NewRaw(`
-		SELECT tag, COUNT(*) as count
-		FROM (
-			SELECT UNNEST(tags) as tag
-			FROM chat_sessions
-			WHERE character_id = ? AND tags IS NOT NULL
-		) tag_counts
-		GROUP BY tag
-		ORDER BY count DESC
-		LIMIT 10
-	`, characterID).Scan(ctx, &tagStats)
 
-	if err == nil {
+	if err == nil && len(character.Tags) > 0 {
+		// 將角色標籤轉換為統計格式
+		for i, tag := range character.Tags {
+			tagStats = append(tagStats, struct {
+				Tag   string `bun:"tag"`
+				Count int    `bun:"count"`
+			}{
+				Tag:   tag,
+				Count: len(character.Tags) - i, // 簡單的權重計算
+			})
+		}
+	}
+
+	if len(tagStats) > 0 {
 		for _, stat := range tagStats {
 			stats.PopularTags = append(stats.PopularTags, stat.Tag)
 		}

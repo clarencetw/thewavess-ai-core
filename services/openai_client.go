@@ -142,18 +142,12 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 		}).Info("🤖 OpenAI Request Details")
 
 		for i, msg := range request.Messages {
-			// 截斷過長的內容以便閱讀
-			content := msg.Content
-			if len(content) > 1000 {
-				content = content[:1000] + "...(truncated)"
-			}
-
 			utils.Logger.WithFields(map[string]interface{}{
 				"service":        "openai",
 				"message_index":  i,
 				"role":           msg.Role,
 				"content_length": len(msg.Content),
-			}).Info(fmt.Sprintf("📝 Prompt [%s]: %s", strings.ToUpper(msg.Role), content))
+			}).Info(fmt.Sprintf("📝 Prompt [%s]: %s", strings.ToUpper(msg.Role), msg.Content))
 		}
 	} else {
 		// 生產環境只記錄基本信息
@@ -221,18 +215,12 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 		}).Info("🎯 OpenAI Response Details")
 
 		for i, choice := range resp.Choices {
-			// 截斷過長的回應以便閱讀
-			content := choice.Message.Content
-			if len(content) > 500 {
-				content = content[:500] + "...(truncated)"
-			}
-
 			utils.Logger.WithFields(map[string]interface{}{
 				"service":        "openai",
 				"choice_index":   i,
 				"finish_reason":  choice.FinishReason,
 				"content_length": len(choice.Message.Content),
-			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, content))
+			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, choice.Message.Content))
 		}
 	} else {
 		// 生產環境只記錄基本信息

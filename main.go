@@ -12,7 +12,9 @@ import (
 
 	"github.com/clarencetw/thewavess-ai-core/database"
 	_ "github.com/clarencetw/thewavess-ai-core/docs"
+	"github.com/clarencetw/thewavess-ai-core/middleware"
 	"github.com/clarencetw/thewavess-ai-core/routes"
+	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
@@ -77,6 +79,10 @@ func configureCORS() cors.Config {
 func main() {
 	// Initialize logger first
 	utils.InitLogger()
+	
+	// Initialize log hook after logger
+	logHook := services.NewLogHook()
+	utils.Logger.AddHook(logHook)
 
 	// Load environment variables from .env file
 	if err := utils.LoadEnv(); err != nil {
@@ -108,6 +114,7 @@ func main() {
 	router.Use(cors.New(configureCORS()))
 	router.Use(utils.RequestIDMiddleware())
 	router.Use(utils.RecoverMiddleware())
+	router.Use(middleware.LoggingMiddleware())
 
 	// Root path redirect to web interface
 	router.GET("/", func(c *gin.Context) {

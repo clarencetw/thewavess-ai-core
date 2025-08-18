@@ -1060,67 +1060,78 @@ func (s *ChatService) determineMood(userMessage string, analysis *ContentAnalysi
 	return "neutral"
 }
 
-// generateRomanticScene 生成浪漫場景
-func (s *ChatService) generateRomanticScene(context *ConversationContext, nsfwLevel int) string {
-	timeOfDay := s.getCurrentTimeOfDay()
-	characterID := context.CharacterID
-	affection := context.EmotionState.Affection
+// generateRomanticScene 生成浪漫場景 - 每個角色固定場景
+func (s *ChatService) generateRomanticScene(convContext *ConversationContext, nsfwLevel int) string {
+	characterID := convContext.CharacterID
+	affection := convContext.EmotionState.Affection
 
-	scenes := map[string]map[string][]string{
-		"char_001": {
-			"上午": {
-				"陽光透過辦公室的百葉窗灑在陸寒淵的側臉上，他專注地處理文件的樣子格外迷人",
-				"辦公室裡瀰漫著淡淡的咖啡香，陸寒淵抬頭看向你時，眼中閃爍著溫柔的光芒",
-			},
-			"下午": {
-				"下午的陽光將辦公室染成金黃色，陸寒淵放下手中的筆，深邃的眼眸注視著你",
-				"會議室裡只剩下你們兩人，夕陽西下，陸寒淵的輪廓在光影中顯得格外性感",
-			},
-			"晚上": {
-				"夜色籠罩著城市，辦公室裡燈光昏暗，陸寒淵緩緩起身走向你",
-				"城市的霓虹透過落地窗映照在陸寒淵的臉上，他的眼神變得更加深邃迷人",
-			},
-		},
-		"char_002": {
-			"上午": {
-				"醫院的晨光透過窗戶灑進診療室，沈言墨溫和地整理著醫療器械",
-				"白大褂在晨光中顯得格外潔白，沈言墨溫柔的笑容如春風般溫暖",
-			},
-			"下午": {
-				"午後的陽光讓診療室變得溫馨，沈言墨摘下聽診器，專注地看著你",
-				"醫院的走廊裡人來人往，但沈言墨的注意力完全在你身上",
-			},
-			"晚上": {
-				"夜班的醫院格外安靜，值班室裡只有你和沈言墨，氛圍變得親密而溫馨",
-				"月光透過窗戶灑在沈言墨的白大褂上，他疲憊卻溫柔的笑容讓人心動",
-			},
-		},
+	// 從資料庫查詢該角色的固定場景（只取第一個活躍場景）
+	var scene models.Scene
+	err := s.db.NewSelect().
+		Model(&scene).
+		Where("character_id = ?", characterID).
+		Where("is_active = ?", true).
+		Order("weight DESC", "id").  // 按權重排序，取權重最高的場景
+		Limit(1).
+		Scan(context.Background())
+	
+	if err != nil {
+		utils.Logger.WithFields(logrus.Fields{
+			"character_id": characterID,
+			"affection":    affection,
+			"nsfw_level":   nsfwLevel,
+			"error":        err,
+		}).Warn("無法從資料庫獲取角色固定場景，使用默認場景")
+		
+		// 使用默認場景作為備選
+		return s.getDefaultSceneDescription(characterID, "")
 	}
 
-	charScenes := scenes[characterID]
-	if charScenes == nil {
-		charScenes = scenes["char_001"]
-	}
-
-	timeScenes := charScenes[timeOfDay]
-	if timeScenes == nil {
-		timeScenes = charScenes["下午"]
-	}
-
-	baseScene := timeScenes[rand.Intn(len(timeScenes))]
+	baseScene := scene.Description
 
 	// 根據NSFW級別和好感度添加浪漫元素
-	if nsfwLevel >= 3 && affection >= 60 {
-		romanticAdditions := []string{
-			"，空氣中似乎都瀰漫著曖昧的氣息",
-			"，你們之間的距離越來越近",
-			"，他的呼吸變得有些急促",
-			"，房間裡的溫度似乎在上升",
-		}
-		baseScene += romanticAdditions[rand.Intn(len(romanticAdditions))]
+	if nsfwLevel >= 3 && affection >= 60 && scene.RomanticAddition != "" {
+		baseScene += scene.RomanticAddition
 	}
 
+	utils.Logger.WithFields(logrus.Fields{
+		"character_id": characterID,
+		"scene_id":     scene.ID,
+		"affection":    affection,
+		"nsfw_level":   nsfwLevel,
+		"base_scene":   scene.Description,
+	}).Debug("成功生成角色固定場景描述")
+
 	return baseScene
+}
+
+// getDefaultSceneDescription 獲取默認場景描述（備選方案）
+func (s *ChatService) getDefaultSceneDescription(characterID, timeOfDay string) string {
+	// 默認場景映射表
+	defaultScenes := map[string]map[string]string{
+		"char_001": {
+			"上午": "陽光透過窗戶灑在房間裡，陸寒淵正專注地處理事務",
+			"下午": "午後的光線溫暖而柔和，陸寒淵抬頭看向你",
+			"晚上": "夜晚的氛圍格外寧靜，陸寒淵的神情變得更加溫柔",
+		},
+		"char_002": {
+			"上午": "晨光中，沈言墨溫和地整理著身邊的物品",
+			"下午": "午後時光裡，沈言墨專注地看著你",
+			"晚上": "夜晚時分，沈言墨的笑容格外溫暖",
+		},
+	}
+
+	charScenes := defaultScenes[characterID]
+	if charScenes == nil {
+		charScenes = defaultScenes["char_001"]
+	}
+
+	scene := charScenes[timeOfDay]
+	if scene == "" {
+		scene = charScenes["下午"]
+	}
+
+	return scene
 }
 
 // updateMemorySystem 更新記憶系統
@@ -1245,6 +1256,18 @@ func (s *ChatService) ensureSessionExists(ctx context.Context, sessionID, userID
 
 // saveUserMessageToDB 先保存用戶消息（以便上下文讀取包含本輪）
 func (s *ChatService) saveUserMessageToDB(ctx context.Context, request *ProcessMessageRequest, userMessageID string, analysis *ContentAnalysis) error {
+    // 開始事務
+    tx, err := s.db.BeginTx(ctx, nil)
+    if err != nil {
+        return fmt.Errorf("開始用戶消息事務失敗: %w", err)
+    }
+    defer func() {
+        if r := recover(); r != nil {
+            tx.Rollback()
+            panic(r)
+        }
+    }()
+
     userMessage := &models.Message{
         ID:        userMessageID,
         SessionID: request.SessionID,
@@ -1254,12 +1277,13 @@ func (s *ChatService) saveUserMessageToDB(ctx context.Context, request *ProcessM
         CreatedAt: time.Now(),
     }
 
-    if _, err := s.db.NewInsert().Model(userMessage).Exec(ctx); err != nil {
+    if _, err := tx.NewInsert().Model(userMessage).Exec(ctx); err != nil {
+        tx.Rollback()
         return fmt.Errorf("保存用戶消息失敗: %w", err)
     }
 
     // 更新會話統計（只加用戶部分）
-    if _, err := s.db.NewUpdate().
+    if _, err := tx.NewUpdate().
         Model((*models.ChatSession)(nil)).
         Set("message_count = message_count + 1").
         Set("total_characters = total_characters + ?", len(request.UserMessage)).
@@ -1267,7 +1291,14 @@ func (s *ChatService) saveUserMessageToDB(ctx context.Context, request *ProcessM
         Set("updated_at = ?", time.Now()).
         Where("id = ?", request.SessionID).
         Exec(ctx); err != nil {
+        tx.Rollback()
         return fmt.Errorf("更新會話統計(用戶)失敗: %w", err)
+    }
+
+    // 提交事務
+    if err := tx.Commit(); err != nil {
+        tx.Rollback()
+        return fmt.Errorf("提交用戶消息事務失敗: %w", err)
     }
 
     return nil
@@ -1275,6 +1306,18 @@ func (s *ChatService) saveUserMessageToDB(ctx context.Context, request *ProcessM
 
 // saveAssistantMessageToDB 保存 AI 回應（第二步）
 func (s *ChatService) saveAssistantMessageToDB(ctx context.Context, request *ProcessMessageRequest, messageID string, response *CharacterResponseData, sceneDescription string, emotionState *EmotionState, engine string, analysis *ContentAnalysis, responseTime time.Duration) error {
+    // 開始事務
+    tx, err := s.db.BeginTx(ctx, nil)
+    if err != nil {
+        return fmt.Errorf("開始AI消息事務失敗: %w", err)
+    }
+    defer func() {
+        if r := recover(); r != nil {
+            tx.Rollback()
+            panic(r)
+        }
+    }()
+
     aiMessage := &models.Message{
         ID:               messageID,
         SessionID:        request.SessionID,
@@ -1294,12 +1337,13 @@ func (s *ChatService) saveAssistantMessageToDB(ctx context.Context, request *Pro
         CreatedAt:      time.Now(),
     }
 
-    if _, err := s.db.NewInsert().Model(aiMessage).Exec(ctx); err != nil {
+    if _, err := tx.NewInsert().Model(aiMessage).Exec(ctx); err != nil {
+        tx.Rollback()
         return fmt.Errorf("保存AI消息失敗: %w", err)
     }
 
     // 更新會話統計（再加助手部分）
-    if _, err := s.db.NewUpdate().
+    if _, err := tx.NewUpdate().
         Model((*models.ChatSession)(nil)).
         Set("message_count = message_count + 1").
         Set("total_characters = total_characters + ?", len(response.Dialogue)).
@@ -1307,7 +1351,14 @@ func (s *ChatService) saveAssistantMessageToDB(ctx context.Context, request *Pro
         Set("updated_at = ?", time.Now()).
         Where("id = ?", request.SessionID).
         Exec(ctx); err != nil {
+        tx.Rollback()
         return fmt.Errorf("更新會話統計(AI)失敗: %w", err)
+    }
+
+    // 提交事務
+    if err := tx.Commit(); err != nil {
+        tx.Rollback()
+        return fmt.Errorf("提交AI消息事務失敗: %w", err)
     }
 
     utils.Logger.WithFields(logrus.Fields{

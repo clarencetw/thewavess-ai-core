@@ -284,7 +284,7 @@
         // 開始小說
         async function startNovel(novelId) {
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
                 const result = await ApiClient.post('/api/v1/novel/start', {
                     novel_id: novelId
@@ -318,7 +318,7 @@
                 UI.showToast('使用模擬小說數據', 'info');
                 
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -388,7 +388,7 @@
             }
             
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
                 const result = await ApiClient.post('/api/v1/novel/choice', {
                     novel_id: currentProgress.novel_id,
@@ -414,7 +414,7 @@
                 simulateChoiceResult(choiceText);
                 
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         

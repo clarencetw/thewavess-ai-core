@@ -39,3 +39,12 @@ type BaseModel struct {
 	CreatedAt time.Time `json:"created_at" db:"created_at" example:"2023-01-01T00:00:00Z"`
 	UpdatedAt time.Time `json:"updated_at" db:"updated_at" example:"2023-01-01T00:00:00Z"`
 }
+
+// SystemLog 系統日誌模型
+type SystemLog struct {
+	ID        int64                  `json:"id" db:"id" example:"1"`
+	Level     string                 `json:"level" db:"level" example:"info"`
+	Message   string                 `json:"message" db:"message" example:"系統啟動完成"`
+	Timestamp time.Time              `json:"timestamp" db:"timestamp" example:"2023-01-01T00:00:00Z"`
+	Data      map[string]interface{} `json:"data,omitempty" db:"data"`
+}

@@ -3,7 +3,7 @@
 # 設定選項
 REGISTER_NEW_USER=false
 FIXED_USERNAME="test_api_user"
-FIXED_PASSWORD="TestPass123456"
+FIXED_PASSWORD="test123456"
 FIXED_EMAIL="test_api@thewavess.com"
 
 # 解析命令行參數

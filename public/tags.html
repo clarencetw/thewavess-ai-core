@@ -319,7 +319,7 @@
                 if (allTagsResult.success && allTagsResult.data) {
                     allTags = allTagsResult.data.tags || [];
                 } else {
-                    allTags = generateMockTags();
+                    throw new Error('載入標籤失敗');
                 }
                 
                 // 載入熱門標籤
@@ -341,14 +341,14 @@
             } catch (error) {
                 console.error('載入標籤數據失敗:', error);
                 
-                // 使用模擬數據
-                allTags = generateMockTags();
-                displayPopularTags(allTags.slice(0, 10));
-                displayAllTags(allTags);
+                // 顯示錯誤狀態
+                allTags = [];
+                displayPopularTags([]);
+                displayAllTags([]);
                 updateTagsStats();
                 updateCategoryDistribution();
                 
-                UI.showToast('使用模擬數據', 'warning');
+                UI.showToast('載入標籤數據失敗', 'error');
             }
         }
         
@@ -493,17 +493,19 @@
             };
             
             try {
-                // 這裡應該調用創建標籤的 API
-                // const result = await ApiClient.post('/api/v1/tags', newTag);
+                const result = await ApiClient.post('/api/v1/tags', newTag);
                 
-                // 模擬創建成功
-                allTags.unshift(newTag);
-                displayAllTags(allTags);
-                updateTagsStats();
-                updateCategoryDistribution();
-                clearTagForm();
-                
-                UI.showToast('標籤創建成功', 'success');
+                if (result.success && result.data) {
+                    allTags.unshift(result.data);
+                    displayAllTags(allTags);
+                    updateTagsStats();
+                    updateCategoryDistribution();
+                    clearTagForm();
+                    
+                    UI.showToast('標籤創建成功', 'success');
+                } else {
+                    throw new Error(result.error?.message || '創建失敗');
+                }
                 
             } catch (error) {
                 console.error('創建標籤失敗:', error);
@@ -548,16 +550,18 @@
             }
             
             try {
-                // 這裡應該調用刪除標籤的 API
-                // await ApiClient.delete(`/api/v1/tags/${tagId}`);
+                const result = await ApiClient.delete(`/api/v1/tags/${tagId}`);
                 
-                // 模擬刪除成功
-                allTags = allTags.filter(t => t.id !== tagId);
-                displayAllTags(allTags);
-                updateTagsStats();
-                updateCategoryDistribution();
-                
-                UI.showToast('標籤已刪除', 'success');
+                if (result.success) {
+                    allTags = allTags.filter(t => t.id !== tagId);
+                    displayAllTags(allTags);
+                    updateTagsStats();
+                    updateCategoryDistribution();
+                    
+                    UI.showToast('標籤已刪除', 'success');
+                } else {
+                    throw new Error(result.error?.message || '刪除失敗');
+                }
                 
             } catch (error) {
                 console.error('刪除標籤失敗:', error);
@@ -681,23 +685,6 @@
             UI.showToast('數據已刷新', 'success');
         }
         
-        // 生成模擬標籤
-        function generateMockTags() {
-            return [
-                { id: 'tag_001', name: '浪漫', category: 'emotion', description: '浪漫氛圍的對話', color: 'pink', usage_count: 45, created_at: moment().toISOString() },
-                { id: 'tag_002', name: '霸道總裁', category: 'character', description: '霸道總裁風格', color: 'red', usage_count: 32, created_at: moment().toISOString() },
-                { id: 'tag_003', name: '溫柔', category: 'emotion', description: '溫柔體貼的互動', color: 'green', usage_count: 28, created_at: moment().toISOString() },
-                { id: 'tag_004', name: '辦公室', category: 'scene', description: '辦公室場景', color: 'blue', usage_count: 21, created_at: moment().toISOString() },
-                { id: 'tag_005', name: '甜蜜', category: 'emotion', description: '甜蜜時刻', color: 'yellow', usage_count: 19, created_at: moment().toISOString() },
-                { id: 'tag_006', name: '醫院', category: 'scene', description: '醫院場景', color: 'indigo', usage_count: 15, created_at: moment().toISOString() },
-                { id: 'tag_007', name: '親密', category: 'content', description: '親密互動內容', color: 'purple', usage_count: 12, created_at: moment().toISOString() },
-                { id: 'tag_008', name: '禁慾系', category: 'character', description: '禁慾系角色風格', color: 'gray', usage_count: 10, created_at: moment().toISOString() },
-                { id: 'tag_009', name: '青梅竹馬', category: 'character', description: '青梅竹馬關係設定', color: 'green', usage_count: 18, created_at: moment().toISOString() },
-                { id: 'tag_010', name: '甜寵', category: 'style', description: '甜蜜寵愛的互動風格', color: 'pink', usage_count: 25, created_at: moment().toISOString() },
-                { id: 'tag_011', name: '年下', category: 'character', description: '年下角色設定', color: 'blue', usage_count: 8, created_at: moment().toISOString() },
-                { id: 'tag_012', name: '暗戀', category: 'emotion', description: '暗戀情感主題', color: 'purple', usage_count: 14, created_at: moment().toISOString() }
-            ];
-        }
         
         // 返回上一頁
         function goBack() {

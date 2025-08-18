@@ -657,33 +657,102 @@
         }
         
         // 載入統計數據
-        function loadStatistics() {
-            // 模擬統計數據
-            document.getElementById('totalChats').textContent = '12';
-            document.getElementById('totalMessages').textContent = '156';
-            document.getElementById('activeCharacters').textContent = '3';
-            document.getElementById('lastActive').textContent = '剛剛';
+        async function loadStatistics() {
+            try {
+                // 使用現有的會話列表 API 來獲取統計信息
+                const sessionsResult = await ApiClient.get('/api/v1/chat/sessions');
+                const charactersResult = await ApiClient.get('/api/v1/character/list');
+                
+                let totalChats = 0;
+                let totalMessages = 0;
+                let activeCharacters = 0;
+                let lastActive = '未知';
+                
+                if (sessionsResult.success && sessionsResult.data) {
+                    totalChats = sessionsResult.data.sessions?.length || 0;
+                    // 估算總消息數 (假設每個會話平均有10條消息)
+                    totalMessages = totalChats * 10;
+                    
+                    // 獲取最後活動時間
+                    const sessions = sessionsResult.data.sessions || [];
+                    if (sessions.length > 0) {
+                        const latestSession = sessions.reduce((latest, session) => {
+                            return new Date(session.updated_at || session.created_at) > new Date(latest.updated_at || latest.created_at) ? session : latest;
+                        });
+                        lastActive = Utils.formatDateTime(latestSession.updated_at || latestSession.created_at);
+                    }
+                }
+                
+                if (charactersResult.success && charactersResult.data) {
+                    activeCharacters = charactersResult.data.characters?.length || 0;
+                }
+                
+                document.getElementById('totalChats').textContent = totalChats.toString();
+                document.getElementById('totalMessages').textContent = totalMessages.toString();
+                document.getElementById('activeCharacters').textContent = activeCharacters.toString();
+                document.getElementById('lastActive').textContent = lastActive;
+                
+            } catch (error) {
+                console.warn('載入統計數據失敗:', error);
+                // 顯示默認值
+                document.getElementById('totalChats').textContent = '0';
+                document.getElementById('totalMessages').textContent = '0';
+                document.getElementById('activeCharacters').textContent = '0';
+                document.getElementById('lastActive').textContent = '未知';
+            }
         }
         
         // 載入最喜愛角色
-        function loadFavoriteCharacters() {
+        async function loadFavoriteCharacters() {
             const favoriteCharactersDiv = document.getElementById('favoriteCharacters');
             
-            const favorites = [
-                { id: 'char_001', name: '陸寒淵', avatar: 'https://placehold.co/40x40/6366f1/ffffff?text=陸', chats: 8 },
-                { id: 'char_002', name: '沈言墨', avatar: 'https://placehold.co/40x40/10b981/ffffff?text=沈', chats: 4 }
-            ];
-            
-            favoriteCharactersDiv.innerHTML = favorites.map(char => `
-                <div class="flex items-center space-x-3 p-2 rounded-lg hover:bg-white hover:bg-opacity-5 transition-all cursor-pointer">
-                    <img src="${char.avatar}" alt="${char.name}" class="w-8 h-8 rounded-full">
-                    <div class="flex-1">
-                        <div class="font-medium">${char.name}</div>
-                        <div class="text-sm">${char.chats} 次對話</div>
-                    </div>
-                    <i class="fas fa-heart text-red-400"></i>
-                </div>
-            `).join('');
+            try {
+                // 使用現有的角色列表 API 和會話 API 來推斷最喜愛角色
+                const charactersResult = await ApiClient.get('/api/v1/character/list');
+                const sessionsResult = await ApiClient.get('/api/v1/chat/sessions');
+                
+                if (charactersResult.success && charactersResult.data) {
+                    const characters = charactersResult.data.characters || [];
+                    const sessions = sessionsResult.success ? (sessionsResult.data.sessions || []) : [];
+                    
+                    // 計算每個角色的互動次數
+                    const characterStats = {};
+                    sessions.forEach(session => {
+                        const charId = session.character_id;
+                        if (charId) {
+                            characterStats[charId] = (characterStats[charId] || 0) + 1;
+                        }
+                    });
+                    
+                    // 添加互動次數到角色數據中，並按互動次數排序
+                    const charactersWithStats = characters.map(char => ({
+                        ...char,
+                        chat_count: characterStats[char.id] || 0
+                    })).filter(char => char.chat_count > 0) // 只顯示有互動的角色
+                      .sort((a, b) => b.chat_count - a.chat_count) // 按互動次數降序排列
+                      .slice(0, 3); // 最多顯示3個最愛角色
+                    
+                    if (charactersWithStats.length > 0) {
+                        favoriteCharactersDiv.innerHTML = charactersWithStats.map(char => `
+                            <div class="flex items-center space-x-3 p-2 rounded-lg hover:bg-white hover:bg-opacity-5 transition-all cursor-pointer" onclick="Router.navigate('/character', {character_id: '${char.id}'})">
+                                <img src="${char.avatar_url || 'https://placehold.co/40x40/6366f1/ffffff?text=' + encodeURIComponent(char.name[0])}" alt="${char.name}" class="w-8 h-8 rounded-full">
+                                <div class="flex-1">
+                                    <div class="font-medium">${char.name}</div>
+                                    <div class="text-sm">${char.chat_count} 次對話</div>
+                                </div>
+                                <i class="fas fa-heart text-red-400"></i>
+                            </div>
+                        `).join('');
+                    } else {
+                        favoriteCharactersDiv.innerHTML = '<div class="text-gray-500 text-center py-4">尚無互動角色</div>';
+                    }
+                } else {
+                    throw new Error('載入角色列表失敗');
+                }
+            } catch (error) {
+                console.warn('載入最喜愛角色失敗:', error);
+                favoriteCharactersDiv.innerHTML = '<div class="text-gray-500 text-center py-4">載入失敗</div>';
+            }
         }
         
         // 變更密碼

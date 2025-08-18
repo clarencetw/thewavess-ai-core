@@ -30,30 +30,64 @@
 
 ### 關鍵詞分類（中英混合）
 
+系統採用多層次關鍵詞分析，包含以下分類：
+
+#### 主要分級關鍵詞
+
 - **浪漫（L2）**：
-  - 中文：喜歡你、愛你、想你、心動、約會、臉紅、害羞、溫柔、甜蜜、浪漫、陪伴、呵護
-  - 英文：love, like, miss, romantic, date, gentle
+  - 中文：喜歡你、愛你、想你、心動、約會、臉紅、害羞、溫柔、甜蜜、浪漫、陪伴、呵護、思念、悸動、在意、關心
+  - 英文：love, like, miss, romantic, date, gentle, beautiful, cute, charming, attractive, heartbeat, sweet, darling
 
 - **親密（L3）**：
-  - 中文：擁抱、親吻、靠近、貼近、觸碰、撫摸、愛撫、肌膚、體溫、心跳
-  - 英文：kiss, touch, caress, embrace, skin, warm, shiver
+  - 中文：擁抱、親吻、靠近、貼近、觸碰、撫摸、愛撫、肌膚、體溫、心跳、親密、激情、慾望、性感、誘惑、調情、肉體、身體
+  - 英文：kiss, touch, caress, embrace, skin, warm, shiver, intimate, passion, desire, sexy, seduce, tease, flirt, body
 
 - **成人（L4）**：
-  - 中文：身體、胸、腰、腿、內衣、濕潤、勃起、呻吟
-  - 英文：body, breast, nipple, ass, wet, hard, moan
+  - 中文：做愛、愛愛、啪啪啪、性行為、性愛、高潮、口交、乳交、陰莖、陰道、乳房、胸部、私處、性器、濕潤、勃起、敏感、呻吟
+  - 英文：sex, fuck, cum, orgasm, penetrate, naked, nude, penis, vagina, breast, nipple, pussy, cock, wet, hard, moan, blowjob
 
 - **極度（L5）**：
-  - 性器官與明確性行為的露骨詞彙與俚語
-  - 英文：fuck, pussy, dick, blowjob, anal, deepthroat, creampie, facial 等
+  - 中文：狂操、猛插、爆射、內射、肛交、深喉、群交、3P、調教、綁縛、SM、潮吹、失禁、淫蕩、騷、賤
+  - 英文：gangbang, threesome, anal, dp, deepthroat, facial, creampie, squirt, bondage, domination, submissive, kinky
 
-### 判斷規則
+#### 進階分類
 
-- 出現 ≥2 個 L5 詞彙，或 L5≥1 且 L4≥2 → **Level 5**（Grok）
-- 出現 ≥2 個 L4，或 L4≥1 且 L3≥2 → **Level 4**（OpenAI）
-- 出現 ≥2 個 L3，或 L3≥1 且 L2≥2 → **Level 3**（OpenAI）
-- 僅 L2 → **Level 2**；否則 **Level 1**
+- **角色扮演**：女僕、OL、秘書、護士、老師、上司、霸總、制服、cosplay
+- **情趣道具**：跳蛋、按摩棒、震動棒、手銬、眼罩、項圈、情趣內衣
+- **違法內容**：未成年、蘿莉、正太、亂倫、強暴、強姦、非自願、獸交（一律 Level 5）
+- **表意符號**：🍆、🍑、💦、👅、😈、😏、🥵、🫦、💋、🛏、🔞
+- **變形詞彙**：f*ck、f**k、s3x、secks、c0ck、d1ck 等
 
-> **注意**：同義與在地化詞庫需持續擴充（繁中/口語用法）
+### 判斷規則（更新版）
+
+系統採用加權計算機制，包含以下規則：
+
+#### 核心規則
+- **Level 5 觸發**：
+  - 違法類關鍵詞 ≥1（未成年/強暴/亂倫/獸交等）
+  - 極度明確詞彙 ≥2
+  - 極度詞彙 ≥1 且 成人詞彙 ≥2
+- **Level 4 觸發**：
+  - 成人詞彙 ≥2
+  - 成人詞彙 ≥1 且 親密詞彙 ≥2
+- **Level 3 觸發**：
+  - 親密詞彙 ≥2
+  - 親密詞彙 ≥1 且 浪漫詞彙 ≥2
+- **Level 2 觸發**：
+  - 浪漫詞彙 ≥2 或 親密詞彙 ≥1
+
+#### 加權機制
+- Emoji 符號加權到親密類別
+- 角色扮演、情趣道具詞彙加權到成人類別
+- 變形詞彙加權到成人類別
+- 違法類詞彙雙倍加權到極度類別
+
+#### 文本正規化
+- **NFKC 標準化**：處理全形/半形字元
+- **Squashed 匹配**：移除空白與標點符號的緊密匹配
+- **模糊匹配**：正則表達式處理變形詞彙（如 f.u.c.k、f u c k）
+
+> **注意**：系統支援繁體中文口語用法與各種變形詞彙，持續優化匹配精度
 
 ## 合規與安全邊界
 
@@ -71,7 +105,10 @@
 
 記錄偵測結果、路由決策與上下文摘要。
 
-**對應程式碼**：`services/nsfw_analyzer.go`、`services/chat_service.go:selectAIEngine`
+**對應程式碼**：
+- **分析器**：`services/nsfw_analyzer.go` - `NSFWAnalyzer.AnalyzeContent()`
+- **引擎選擇**：`services/chat_service.go:selectAIEngine()` 
+- **關鍵詞庫**：`NSFWAnalyzer.NewNSFWAnalyzer()` 中的各類關鍵詞數組
 
 ## 女性向 Prompt 設計
 
@@ -155,13 +192,17 @@ Assistant（示例）：
 
 ### 已完成功能
 
-- [完成] **NSFW 分級**：`NSFWAnalyzer` 已完整實現，提供統一的 5 級分級系統
+- [完成] **NSFW 分級**：`NSFWAnalyzer` 完整實現進階多層次分析
+  - [完成] 8 大關鍵詞分類（浪漫/親密/成人/極度/角色扮演/情趣/違法/變形）
+  - [完成] NFKC 文本正規化與 squashed 匹配
+  - [完成] 正則模糊匹配變形詞彙（如 f.u.c.k）
+  - [完成] 加權計算機制與信心度評估
 - [完成] **Prompt 統一**：OpenAI 使用 `BuildCharacterPrompt`；Grok 使用 `BuildNSFWPrompt`
 - [完成] **輸出解析**：
   - [完成] 多種輸出格式解析器實現（`parseDialogueActionFormat`, `parseJSONFormat` 等）
   - [完成] 回退策略：`generatePersonalizedAction` 已實現
-- [完成] **引擎選擇**：`selectAIEngine` 基於內容分析自動選擇引擎
-- [完成] **審計**：`ScoringEvaluator` 記錄完整指標，OpenAI/Grok 請求已添加結構化日誌
+- [完成] **引擎選擇**：`selectAIEngine` 基於 `ContentAnalysis.ShouldUseGrok` 自動路由
+- [完成] **審計**：`ScoringEvaluator` 記錄完整指標，包含詳細 NSFW 分析日誌
 
 ### 待完成項目
 
@@ -169,20 +210,25 @@ Assistant（示例）：
 
 ## 開發者檢查清單
 
-- [x] `NSFWAnalyzer` 為唯一分級來源；單元測試通過
-  - [完成] 完整實現 5 級分級系統
-- [x] Prompt 明確角色、節奏、護欄與輸出格式
-  - [完成] `BuildCharacterPrompt` & `BuildNSFWPrompt` 已實現
-- [ ] 記憶檢索（短期/長期）摘要後注入 Prompt
-  - [待完成] TODO 標記已添加，待實現
-- [x] 引擎選擇機制實現
-  - [完成] `selectAIEngine` 基於內容分析自動選擇（NSFW 預設啟用）
-- [x] Level 5 僅走 Grok；OpenAI 嚴禁露骨詞
-  - [完成] `ShouldUseGrok` 判斷邏輯完整
-- [x] 解析 `對話|||動作`，回退策略穩健
-  - [完成] 多種輸出格式解析器實現
-- [x] 評分器（`ScoringEvaluator`）記錄 NSFW/引擎/情感等指標
-  - [完成] 完整評分系統
-- [x] 日誌與審計資訊完整可查
-  - [完成] 結構化日誌記錄（新增 OpenAI/Grok 請求日誌）
+- [x] **`NSFWAnalyzer` 進階分級系統**：
+  - [完成] 8 大關鍵詞分類與加權計算
+  - [完成] NFKC 正規化與模糊匹配
+  - [完成] 違法內容檢測與強制 Level 5 路由
+  - [完成] 信心度評估與 `ShouldUseGrok` 判斷
+- [x] **Prompt 系統**：
+  - [完成] `BuildCharacterPrompt` & `BuildNSFWPrompt` 實現
+  - [完成] 女性向風格指引與護欄機制
+- [ ] **記憶系統**：
+  - [待完成] 記憶檢索與 Prompt 注入功能
+- [x] **引擎路由**：
+  - [完成] `selectAIEngine` 基於 `ContentAnalysis.ShouldUseGrok`
+  - [完成] Level 1-4 → OpenAI，Level 5 → Grok
+  - [完成] NSFW 預設啟用，無需使用者設定
+- [x] **輸出處理**：
+  - [完成] `對話|||動作` 格式解析
+  - [完成] 多種回退策略與錯誤處理
+- [x] **審計與日誌**：
+  - [完成] `ScoringEvaluator` 完整評分指標
+  - [完成] 結構化 NSFW 分析日誌
+  - [完成] OpenAI/Grok 請求詳細記錄
 

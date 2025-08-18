@@ -185,7 +185,7 @@
             };
             
             try {
-                UI.showLoading();
+                UI.showGlobalLoading(true);
                 
                 const results = await searchContent(query, searchOptions, currentPage);
                 displaySearchResults(results, true);
@@ -197,7 +197,7 @@
                 console.error('搜尋失敗:', error);
                 UI.showToast('搜尋失敗: ' + error.message, 'error');
             } finally {
-                UI.hideLoading();
+                UI.showGlobalLoading(false);
             }
         }
         
@@ -231,8 +231,7 @@
                     }
                 } catch (error) {
                     console.warn('對話搜尋失敗:', error);
-                    // 使用模擬數據
-                    results.chats = generateMockChatResults(query);
+                    results.chats = [];
                 }
             }
             
@@ -251,8 +250,7 @@
                     }
                 } catch (error) {
                     console.warn('記憶搜尋失敗:', error);
-                    // 使用模擬數據
-                    results.memories = generateMockMemoryResults(query);
+                    results.memories = [];
                 }
             }
             
@@ -536,7 +534,7 @@
                 console.error('載入更多結果失敗:', error);
                 UI.showToast('載入失敗: ' + error.message, 'error');
             } finally {
-                UI.hideLoading(document.getElementById('loadMoreBtn'));
+                UI.showLoading(document.getElementById('loadMoreBtn'), false);
             }
         }
         
@@ -553,49 +551,6 @@
             });
         }
         
-        // 生成模擬對話結果
-        function generateMockChatResults(query) {
-            return [
-                {
-                    id: 'chat_001',
-                    session_id: 'session_123',
-                    character_name: '陸寒淵',
-                    content: `包含「${query}」的對話內容，這是一段模擬的對話記錄，展示搜尋結果的格式。`,
-                    created_at: moment().toISOString(),
-                    nsfw_level: 2
-                },
-                {
-                    id: 'chat_002', 
-                    session_id: 'session_124',
-                    character_name: '沈言墨',
-                    content: `另一段包含搜尋關鍵字「${query}」的對話，這裡會顯示匹配的內容片段。`,
-                    created_at: moment().subtract(1, "day").toISOString(),
-                    nsfw_level: 1
-                }
-            ];
-        }
-        
-        // 生成模擬記憶結果
-        function generateMockMemoryResults(query) {
-            return [
-                {
-                    id: 'memory_001',
-                    type: 'preference',
-                    content: `用戶偏好記憶：與搜尋詞「${query}」相關的偏好設定或互動記錄。`,
-                    importance: 8,
-                    character_name: '陸寒淵',
-                    created_at: moment().toISOString()
-                },
-                {
-                    id: 'memory_002',
-                    type: 'milestone',
-                    content: `關係里程碑：關於「${query}」的重要時刻或特殊互動記錄。`,
-                    importance: 9,
-                    character_name: '沈言墨',
-                    created_at: moment().subtract(2, "days").toISOString()
-                }
-            ];
-        }
         
         // 頁面導航
         function openChat(sessionId) {
