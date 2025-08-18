@@ -60,7 +60,7 @@ services:
       - ./data/postgres/data:/var/lib/postgresql/data
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U thewavess"]
+      test: ["CMD-SHELL", "pg_isready -U thewavess -d thewavess_ai_core"]
       interval: 10s
       timeout: 5s
       retries: 5
