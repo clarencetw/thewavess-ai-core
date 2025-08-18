@@ -1,31 +1,17 @@
 package services
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
-	"net/http"
-	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/utils"
+	"github.com/sashabaranov/go-openai"
 )
 
 // TTSService TTS 服務
 type TTSService struct {
-	openaiClient *http.Client
-	apiKey       string
-	apiURL       string
-}
-
-// TTSRequest TTS 請求結構
-type TTSRequest struct {
-	Model          string  `json:"model"`
-	Input          string  `json:"input"`
-	Voice          string  `json:"voice"`
-	ResponseFormat string  `json:"response_format,omitempty"`
-	Speed          float64 `json:"speed,omitempty"`
+	client *openai.Client
 }
 
 // TTSResponse TTS 回應結構
@@ -41,17 +27,26 @@ func NewTTSService() *TTSService {
 	// 確保環境變數已載入
 	utils.LoadEnv()
 	
-	apiKey := utils.GetEnvWithDefault("OPENAI_API_KEY", "")
+	// 優先使用專用的 TTS API key，如果沒有則使用 OpenAI API key
+	apiKey := utils.GetEnvWithDefault("TTS_API_KEY", "")
 	if apiKey == "" {
-		utils.Logger.Warn("OPENAI_API_KEY not set for TTS service")
+		apiKey = utils.GetEnvWithDefault("OPENAI_API_KEY", "")
+		if apiKey == "" {
+			utils.Logger.Warn("Neither TTS_API_KEY nor OPENAI_API_KEY set for TTS service")
+		}
+	}
+
+	var client *openai.Client
+	if apiKey != "" {
+		// 使用標準 OpenAI API
+		client = openai.NewClient(apiKey)
+		utils.Logger.WithFields(map[string]interface{}{
+			"service": "tts",
+		}).Info("TTS service initialized with OpenAI")
 	}
 
 	return &TTSService{
-		openaiClient: &http.Client{
-			Timeout: 60 * time.Second, // TTS 需要更長的超時時間
-		},
-		apiKey: apiKey,
-		apiURL: "https://api.openai.com/v1/audio/speech",
+		client: client,
 	}
 }
 
@@ -65,41 +60,22 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 		"speed":   speed,
 	}).Info("TTS generation started")
 
-	// 如果沒有 API Key，返回 mock 響應
-	if s.apiKey == "" {
+	// 如果沒有客戶端，返回 mock 響應
+	if s.client == nil {
+		utils.Logger.WithField("service", "tts").Info("Using mock response (API key not set)")
 		return s.mockTTSResponse(text, voice), nil
 	}
 
-	// 準備請求
-	request := TTSRequest{
-		Model:          "tts-1",
+	// 使用 go-openai 庫調用 TTS API
+	request := openai.CreateSpeechRequest{
+		Model:          openai.TTSModel1,
 		Input:          text,
-		Voice:          s.mapVoice(voice),
-		ResponseFormat: "mp3",
+		Voice:          s.mapVoiceToOpenAI(voice),
+		ResponseFormat: openai.SpeechResponseFormatMp3,
 		Speed:          speed,
 	}
 
-	requestBody, err := json.Marshal(request)
-	if err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service": "tts",
-			"error":   err.Error(),
-		}).Error("Failed to marshal TTS request")
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
-	}
-
-	// 創建 HTTP 請求
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", s.apiURL, bytes.NewReader(requestBody))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
-	}
-
-	// 設置請求頭
-	httpReq.Header.Set("Authorization", "Bearer "+s.apiKey)
-	httpReq.Header.Set("Content-Type", "application/json")
-
-	// 發送請求
-	resp, err := s.openaiClient.Do(httpReq)
+	resp, err := s.client.CreateSpeech(ctx, request)
 	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service": "tts",
@@ -108,22 +84,10 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 		// 如果API調用失敗，返回mock響應作為fallback
 		return s.mockTTSResponse(text, voice), nil
 	}
-	defer resp.Body.Close()
-
-	// 檢查響應狀態
-	if resp.StatusCode != http.StatusOK {
-		bodyBytes, _ := io.ReadAll(resp.Body)
-		utils.Logger.WithFields(map[string]interface{}{
-			"service":     "tts",
-			"status_code": resp.StatusCode,
-			"response":    string(bodyBytes),
-		}).Error("TTS API returned error")
-		// 如果API返回錯誤，返回mock響應作為fallback
-		return s.mockTTSResponse(text, voice), nil
-	}
+	defer resp.Close()
 
 	// 讀取音頻數據
-	audioData, err := io.ReadAll(resp.Body)
+	audioData, err := io.ReadAll(resp)
 	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service": "tts",
@@ -152,20 +116,20 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 	}, nil
 }
 
-// mapVoice 將角色語音映射到 OpenAI TTS 語音
-func (s *TTSService) mapVoice(voice string) string {
-	voiceMapping := map[string]string{
-		"voice_001": "alloy",  // 陸燁銘標準音
-		"voice_002": "echo",   // 陸燁銘深情音
-		"voice_003": "fable",  // 沈言墨溫雅音
-		"default":   "alloy",
+// mapVoiceToOpenAI 將角色語音映射到 OpenAI TTS 語音
+func (s *TTSService) mapVoiceToOpenAI(voice string) openai.SpeechVoice {
+	voiceMapping := map[string]openai.SpeechVoice{
+		"voice_001": openai.VoiceAlloy,  // 陸燁銘標準音
+		"voice_002": openai.VoiceEcho,   // 陸燁銘深情音
+		"voice_003": openai.VoiceFable,  // 沈言墨溫雅音
+		"default":   openai.VoiceAlloy,
 	}
 
 	if mappedVoice, exists := voiceMapping[voice]; exists {
 		return mappedVoice
 	}
 	
-	return "alloy" // 默認語音
+	return openai.VoiceAlloy // 默認語音
 }
 
 // mockTTSResponse 創建模擬的 TTS 響應
