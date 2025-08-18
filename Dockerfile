@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.22-alpine AS builder
+FROM golang:1.23-alpine AS builder
 
 # Install build dependencies
 RUN apk add --no-cache git
@@ -39,6 +39,9 @@ COPY --from=builder /app/main .
 
 # Copy docs directory
 COPY --from=builder /app/docs ./docs
+
+# Copy public directory for web interface
+COPY --from=builder /app/public ./public
 
 # Expose port
 EXPOSE 8080
