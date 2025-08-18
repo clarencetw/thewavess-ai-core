@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/utils"
@@ -39,7 +38,10 @@ type TTSResponse struct {
 
 // NewTTSService 創建新的 TTS 服務
 func NewTTSService() *TTSService {
-	apiKey := os.Getenv("OPENAI_API_KEY")
+	// 確保環境變數已載入
+	utils.LoadEnv()
+	
+	apiKey := utils.GetEnvWithDefault("OPENAI_API_KEY", "")
 	if apiKey == "" {
 		utils.Logger.Warn("OPENAI_API_KEY not set for TTS service")
 	}

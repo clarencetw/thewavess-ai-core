@@ -2,7 +2,6 @@ package handlers
 
 import (
 	"net/http"
-	"os"
 	"runtime"
 
 	"github.com/gin-gonic/gin"
@@ -24,10 +23,7 @@ func GetVersion(c *gin.Context) {
 	version := "1.0.0"
 	buildTime := "2025-08-16T00:00:00Z"
 	gitCommit := "latest"
-	environment := os.Getenv("ENVIRONMENT")
-	if environment == "" {
-		environment = "development"
-	}
+	environment := utils.GetEnvWithDefault("ENVIRONMENT", "development")
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
@@ -67,12 +63,12 @@ func GetStatus(c *gin.Context) {
 
 	// 檢查環境變數
 	openaiStatus := "not_configured"
-	if os.Getenv("OPENAI_API_KEY") != "" {
+	if utils.GetEnvWithDefault("OPENAI_API_KEY", "") != "" {
 		openaiStatus = "configured"
 	}
 
 	grokStatus := "not_configured"
-	if os.Getenv("GROK_API_KEY") != "" {
+	if utils.GetEnvWithDefault("GROK_API_KEY", "") != "" {
 		grokStatus = "configured"
 	}
 
@@ -91,7 +87,7 @@ func GetStatus(c *gin.Context) {
 			"memory_usage_mb": memUsageMB,
 			"goroutines":      runtime.NumGoroutine(),
 			"go_version":      runtime.Version(),
-			"environment":     os.Getenv("ENVIRONMENT"),
+			"environment":     utils.GetEnvWithDefault("ENVIRONMENT", "development"),
 		},
 	})
 }

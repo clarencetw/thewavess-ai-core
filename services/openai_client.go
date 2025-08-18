@@ -3,8 +3,6 @@ package services
 import (
 	"context"
 	"fmt"
-	"os"
-	"strconv"
 	"strings"
 
 	"github.com/clarencetw/thewavess-ai-core/utils"
@@ -17,6 +15,8 @@ type OpenAIClient struct {
 	model       string
 	maxTokens   int
 	temperature float32
+	baseURL     string
+	isAzure     bool
 }
 
 // OpenAIRequest OpenAI 請求結構
@@ -57,19 +57,57 @@ type OpenAIResponse struct {
 
 // NewOpenAIClient 創建新的 OpenAI 客戶端
 func NewOpenAIClient() *OpenAIClient {
-	apiKey := os.Getenv("OPENAI_API_KEY")
+	// 確保環境變數已載入
+	utils.LoadEnv()
+	
+	apiKey := utils.GetEnvWithDefault("OPENAI_API_KEY", "")
 	if apiKey == "" {
 		utils.Logger.Warn("OPENAI_API_KEY not set, using mock responses")
 	}
 
 	// 從環境變數讀取配置，提供預設值
-	model := getEnvWithDefault("OPENAI_MODEL", "gpt-4o")
-	maxTokens := getEnvIntWithDefault("OPENAI_MAX_TOKENS", 800)
-	temperature := getEnvFloatWithDefault("OPENAI_TEMPERATURE", 0.8)
+	model := utils.GetEnvWithDefault("OPENAI_MODEL", "gpt-4o")
+	maxTokens := utils.GetEnvIntWithDefault("OPENAI_MAX_TOKENS", 800)
+	temperature := utils.GetEnvFloatWithDefault("OPENAI_TEMPERATURE", 0.8)
+
+	// 獲取自定義 API URL，支援 Azure 或其他端點
+	baseURL := utils.GetEnvWithDefault("OPENAI_API_URL", "https://api.openai.com/v1")
+	isAzure := false
+	
+	// 檢查是否為 Azure OpenAI
+	if strings.Contains(baseURL, "azure.com") {
+		isAzure = true
+		// Azure OpenAI 需要特殊的 URL 和配置處理
+		// 保持原始 baseURL，讓 go-openai 庫處理具體的端點路徑
+	}
 
 	var client *openai.Client
 	if apiKey != "" {
-		client = openai.NewClient(apiKey)
+		if isAzure {
+			// Azure OpenAI 需要特殊配置 - 使用 DefaultAzureConfig
+			config := openai.DefaultAzureConfig(apiKey, baseURL)
+			// Azure 需要部署名稱，通常就是模型名稱
+			config.AzureModelMapperFunc = func(model string) string {
+				return model // 使用模型名稱作為部署名稱
+			}
+			client = openai.NewClientWithConfig(config)
+			
+			utils.Logger.WithFields(map[string]interface{}{
+				"base_url": baseURL,
+				"api_type": "azure",
+				"api_version": config.APIVersion,
+			}).Info("Using Azure OpenAI API")
+		} else if baseURL != "https://api.openai.com/v1" {
+			// 其他自定義端點
+			config := openai.DefaultConfig(apiKey)
+			config.BaseURL = baseURL
+			client = openai.NewClientWithConfig(config)
+			
+			utils.Logger.WithField("base_url", baseURL).Info("Using custom OpenAI API URL")
+		} else {
+			// 使用默認 OpenAI API
+			client = openai.NewClient(apiKey)
+		}
 	}
 
 	return &OpenAIClient{
@@ -77,6 +115,8 @@ func NewOpenAIClient() *OpenAIClient {
 		model:       model,
 		maxTokens:   maxTokens,
 		temperature: float32(temperature),
+		baseURL:     baseURL,
+		isAzure:     isAzure,
 	}
 }
 
@@ -85,6 +125,7 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	// 記錄請求開始
 	utils.Logger.WithFields(map[string]interface{}{
 		"service":        "openai",
+		"base_url":       c.baseURL,
 		"model":          c.model,
 		"max_tokens":     c.maxTokens,
 		"temperature":    c.temperature,
@@ -93,7 +134,7 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	}).Info("OpenAI API request started")
 
 	// 開發模式下詳細記錄 prompt 內容
-	if os.Getenv("GO_ENV") != "production" {
+	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service": "openai",
 			"model":   c.model,
@@ -172,7 +213,7 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	}).Info("OpenAI API response received")
 
 	// 開發模式下詳細記錄響應內容
-	if os.Getenv("GO_ENV") != "production" {
+	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service":     "openai",
 			"response_id": resp.ID,
@@ -413,28 +454,3 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 	return messages
 }
 
-// 輔助函數：讀取環境變數並提供預設值
-func getEnvWithDefault(key, defaultValue string) string {
-	if value := os.Getenv(key); value != "" {
-		return value
-	}
-	return defaultValue
-}
-
-func getEnvIntWithDefault(key string, defaultValue int) int {
-	if value := os.Getenv(key); value != "" {
-		if intValue, err := strconv.Atoi(value); err == nil {
-			return intValue
-		}
-	}
-	return defaultValue
-}
-
-func getEnvFloatWithDefault(key string, defaultValue float64) float64 {
-	if value := os.Getenv(key); value != "" {
-		if floatValue, err := strconv.ParseFloat(value, 64); err == nil {
-			return floatValue
-		}
-	}
-	return defaultValue
-}

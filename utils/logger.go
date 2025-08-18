@@ -146,7 +146,7 @@ func (f *GinStyleFormatter) Format(entry *logrus.Entry) ([]byte, error) {
 
 // isTerminal 檢查是否在終端環境
 func isTerminal() bool {
-	return os.Getenv("TERM") != ""
+	return GetEnvWithDefault("TERM", "") != ""
 }
 
 // InitLogger 初始化日誌記錄器
@@ -160,7 +160,7 @@ func InitLogger() {
 	Logger.SetOutput(os.Stdout)
 	
 	// 根據環境變數設置日誌等級
-	level := os.Getenv("LOG_LEVEL")
+	level := GetEnvWithDefault("LOG_LEVEL", "info")
 	switch level {
 	case "debug":
 		Logger.SetLevel(logrus.DebugLevel)

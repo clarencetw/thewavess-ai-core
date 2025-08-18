@@ -2,7 +2,6 @@ package utils
 
 import (
 	"errors"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -18,7 +17,7 @@ type JWTClaims struct {
 
 // GenerateAccessToken 生成訪問令牌
 func GenerateAccessToken(userID, username, email string) (string, error) {
-	secretKey := os.Getenv("JWT_SECRET")
+	secretKey := GetEnvWithDefault("JWT_SECRET", "your-super-secret-jwt-key-here")
 	if secretKey == "" {
 		secretKey = "default-secret-key-for-development"
 	}
@@ -41,7 +40,7 @@ func GenerateAccessToken(userID, username, email string) (string, error) {
 
 // GenerateRefreshToken 生成刷新令牌
 func GenerateRefreshToken(userID string) (string, error) {
-	secretKey := os.Getenv("JWT_SECRET")
+	secretKey := GetEnvWithDefault("JWT_SECRET", "your-super-secret-jwt-key-here")
 	if secretKey == "" {
 		secretKey = "default-secret-key-for-development"
 	}
@@ -60,7 +59,7 @@ func GenerateRefreshToken(userID string) (string, error) {
 
 // ValidateToken 驗證令牌
 func ValidateToken(tokenString string) (*JWTClaims, error) {
-	secretKey := os.Getenv("JWT_SECRET")
+	secretKey := GetEnvWithDefault("JWT_SECRET", "your-super-secret-jwt-key-here")
 	if secretKey == "" {
 		secretKey = "default-secret-key-for-development"
 	}
@@ -85,7 +84,7 @@ func ValidateToken(tokenString string) (*JWTClaims, error) {
 
 // ValidateRefreshToken 驗證刷新令牌
 func ValidateRefreshToken(tokenString string) (string, error) {
-	secretKey := os.Getenv("JWT_SECRET")
+	secretKey := GetEnvWithDefault("JWT_SECRET", "your-super-secret-jwt-key-here")
 	if secretKey == "" {
 		secretKey = "default-secret-key-for-development"
 	}

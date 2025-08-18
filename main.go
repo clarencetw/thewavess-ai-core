@@ -2,13 +2,11 @@ package main
 
 import (
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/gin-contrib/cors"
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
-	"github.com/joho/godotenv"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
@@ -48,10 +46,7 @@ func configureCORS() cors.Config {
 	config := cors.DefaultConfig()
 	
 	// 從環境變數讀取允許的來源，預設為全開
-	allowedOrigins := os.Getenv("CORS_ALLOWED_ORIGINS")
-	if allowedOrigins == "" {
-		allowedOrigins = "*"
-	}
+	allowedOrigins := utils.GetEnvWithDefault("CORS_ALLOWED_ORIGINS", "*")
 	
 	if allowedOrigins == "*" {
 		config.AllowAllOrigins = true
@@ -60,24 +55,18 @@ func configureCORS() cors.Config {
 	}
 	
 	// 從環境變數讀取允許的方法，預設為常用方法
-	allowedMethods := os.Getenv("CORS_ALLOWED_METHODS")
-	if allowedMethods == "" {
-		allowedMethods = "GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS"
-	}
+	allowedMethods := utils.GetEnvWithDefault("CORS_ALLOWED_METHODS", "GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS")
 	config.AllowMethods = strings.Split(allowedMethods, ",")
 	
 	// 從環境變數讀取允許的標頭，預設為常用標頭
-	allowedHeaders := os.Getenv("CORS_ALLOWED_HEADERS")
-	if allowedHeaders == "" {
-		allowedHeaders = "Origin,Content-Length,Content-Type,Authorization,X-Requested-With,Accept,Accept-Encoding,Accept-Language,Connection,Host,User-Agent"
-	}
+	allowedHeaders := utils.GetEnvWithDefault("CORS_ALLOWED_HEADERS", "Origin,Content-Length,Content-Type,Authorization,X-Requested-With,Accept,Accept-Encoding,Accept-Language,Connection,Host,User-Agent")
 	config.AllowHeaders = strings.Split(allowedHeaders, ",")
 	
 	// 允許認證
 	config.AllowCredentials = true
 	
 	// 從環境變數讀取暴露的標頭
-	exposedHeaders := os.Getenv("CORS_EXPOSED_HEADERS")
+	exposedHeaders := utils.GetEnvWithDefault("CORS_EXPOSED_HEADERS", "")
 	if exposedHeaders != "" {
 		config.ExposeHeaders = strings.Split(exposedHeaders, ",")
 	}
@@ -90,7 +79,7 @@ func main() {
 	utils.InitLogger()
 
 	// Load environment variables from .env file
-	if err := godotenv.Load(); err != nil {
+	if err := utils.LoadEnv(); err != nil {
 		utils.Logger.Warn("No .env file found or error loading .env file")
 	} else {
 		utils.Logger.Info("Successfully loaded .env file")

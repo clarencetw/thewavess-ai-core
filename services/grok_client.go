@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -20,6 +18,7 @@ type GrokClient struct {
 	apiKey     string
 	baseURL    string
 	httpClient *http.Client
+	isAzure    bool
 }
 
 // GrokRequest Grok 請求結構（類似 OpenAI 格式）
@@ -60,9 +59,22 @@ type GrokResponse struct {
 
 // NewGrokClient 創建新的 Grok 客戶端
 func NewGrokClient() *GrokClient {
+	// 確保環境變數已載入
+	utils.LoadEnv()
+	
+	// 獲取 API URL，支援 Azure 或其他自定義端點
+	baseURL := utils.GetEnvWithDefault("GROK_API_URL", "https://api.x.ai/v1")
+	isAzure := false
+	
+	// 檢查是否為 Azure AI Foundry
+	if strings.Contains(baseURL, "azure.com") {
+		isAzure = true
+	}
+	
 	return &GrokClient{
-		apiKey:  os.Getenv("GROK_API_KEY"),
-		baseURL: "https://api.x.ai/v1", // Grok API endpoint
+		apiKey:  utils.GetEnvWithDefault("GROK_API_KEY", ""),
+		baseURL: baseURL,
+		isAzure: isAzure,
 		httpClient: &http.Client{
 			Timeout: 30 * time.Second,
 		},
@@ -76,6 +88,7 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	// 記錄請求開始
 	utils.Logger.WithFields(map[string]interface{}{
 		"service":        "grok",
+		"base_url":       c.baseURL,
 		"model":          request.Model,
 		"max_tokens":     request.MaxTokens,
 		"temperature":    request.Temperature,
@@ -91,7 +104,7 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	}
 
 	// 開發模式下詳細記錄 prompt 內容
-	if os.Getenv("GO_ENV") != "production" {
+	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service": "grok",
 			"model":   request.Model,
@@ -136,7 +149,13 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	}
 
 	// 創建 HTTP 請求
-	url := c.baseURL + "/chat/completions"
+	var url string
+	if c.isAzure {
+		// Azure AI Foundry 使用與 OpenAI 相同的端點結構
+		url = c.baseURL + "/models/chat/completions?api-version=2024-05-01-preview"
+	} else {
+		url = c.baseURL + "/chat/completions"
+	}
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestBody))
 	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{
@@ -149,8 +168,14 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 
 	// 設置請求標頭
 	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	httpReq.Header.Set("User-Agent", "thewavess-ai-core/1.0")
+	
+	// Azure 需要不同的認證方式
+	if c.isAzure {
+		httpReq.Header.Set("api-key", c.apiKey)
+	} else {
+		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
 
 	// 發送 HTTP 請求
 	utils.Logger.WithFields(map[string]interface{}{
@@ -221,7 +246,7 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	}).Info("Grok API response received")
 
 	// 開發模式下詳細記錄響應內容
-	if os.Getenv("GO_ENV") != "production" {
+	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service":     "grok",
 			"response_id": grokResponse.ID,
@@ -366,53 +391,17 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription 
 
 // getGrokModel 獲取 Grok 模型配置
 func getGrokModel() string {
-	model := os.Getenv("GROK_MODEL")
-	if model == "" {
-		return "grok-beta" // 默認模型
-	}
-	return model
+	return utils.GetEnvWithDefault("GROK_MODEL", "grok-beta")
 }
 
 // getGrokMaxTokens 獲取 Grok 最大 Token 數配置
 func getGrokMaxTokens() int {
-	maxTokensStr := os.Getenv("GROK_MAX_TOKENS")
-	if maxTokensStr == "" {
-		return 1000 // 默認值
-	}
-	
-	maxTokens, err := strconv.Atoi(maxTokensStr)
-	if err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service":        "grok",
-			"env_value":      maxTokensStr,
-			"error":          err.Error(),
-			"default_value":  1000,
-		}).Warn("Failed to parse GROK_MAX_TOKENS, using default")
-		return 1000
-	}
-	
-	return maxTokens
+	return utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 1000)
 }
 
 // getGrokTemperature 獲取 Grok 溫度配置
 func getGrokTemperature() float64 {
-	temperatureStr := os.Getenv("GROK_TEMPERATURE")
-	if temperatureStr == "" {
-		return 0.9 // 默認值
-	}
-	
-	temperature, err := strconv.ParseFloat(temperatureStr, 64)
-	if err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service":        "grok",
-			"env_value":      temperatureStr,
-			"error":          err.Error(),
-			"default_value":  0.9,
-		}).Warn("Failed to parse GROK_TEMPERATURE, using default")
-		return 0.9
-	}
-	
-	return temperature
+	return utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.9)
 }
 
 // generateMockResponse 生成模擬響應（用於 API key 未配置或測試場景）

@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
-	"os"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
@@ -18,13 +17,17 @@ var DB *bun.DB
 
 // InitDB 初始化數據庫連接
 func InitDB() error {
+	// 確保環境變數已載入
+	utils.LoadEnv()
+	
 	// 構建數據庫連接字符串
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		os.Getenv("DB_USER"),
-		os.Getenv("DB_PASSWORD"),
-		os.Getenv("DB_HOST"),
-		os.Getenv("DB_PORT"),
-		os.Getenv("DB_NAME"),
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=%s",
+		utils.GetEnvWithDefault("DB_USER", "postgres"),
+		utils.GetEnvWithDefault("DB_PASSWORD", "password"),
+		utils.GetEnvWithDefault("DB_HOST", "localhost"),
+		utils.GetEnvWithDefault("DB_PORT", "5432"),
+		utils.GetEnvWithDefault("DB_NAME", "thewavess_ai_core"),
+		utils.GetEnvWithDefault("DB_SSLMODE", "disable"),
 	)
 
 	// 創建 PostgreSQL 連接
@@ -34,7 +37,7 @@ func InitDB() error {
 	DB = bun.NewDB(sqldb, pgdialect.New())
 
 	// 開發環境下啟用詳細查詢日誌
-	if os.Getenv("GO_ENV") != "production" {
+	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
 		DB.AddQueryHook(bundebug.NewQueryHook(
 			bundebug.WithVerbose(true),
 			bundebug.FromEnv("BUNDEBUG"),
