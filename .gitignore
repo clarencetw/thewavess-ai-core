@@ -54,7 +54,6 @@ docs/
 .DS_Store
 
 # Database data directories (keep structure, ignore data)
-data/postgres/*
-!data/postgres/.gitkeep
+data/postgres/data/
 data/redis/*
 !data/redis/.gitkeep
