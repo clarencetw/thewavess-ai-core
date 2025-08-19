@@ -11,6 +11,16 @@ func SetupRoutes(router *gin.RouterGroup) {
 	// 系統管理路由（無需認證）
 	router.GET("/version", handlers.GetVersion)
 	router.GET("/status", handlers.GetStatus)
+
+	// 監控系統路由（無需認證）
+	monitor := router.Group("/monitor")
+	{
+		monitor.GET("/health", handlers.HealthCheck)
+		monitor.GET("/ready", handlers.Ready)
+		monitor.GET("/live", handlers.Live)
+		monitor.GET("/stats", handlers.GetSystemStats)
+		monitor.GET("/metrics", handlers.GetMetrics)
+	}
 	
 	// 測試路由（無需認證） - 用於開發測試
 	router.POST("/test/message", handlers.TestMessage)

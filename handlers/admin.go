@@ -319,7 +319,7 @@ func GetAdminUsers(c *gin.Context) {
 		Order("created_at DESC").
 		Offset((page - 1) * limit).
 		Limit(limit).
-		Scan(ctx)
+		Scan(ctx, &users)
 
 	if err != nil {
 		utils.Logger.WithError(err).WithField("admin_id", userID).Error("Failed to query users")

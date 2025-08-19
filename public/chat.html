@@ -101,6 +101,77 @@
         .space-minimal > * + * {
             margin-top: 1rem;
         }
+        
+        /* TTS 按鈕樣式 */
+        .tts-button {
+            background: transparent;
+            border: none;
+            color: #6b7280;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            padding: 6px;
+            border-radius: 4px;
+            min-width: 24px;
+            min-height: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .tts-button:hover {
+            color: #3b82f6;
+            background: #f3f4f6;
+        }
+        
+        .tts-button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .tts-button.playing {
+            color: #3b82f6;
+            animation: pulse 1.5s infinite;
+        }
+        
+        .tts-button.loading {
+            color: #f59e0b;
+            animation: spin 1s linear infinite;
+        }
+        
+        /* 手機版 TTS 按鈕優化 */
+        @media (max-width: 768px) {
+            .tts-button {
+                padding: 8px;
+                min-width: 32px;
+                min-height: 32px;
+            }
+            
+            .tts-button i {
+                font-size: 14px !important;
+            }
+        }
+        
+        /* 觸控設備優化 */
+        @media (hover: none) and (pointer: coarse) {
+            .tts-button:hover {
+                background: transparent;
+            }
+            
+            .tts-button:active {
+                background: #e5e7eb;
+                transform: scale(0.95);
+            }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        @keyframes spin {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
     </style>
     
 </head>
@@ -424,6 +495,11 @@
             intimacyLevel: 'friendly'
         };
         
+        // TTS 相關變數
+        let currentAudio = null;
+        let currentPlayingButton = null;
+        let ttsCache = new Map(); // 簡單緩存
+        
         // 頁面初始化
         document.addEventListener('DOMContentLoaded', async function() {
             await App.init();
@@ -609,6 +685,8 @@
                             });
                         }
                     });
+                    
+                    console.log('TTS: 歷史消息載入完成，可使用 TTS 功能');
                     
                     // 更新消息歷史
                     messageHistory = result.data.messages.map(msg => ({
@@ -817,6 +895,9 @@
                         <span class="font-medium">${actionText}</span>
                     </div>` : '';
                 
+                // 生成唯一 ID 用於 TTS
+                const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+                
                 messageDiv.innerHTML = `
                     <img class="w-6 h-6 md:w-8 md:h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
                     <div class="bg-white border border-gray-200 shadow-xl rounded-lg p-2 md:p-3 max-w-[85%] md:max-w-[80%]">
@@ -827,6 +908,9 @@
                             <span>${metadata.timestamp ? Utils.formatShortTime(metadata.timestamp) : Utils.formatShortTime(new Date())}</span>
                             <div class="flex items-center space-x-2">
                                 ${metadata.nsfw_level ? `<span class="bg-gray-600 text-white px-1 py-0.5 rounded text-xs">L${metadata.nsfw_level}</span>` : ''}
+                                <button class="tts-button" onclick="toggleTTS('${messageId}', '${content.replace(/'/g, "&#39;").replace(/"/g, "&quot;")}')") title="語音播放" data-message-id="${messageId}">
+                                    <i class="fas fa-volume-up text-xs"></i>
+                                </button>
                                 <button class="hover:text-blue-500 transition-colors" onclick="regenerateMessage(this)" title="重新生成">
                                     <i class="fas fa-redo text-xs"></i>
                                 </button>
@@ -855,7 +939,8 @@
                 sender,
                 content,
                 metadata,
-                timestamp: moment().toISOString()
+                timestamp: moment().toISOString(),
+                messageId: sender === 'ai' ? messageDiv.querySelector('[data-message-id]')?.getAttribute('data-message-id') : null
             });
             
             // 更新側邊欄歷史記錄
@@ -1306,6 +1391,14 @@
                     // 添加新的AI回應
                     handleAIResponse(result.data);
                     
+                    // 為新消息啟用 TTS
+                    setTimeout(() => {
+                        const lastMessage = document.querySelector('#messagesList > div:last-child');
+                        if (lastMessage) {
+                            enableTTSForMessage(lastMessage);
+                        }
+                    }, 100);
+                    
                     UI.showToast('消息重新生成完成', 'success');
                 } else {
                     throw new Error(result.error?.message || '重新生成失敗');
@@ -1657,6 +1750,275 @@
             // 同步到手機版
             syncMobileChatHistory();
         };
+        
+        // TTS 相關功能
+        
+        // 切換 TTS 播放狀態
+        async function toggleTTS(messageId, content) {
+            const button = document.querySelector(`[data-message-id="${messageId}"]`);
+            if (!button) return;
+            
+            // 如果正在播放其他音頻，先停止
+            if (currentAudio && !currentAudio.paused) {
+                if (currentPlayingButton && currentPlayingButton !== button) {
+                    stopTTS();
+                }
+            }
+            
+            // 如果點擊的是正在播放的按鈕，則停止播放
+            if (currentPlayingButton === button && currentAudio && !currentAudio.paused) {
+                stopTTS();
+                return;
+            }
+            
+            // 開始播放
+            await playTTS(messageId, content, button);
+        }
+        
+        // 播放 TTS 語音
+        async function playTTS(messageId, content, button) {
+            try {
+                // 設置載入狀態
+                setTTSButtonState(button, 'loading');
+                
+                // 清理內容（移除 HTML 標籤和多餘空格）
+                const cleanContent = content.replace(/<[^>]*>/g, '').replace(/\s+/g, ' ').trim();
+                
+                if (!cleanContent) {
+                    UI.showToast('沒有可播放的文字內容', 'warning');
+                    setTTSButtonState(button, 'idle');
+                    return;
+                }
+                
+                // 檢查緩存
+                const cacheKey = cleanContent;
+                if (ttsCache.has(cacheKey)) {
+                    const audioUrl = ttsCache.get(cacheKey);
+                    playAudioFromUrl(audioUrl, button);
+                    return;
+                }
+                
+                // 準備 API 請求數據
+                const requestData = {
+                    text: cleanContent,
+                    character_id: currentCharacter?.id || 'char_001',
+                    voice_id: getVoiceIdForCharacter(currentCharacter?.id)
+                };
+                
+                // 嘗試使用 TTS 預覽 API
+                let result = await ApiClient.post('/api/v1/tts/preview', requestData);
+                
+                // 如果預覽 API 失敗，嘗試使用生成 API
+                if (!result.success) {
+                    result = await ApiClient.post('/api/v1/tts/generate', requestData);
+                }
+                
+                if (result.success && result.data) {
+                    let audioUrl;
+                    
+                    // 處理不同的 API 回應格式
+                    if (result.data.audio_url) {
+                        audioUrl = result.data.audio_url;
+                    } else if (result.data.url) {
+                        audioUrl = result.data.url;
+                    } else if (result.data.audio_data) {
+                        // 如果是 base64 數據，創建 blob URL
+                        const audioBlob = base64ToBlob(result.data.audio_data, 'audio/mpeg');
+                        audioUrl = URL.createObjectURL(audioBlob);
+                    } else {
+                        throw new Error('無效的音頻數據格式');
+                    }
+                    
+                    // 緩存音頻 URL
+                    ttsCache.set(cacheKey, audioUrl);
+                    
+                    // 播放音頻
+                    playAudioFromUrl(audioUrl, button);
+                    
+                } else {
+                    throw new Error(result.error?.message || 'TTS 服務不可用');
+                }
+                
+            } catch (error) {
+                console.error('TTS 播放失敗:', error);
+                
+                let errorMessage = '語音播放失敗';
+                if (error.message.includes('404')) {
+                    errorMessage = 'TTS 服務不可用';
+                } else if (error.message.includes('network')) {
+                    errorMessage = '網路連接失敗';
+                } else if (error.message) {
+                    errorMessage = error.message;
+                }
+                
+                UI.showToast(errorMessage, 'error');
+                setTTSButtonState(button, 'idle');
+            }
+        }
+        
+        // 從 URL 播放音頻
+        function playAudioFromUrl(audioUrl, button) {
+            try {
+                // 停止當前播放
+                if (currentAudio) {
+                    currentAudio.pause();
+                    currentAudio = null;
+                }
+                
+                // 創建新的音頻元素
+                currentAudio = new Audio(audioUrl);
+                currentPlayingButton = button;
+                
+                // 設置事件監聽器
+                currentAudio.addEventListener('loadstart', () => {
+                    setTTSButtonState(button, 'loading');
+                });
+                
+                currentAudio.addEventListener('canplay', () => {
+                    setTTSButtonState(button, 'playing');
+                });
+                
+                currentAudio.addEventListener('ended', () => {
+                    setTTSButtonState(button, 'idle');
+                    currentAudio = null;
+                    currentPlayingButton = null;
+                });
+                
+                currentAudio.addEventListener('error', (e) => {
+                    console.error('音頻播放錯誤:', e);
+                    UI.showToast('音頻播放失敗', 'error');
+                    setTTSButtonState(button, 'idle');
+                    currentAudio = null;
+                    currentPlayingButton = null;
+                });
+                
+                // 開始播放
+                currentAudio.play();
+                
+            } catch (error) {
+                console.error('播放音頻失敗:', error);
+                UI.showToast('音頻播放失敗', 'error');
+                setTTSButtonState(button, 'idle');
+            }
+        }
+        
+        // 停止 TTS 播放
+        function stopTTS() {
+            if (currentAudio) {
+                currentAudio.pause();
+                currentAudio = null;
+            }
+            
+            if (currentPlayingButton) {
+                setTTSButtonState(currentPlayingButton, 'idle');
+                currentPlayingButton = null;
+            }
+        }
+        
+        // 設置 TTS 按鈕狀態
+        function setTTSButtonState(button, state) {
+            if (!button) return;
+            
+            const icon = button.querySelector('i');
+            if (!icon) return;
+            
+            // 移除所有狀態類別
+            button.classList.remove('playing', 'loading');
+            
+            switch (state) {
+                case 'idle':
+                    icon.className = 'fas fa-volume-up text-xs';
+                    button.disabled = false;
+                    button.title = '語音播放';
+                    break;
+                case 'loading':
+                    icon.className = 'fas fa-spinner text-xs';
+                    button.classList.add('loading');
+                    button.disabled = true;
+                    button.title = '載入中...';
+                    break;
+                case 'playing':
+                    icon.className = 'fas fa-stop text-xs';
+                    button.classList.add('playing');
+                    button.disabled = false;
+                    button.title = '停止播放';
+                    break;
+            }
+        }
+        
+        // 根據角色獲取語音 ID
+        function getVoiceIdForCharacter(characterId) {
+            const voiceMap = {
+                'char_001': 'male_mature',    // 陸寒淵 - 成熟男性
+                'char_002': 'male_gentle',    // 沈言墨 - 溫和男性
+                'char_003': 'male_scholarly'  // 默認學者類型
+            };
+            
+            return voiceMap[characterId] || 'male_mature';
+        }
+        
+        // Base64 轉 Blob 工具函數
+        function base64ToBlob(base64, mimeType) {
+            const byteCharacters = atob(base64);
+            const byteNumbers = new Array(byteCharacters.length);
+            
+            for (let i = 0; i < byteCharacters.length; i++) {
+                byteNumbers[i] = byteCharacters.charCodeAt(i);
+            }
+            
+            const byteArray = new Uint8Array(byteNumbers);
+            return new Blob([byteArray], { type: mimeType });
+        }
+        
+        // 清理緩存和資源
+        function cleanupTTSResources() {
+            // 停止當前播放
+            stopTTS();
+            
+            // 清理緩存中的 blob URLs
+            for (const [key, url] of ttsCache) {
+                if (url.startsWith('blob:')) {
+                    URL.revokeObjectURL(url);
+                }
+            }
+            ttsCache.clear();
+        }
+        
+        // 頁面卸載時清理資源
+        window.addEventListener('beforeunload', cleanupTTSResources);
+        
+        // 當用戶離開頁面時暫停播放
+        document.addEventListener('visibilitychange', function() {
+            if (document.hidden && currentAudio && !currentAudio.paused) {
+                // 當頁面隱藏時暫停播放，但不重設按鈕狀態
+                currentAudio.pause();
+            }
+        });
+        
+        // 手機版優化：當用戶滾動時暫停 TTS
+        let scrollTimeout;
+        document.getElementById('messagesArea').addEventListener('scroll', function() {
+            if (currentAudio && !currentAudio.paused) {
+                clearTimeout(scrollTimeout);
+                scrollTimeout = setTimeout(() => {
+                    // 如果用戶持續滾動，不停止播放
+                    // 這裡可以添加更複雜的逻輯
+                }, 1000);
+            }
+        });
+        
+        // 為新消息添加 TTS 功能的輔助函數
+        function enableTTSForMessage(messageElement) {
+            const ttsButton = messageElement.querySelector('.tts-button');
+            if (ttsButton && !ttsButton.onclick) {
+                const messageId = ttsButton.getAttribute('data-message-id');
+                const messageContent = messageElement.querySelector('.message-content');
+                if (messageContent && messageId) {
+                    const content = messageContent.textContent;
+                    ttsButton.onclick = () => toggleTTS(messageId, content);
+                }
+            }
+        }
         
         // Toast 系統統一使用 common.js 中的 UI.showToast 函數
     </script>

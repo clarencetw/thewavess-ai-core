@@ -30,7 +30,7 @@ done
 
 echo "🚀 Testing Thewavess AI Core API - Complete Test Suite"
 echo "======================================================"
-echo "Testing all 68 API endpoints"
+echo "Testing all 73 API endpoints"
 if [ "$REGISTER_NEW_USER" = true ]; then
     echo "Mode: Register new test user"
 else
@@ -208,6 +208,16 @@ test_health_check
 test_endpoint "GET" "/version" "" "Get API Version"
 test_endpoint "GET" "/status" "" "Get System Status"
 # Note: /test/message requires authentication and will be tested later
+
+# 1.1 MONITORING SYSTEM (5 endpoints)
+echo -e "\n${PURPLE}📊 MONITORING SYSTEM (5 endpoints)${NC}"
+echo "===================================="
+
+test_endpoint "GET" "/monitor/health" "" "System Health Check"
+test_endpoint "GET" "/monitor/ready" "" "Kubernetes Readiness Probe"
+test_endpoint "GET" "/monitor/live" "" "Kubernetes Liveness Probe"
+test_endpoint "GET" "/monitor/stats" "" "Detailed System Stats"
+test_endpoint "GET" "/monitor/metrics" "" "Prometheus Metrics"
 
 # 2. CHARACTER SYSTEM (3 public endpoints)
 echo -e "\n${PURPLE}🎭 CHARACTER SYSTEM (3 public endpoints)${NC}"
