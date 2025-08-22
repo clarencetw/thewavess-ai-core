@@ -18,6 +18,9 @@
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
 </head>
 <body class="min-h-full p-4 bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
@@ -73,11 +76,10 @@
                 <!-- 標籤篩選 -->
                 <div class="mb-4 flex flex-wrap gap-2">
                     <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-blue-600 text-white border-blue-600 hover:bg-blue-700 transition-colors cursor-pointer" data-category="all" id="filter-all">全部</button>
-                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="emotion" id="filter-emotion">情感</button>
-                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="scene" id="filter-scene">場景</button>
-                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="character" id="filter-character">角色</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="genre" id="filter-genre">類型</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="personality" id="filter-personality">性格</button>
+                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="role" id="filter-role">職業</button>
                     <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="style" id="filter-style">風格</button>
-                    <button class="px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer" data-category="content" id="filter-content">內容</button>
                 </div>
                 
                 <!-- 標籤搜尋 -->
@@ -97,78 +99,50 @@
                 </div>
             </div>
             
-            <!-- 標籤創建 -->
+            <!-- 角色篩選器 -->
             <div class="bg-white border rounded-lg p-6">
                 <h2 class="text-xl font-semibold mb-4">
-                    <i class="fas fa-plus text-green-400 mr-2"></i>
-                    創建新標籤
+                    <i class="fas fa-filter text-purple-400 mr-2"></i>
+                    按標籤篩選角色
                 </h2>
                 
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                        <label class="block font-medium mb-2">標籤名稱</label>
-                        <input 
-                            type="text" 
-                            id="newTagName"
-                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
-                            placeholder="輸入標籤名稱..."
-                        >
-                    </div>
-                    
-                    <div>
-                        <label class="block font-medium mb-2">標籤類別</label>
-                        <select 
-                            id="newTagCategory"
-                            class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
-                        >
-                            <option value="emotion">情感</option>
-                            <option value="scene">場景</option>
-                            <option value="character">角色</option>
-                            <option value="style">風格</option>
-                            <option value="content">內容</option>
-                        </select>
+                <!-- 已選標籤 -->
+                <div class="mb-4">
+                    <label class="block font-medium mb-2">已選擇的標籤</label>
+                    <div class="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-lg min-h-[50px]" id="selectedTagsContainer">
+                        <span class="text-gray-500 text-sm">點擊標籤來篩選角色</span>
                     </div>
                 </div>
                 
-                <div class="mt-4">
-                    <label class="block font-medium mb-2">標籤描述</label>
-                    <textarea 
-                        id="newTagDescription"
-                        class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
-                        rows="3"
-                        placeholder="描述這個標籤的用途和含義..."
-                    ></textarea>
-                </div>
-                
-                <div class="mt-4">
-                    <label class="block font-medium mb-2">標籤顏色</label>
-                    <div class="flex space-x-2">
-                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-blue-500" data-color="blue" id="color-blue" onclick="selectTagColor('blue')"></button>
-                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-green-500" data-color="green" id="color-green" onclick="selectTagColor('green')"></button>
-                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-red-500" data-color="red" id="color-red" onclick="selectTagColor('red')"></button>
-                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-yellow-500" data-color="yellow" id="color-yellow" onclick="selectTagColor('yellow')"></button>
-                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-purple-500" data-color="purple" id="color-purple" onclick="selectTagColor('purple')"></button>
-                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-pink-500" data-color="pink" id="color-pink" onclick="selectTagColor('pink')"></button>
-                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-indigo-500" data-color="indigo" id="color-indigo" onclick="selectTagColor('indigo')"></button>
-                        <button class="w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-gray-500" data-color="gray" id="color-gray" onclick="selectTagColor('gray')"></button>
+                <!-- 篩選結果 -->
+                <div class="mb-4">
+                    <div class="flex items-center justify-between mb-3">
+                        <label class="block font-medium">篩選結果</label>
+                        <span class="text-sm text-gray-600" id="filteredCharacterCount">0 個角色</span>
+                    </div>
+                    <div class="space-y-3 max-h-64 overflow-y-auto" id="filteredCharactersList">
+                        <div class="text-center text-gray-500 py-4">
+                            請選擇標籤來查看符合的角色
+                        </div>
                     </div>
                 </div>
                 
-                <div class="mt-6 flex space-x-4">
+                <!-- 操作按鈕 -->
+                <div class="flex space-x-4">
                     <button 
-                        class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded"
-                        onclick="createNewTag()"
+                        class="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded flex-1"
+                        onclick="viewCharacterList()"
                     >
-                        <i class="fas fa-plus mr-2"></i>
-                        創建標籤
+                        <i class="fas fa-users mr-2"></i>
+                        查看完整角色列表
                     </button>
                     
                     <button 
                         class="bg-gray-600 hover:bg-gray-700 text-white px-6 py-3 rounded"
-                        onclick="clearTagForm()"
+                        onclick="clearSelectedTags()"
                     >
-                        <i class="fas fa-eraser mr-2"></i>
-                        清空表單
+                        <i class="fas fa-times mr-2"></i>
+                        清空選擇
                     </button>
                 </div>
             </div>
@@ -262,15 +236,17 @@
     <script src="/public/assets/common.js"></script>
     <script>
         let allTags = [];
+        let allCharacters = [];
+        let selectedTags = [];
         let currentFilter = 'all';
-        let selectedTagColor = 'blue';
         
         // 頁面初始化
         document.addEventListener('DOMContentLoaded', async function() {
             await App.init();
             
-            // 載入標籤數據
+            // 載入數據
             await loadTagsData();
+            await loadCharactersData();
             
             // 設置事件監聽器
             setupEventListeners();
@@ -298,11 +274,27 @@
             });
         }
         
+        // 載入角色數據
+        async function loadCharactersData() {
+            try {
+                const result = await SpecializedApiClients.Character.getAll();
+                if (result.success && result.data?.characters) {
+                    allCharacters = result.data.characters;
+                } else {
+                    throw new Error('載入角色失敗');
+                }
+            } catch (error) {
+                UI.handleError(error, '載入角色數據');
+                allCharacters = [];
+                UI.showToast('載入角色數據失敗', 'error');
+            }
+        }
+        
         // 載入標籤數據
         async function loadTagsData() {
             try {
                 // 載入所有標籤
-                const allTagsResult = await ApiClient.get('/api/v1/tags');
+                const allTagsResult = await SpecializedApiClients.Tags.getAll();
                 
                 if (allTagsResult.success && allTagsResult.data) {
                     allTags = allTagsResult.data.tags || [];
@@ -311,7 +303,7 @@
                 }
                 
                 // 載入熱門標籤
-                const popularResult = await ApiClient.get('/api/v1/tags/popular');
+                const popularResult = await SpecializedApiClients.Tags.getPopular();
                 let popularTags = [];
                 
                 if (popularResult.success && popularResult.data) {
@@ -327,7 +319,7 @@
                 updateCategoryDistribution();
                 
             } catch (error) {
-                console.error('載入標籤數據失敗:', error);
+                UI.handleError(error, '載入標籤數據');
                 
                 // 顯示錯誤狀態
                 allTags = [];
@@ -365,11 +357,20 @@
         // 創建標籤元素
         function createTagElement(tag, showUsage = false) {
             const span = document.createElement('span');
-            span.className = `inline-block px-3 py-1 rounded-full text-sm font-medium cursor-pointer transition-all hover:scale-105 bg-${tag.color || 'blue'}-100 text-${tag.color || 'blue'}-800`;
-            span.onclick = () => selectTag(tag);
+            const isSelected = selectedTags.some(st => st.id === tag.id);
+            const baseClass = `inline-block px-3 py-1 rounded-full text-sm font-medium cursor-pointer transition-all hover:scale-105`;
+            
+            if (isSelected) {
+                span.className = `${baseClass} bg-blue-600 text-white border-2 border-blue-700`;
+            } else {
+                const color = getColorFromHex(tag.color) || 'blue';
+                span.className = `${baseClass} bg-${color}-100 text-${color}-800 border-2 border-transparent hover:border-${color}-300`;
+            }
+            
+            span.onclick = () => toggleTagSelection(tag);
             
             let content = tag.name;
-            if (showUsage && tag.usage_count) {
+            if (showUsage && tag.usage_count !== undefined) {
                 content += ` (${tag.usage_count})`;
             }
             
@@ -380,33 +381,30 @@
         // 創建標籤列表項目
         function createTagListItem(tag) {
             const div = document.createElement('div');
-            div.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors';
+            const isSelected = selectedTags.some(st => st.id === tag.id);
+            const bgClass = isSelected ? 'bg-blue-100 border-blue-300' : 'bg-gray-50 hover:bg-gray-100';
+            div.className = `flex items-center justify-between p-3 ${bgClass} border rounded-lg transition-colors cursor-pointer`;
+            
+            const color = getColorFromHex(tag.color) || 'blue';
+            const colorStyle = `background-color: ${tag.color || '#3B82F6'}`;
             
             div.innerHTML = `
-                <div class="flex-1">
+                <div class="flex-1" onclick="toggleTagSelection(arguments[0])" data-tag='${JSON.stringify(tag)}'>
                     <div class="flex items-center space-x-2">
-                        <span class="inline-block w-3 h-3 rounded-full bg-${tag.color || 'blue'}-500"></span>
+                        <span class="inline-block w-3 h-3 rounded-full" style="${colorStyle}"></span>
                         <span class="font-medium">${tag.name}</span>
                         <span class="text-xs bg-gray-200 text-gray-700 px-2 py-1 rounded">${getCategoryLabel(tag.category)}</span>
+                        ${isSelected ? '<i class="fas fa-check text-blue-600"></i>' : ''}
                     </div>
                     <div class="text-sm text-gray-600 mt-1">${tag.description || '無描述'}</div>
                 </div>
                 <div class="flex items-center space-x-2">
                     <span class="text-sm text-gray-500">${tag.usage_count || 0} 次使用</span>
-                    <button 
-                        class="text-blue-600 hover:text-blue-800 text-sm"
-                        onclick="editTag('${tag.id}')"
-                    >
-                        <i class="fas fa-edit"></i>
-                    </button>
-                    <button 
-                        class="text-red-600 hover:text-red-800 text-sm"
-                        onclick="deleteTag('${tag.id}')"
-                    >
-                        <i class="fas fa-trash"></i>
-                    </button>
                 </div>
             `;
+            
+            // 添加點擊事件
+            div.querySelector('.flex-1').addEventListener('click', () => toggleTagSelection(tag));
             
             return div;
         }
@@ -442,120 +440,159 @@
             displayAllTags(filteredTags);
         }
         
-        // 選擇標籤顏色
-        function selectTagColor(color) {
-            selectedTagColor = color;
+        // 切換標籤選擇
+        function toggleTagSelection(tag) {
+            const index = selectedTags.findIndex(st => st.id === tag.id);
             
-            // 更新按鈕狀態
-            document.querySelectorAll('[data-color]').forEach(btn => {
-                btn.className = 'w-8 h-8 rounded-full border-2 border-white shadow-lg cursor-pointer hover:scale-110 transition-transform bg-' + btn.dataset.color + '-500';
-            });
-            const selectedBtn = document.querySelector(`[data-color="${color}"]`);
-            selectedBtn.className = 'w-8 h-8 rounded-full border-2 border-gray-800 shadow-lg cursor-pointer hover:scale-110 transition-transform bg-' + color + '-500';
+            if (index >= 0) {
+                // 取消選擇
+                selectedTags.splice(index, 1);
+                UI.showToast(`取消選擇標籤: ${tag.name}`, 'info');
+            } else {
+                // 選擇標籤
+                selectedTags.push(tag);
+                UI.showToast(`選擇標籤: ${tag.name}`, 'success');
+            }
+            
+            updateSelectedTagsDisplay();
+            filterCharactersByTags();
+            refreshTagsDisplay();
         }
         
-        // 創建新標籤
-        async function createNewTag() {
-            const name = document.getElementById('newTagName').value.trim();
-            const category = document.getElementById('newTagCategory').value;
-            const description = document.getElementById('newTagDescription').value.trim();
+        // 更新已選標籤顯示
+        function updateSelectedTagsDisplay() {
+            const container = document.getElementById('selectedTagsContainer');
+            container.innerHTML = '';
             
-            if (!name) {
-                UI.showToast('請輸入標籤名稱', 'warning');
+            if (selectedTags.length === 0) {
+                container.innerHTML = '<span class="text-gray-500 text-sm">點擊標籤來篩選角色</span>';
                 return;
             }
             
-            // 檢查標籤是否已存在
-            if (allTags.some(tag => tag.name.toLowerCase() === name.toLowerCase())) {
-                UI.showToast('標籤已存在', 'warning');
+            selectedTags.forEach(tag => {
+                const span = document.createElement('span');
+                span.className = 'inline-flex items-center px-3 py-1 rounded-full text-sm bg-blue-100 text-blue-800 border border-blue-200';
+                span.innerHTML = `
+                    ${tag.name}
+                    <button class="ml-2 text-blue-600 hover:text-blue-800" onclick="toggleTagSelection(arguments[0])" data-tag='${JSON.stringify(tag)}'>
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                `;
+                
+                // 添加移除事件
+                span.querySelector('button').addEventListener('click', () => toggleTagSelection(tag));
+                
+                container.appendChild(span);
+            });
+        }
+        
+        // 根據標籤篩選角色
+        function filterCharactersByTags() {
+            if (selectedTags.length === 0) {
+                displayFilteredCharacters([]);
                 return;
             }
             
-            const newTag = {
-                id: 'tag_' + Date.now(),
-                name: name,
-                category: category,
-                description: description,
-                color: selectedTagColor,
-                usage_count: 0,
-                created_at: moment().toISOString()
+            const selectedTagNames = selectedTags.map(tag => tag.name);
+            const filteredCharacters = allCharacters.filter(character => {
+                // 檢查角色的標籤是否包含選中的標籤
+                const characterTags = character.tags || [];
+                return selectedTagNames.some(tagName => characterTags.includes(tagName));
+            });
+            
+            displayFilteredCharacters(filteredCharacters);
+        }
+        
+        // 顯示篩選後的角色
+        function displayFilteredCharacters(characters) {
+            const container = document.getElementById('filteredCharactersList');
+            const countElement = document.getElementById('filteredCharacterCount');
+            
+            countElement.textContent = `${characters.length} 個角色`;
+            container.innerHTML = '';
+            
+            if (characters.length === 0) {
+                container.innerHTML = selectedTags.length > 0 
+                    ? '<div class="text-center text-gray-500 py-4">沒有找到符合條件的角色</div>'
+                    : '<div class="text-center text-gray-500 py-4">請選擇標籤來查看符合的角色</div>';
+                return;
+            }
+            
+            characters.forEach(character => {
+                const div = document.createElement('div');
+                div.className = 'flex items-center space-x-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer';
+                
+                const avatarUrl = character.metadata?.avatar_url || character.avatar_url || 'https://placehold.co/40x40/9CA3AF/ffffff?text=' + encodeURIComponent(character.name.charAt(0));
+                
+                div.innerHTML = `
+                    <img src="${avatarUrl}" alt="${character.name}" class="w-10 h-10 rounded-full object-cover" onerror="this.src='https://placehold.co/40x40/9CA3AF/ffffff?text=${encodeURIComponent(character.name.charAt(0))}'">
+                    <div class="flex-1">
+                        <div class="font-medium">${character.name}</div>
+                        <div class="text-sm text-gray-600">${character.metadata?.description || '暫無描述'}</div>
+                        <div class="flex flex-wrap gap-1 mt-1">
+                            ${(character.tags || []).filter(tag => selectedTags.some(st => st.name === tag)).map(tag => 
+                                `<span class="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded">${tag}</span>`
+                            ).join('')}
+                        </div>
+                    </div>
+                `;
+                
+                div.addEventListener('click', () => {
+                    Router.navigate(`/chat?character=${character.id}`);
+                });
+                
+                container.appendChild(div);
+            });
+        }
+        
+        // 清空選中的標籤
+        function clearSelectedTags() {
+            selectedTags = [];
+            updateSelectedTagsDisplay();
+            filterCharactersByTags();
+            refreshTagsDisplay();
+            UI.showToast('已清空選擇的標籤', 'success');
+        }
+        
+        // 查看完整角色列表
+        function viewCharacterList() {
+            Router.navigate('/character');
+        }
+        
+        // 重新整理標籤顯示
+        function refreshTagsDisplay() {
+            displayPopularTags(allTags.slice(0, 10));
+            filterTags();
+        }
+        
+        // 將hex顏色轉換為tailwind顏色名稱
+        function getColorFromHex(hexColor) {
+            if (!hexColor) return 'blue';
+            
+            const colorMap = {
+                '#FF69B4': 'pink',
+                '#8B008B': 'purple', 
+                '#4169E1': 'blue',
+                '#8B4513': 'yellow',
+                '#00CED1': 'cyan',
+                '#98FB98': 'green',
+                '#87CEEB': 'blue',
+                '#FFD700': 'yellow',
+                '#9370DB': 'purple',
+                '#FFC0CB': 'pink',
+                '#90EE90': 'green',
+                '#20B2AA': 'teal',
+                '#87CEFA': 'blue',
+                '#DDA0DD': 'purple',
+                '#F0E68C': 'yellow',
+                '#D2B48C': 'yellow',
+                '#808080': 'gray',
+                '#F5DEB3': 'yellow',
+                '#CD853F': 'yellow',
+                '#FFA500': 'orange'
             };
             
-            try {
-                const result = await ApiClient.post('/api/v1/tags', newTag);
-                
-                if (result.success && result.data) {
-                    allTags.unshift(result.data);
-                    displayAllTags(allTags);
-                    updateTagsStats();
-                    updateCategoryDistribution();
-                    clearTagForm();
-                    
-                    UI.showToast('標籤創建成功', 'success');
-                } else {
-                    throw new Error(result.error?.message || '創建失敗');
-                }
-                
-            } catch (error) {
-                console.error('創建標籤失敗:', error);
-                UI.showToast('創建失敗: ' + error.message, 'error');
-            }
-        }
-        
-        // 清空標籤表單
-        function clearTagForm() {
-            document.getElementById('newTagName').value = '';
-            document.getElementById('newTagCategory').value = 'emotion';
-            document.getElementById('newTagDescription').value = '';
-            selectTagColor('blue');
-        }
-        
-        // 選擇標籤
-        function selectTag(tag) {
-            UI.showToast(`已選擇標籤: ${tag.name}`, 'info');
-        }
-        
-        // 編輯標籤
-        function editTag(tagId) {
-            const tag = allTags.find(t => t.id === tagId);
-            if (!tag) return;
-            
-            // 填充表單
-            document.getElementById('newTagName').value = tag.name;
-            document.getElementById('newTagCategory').value = tag.category;
-            document.getElementById('newTagDescription').value = tag.description || '';
-            selectTagColor(tag.color || 'blue');
-            
-            UI.showToast('標籤已載入到表單中', 'info');
-        }
-        
-        // 刪除標籤
-        async function deleteTag(tagId) {
-            const tag = allTags.find(t => t.id === tagId);
-            if (!tag) return;
-            
-            if (!confirm(`確定要刪除標籤「${tag.name}」嗎？`)) {
-                return;
-            }
-            
-            try {
-                const result = await ApiClient.delete(`/api/v1/tags/${tagId}`);
-                
-                if (result.success) {
-                    allTags = allTags.filter(t => t.id !== tagId);
-                    displayAllTags(allTags);
-                    updateTagsStats();
-                    updateCategoryDistribution();
-                    
-                    UI.showToast('標籤已刪除', 'success');
-                } else {
-                    throw new Error(result.error?.message || '刪除失敗');
-                }
-                
-            } catch (error) {
-                console.error('刪除標籤失敗:', error);
-                UI.showToast('刪除失敗: ' + error.message, 'error');
-            }
+            return colorMap[hexColor] || 'blue';
         }
         
         // 更新標籤統計
@@ -575,7 +612,7 @@
         
         // 更新分類分布
         function updateCategoryDistribution() {
-            const categories = ['emotion', 'scene', 'character', 'style', 'content'];
+            const categories = ['genre', 'personality', 'role', 'style'];
             const distribution = {};
             
             categories.forEach(cat => {
@@ -592,7 +629,7 @@
                 const percentage = total > 0 ? Math.round(count / total * 100) : 0;
                 
                 const item = document.createElement('div');
-                item.className = 'flex justify-between items-center';
+                item.className = 'flex justify-between items-center cursor-pointer hover:bg-gray-50 p-2 rounded';
                 item.innerHTML = `
                     <span class="text-sm">${getCategoryLabel(category)}</span>
                     <div class="flex-1 mx-3 bg-gray-200 rounded-full h-2">
@@ -601,6 +638,22 @@
                     <span class="text-sm text-gray-600">${count}</span>
                 `;
                 
+                // 點擊分類時篩選該分類的標籤
+                item.addEventListener('click', () => {
+                    // 更新篩選按鈕狀態
+                    document.querySelectorAll('[data-category]').forEach(btn => {
+                        btn.className = 'px-3 py-1 rounded-full text-sm border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors cursor-pointer';
+                    });
+                    
+                    const categoryBtn = document.querySelector(`[data-category="${category}"]`);
+                    if (categoryBtn) {
+                        categoryBtn.className = 'px-3 py-1 rounded-full text-sm border border-gray-300 bg-blue-600 text-white border-blue-600 hover:bg-blue-700 transition-colors cursor-pointer';
+                    }
+                    
+                    currentFilter = category;
+                    filterTags();
+                });
+                
                 distributionDiv.appendChild(item);
             });
         }
@@ -608,11 +661,10 @@
         // 獲取分類標籤
         function getCategoryLabel(category) {
             const labels = {
-                'emotion': '情感',
-                'scene': '場景',
-                'character': '角色',
-                'style': '風格',
-                'content': '內容'
+                'genre': '類型',
+                'personality': '性格',
+                'role': '職業',
+                'style': '風格'
             };
             return labels[category] || category;
         }
@@ -636,54 +688,32 @@
             UI.showToast('標籤已匯出', 'success');
         }
         
-        // 匯入標籤
+        // 匯入標籤 - 功能不可用
         function importTags() {
-            UI.showToast('匯入功能開發中', 'info');
+            UI.showToast('標籤匯入功能暫不開放', 'warning');
         }
         
-        // 標籤優化
+        // 標籤優化 - 功能不可用
         function optimizeTags() {
-            if (!confirm('標籤優化將會合併相似的標籤，確定要繼續嗎？')) {
-                return;
-            }
-            
-            UI.showToast('標籤優化功能開發中', 'info');
+            UI.showToast('標籤優化功能暫不開放', 'warning');
         }
         
-        // 清理無用標籤
+        // 清理無用標籤 - 功能不可用
         function cleanupTags() {
-            if (!confirm('這將刪除所有未使用的標籤，確定要繼續嗎？')) {
-                return;
-            }
-            
-            const beforeCount = allTags.length;
-            allTags = allTags.filter(tag => (tag.usage_count || 0) > 0);
-            const afterCount = allTags.length;
-            const removedCount = beforeCount - afterCount;
-            
-            displayAllTags(allTags);
-            updateTagsStats();
-            updateCategoryDistribution();
-            
-            UI.showToast(`已清理 ${removedCount} 個無用標籤`, 'success');
+            UI.showToast('標籤清理功能暫不開放', 'warning');
         }
         
         // 刷新標籤數據
-        function refreshTagsData() {
-            loadTagsData();
+        async function refreshTagsData() {
+            await loadTagsData();
+            await loadCharactersData();
             UI.showToast('數據已刷新', 'success');
         }
-        
         
         // 返回上一頁
         function goBack() {
             Router.navigate('/');
         }
-        
-        // 初始化時選擇默認顏色
-        window.addEventListener('load', function() {
-            selectTagColor('blue');
-        });
     </script>
     
     <!-- Flowbite Toast 容器 -->

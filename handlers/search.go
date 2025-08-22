@@ -1,19 +1,25 @@
 package handlers
 
 import (
-	"context"
-	"fmt"
-	"net/http"
-	"strconv"
-	"strings"
-	"time"
+    "context"
+    "fmt"
+    "net/http"
+    "strconv"
+    "strings"
+    "time"
 
-	"github.com/gin-gonic/gin"
-	"github.com/uptrace/bun"
-	"github.com/clarencetw/thewavess-ai-core/database"
-	"github.com/clarencetw/thewavess-ai-core/models"
-	"github.com/clarencetw/thewavess-ai-core/utils"
+    "github.com/gin-gonic/gin"
+    "github.com/uptrace/bun"
+    "github.com/clarencetw/thewavess-ai-core/models"
+    dbmodel "github.com/clarencetw/thewavess-ai-core/models/db"
+    "github.com/clarencetw/thewavess-ai-core/services"
+    "github.com/clarencetw/thewavess-ai-core/utils"
 )
+
+// 使用全局character service實例
+func getCharacterServiceForSearch() *services.CharacterService {
+	return services.GetCharacterService()
+}
 
 // SearchChats godoc
 // @Summary      搜尋對話
@@ -118,21 +124,22 @@ func SearchChats(c *gin.Context) {
 
 // searchChatMessages performs the actual database search for chat messages
 func searchChatMessages(ctx context.Context, userID, query, characterID, dateFrom, dateTo string, page, limit int) ([]gin.H, int, gin.H, error) {
-	db := database.GetDB()
+	db := GetDB()
 	if db == nil {
 		return nil, 0, nil, fmt.Errorf("database connection unavailable")
 	}
 
 	// Base query for messages with session information
-	baseQuery := db.NewSelect().
-		Model((*models.Message)(nil)).
-		Column("m.id", "m.session_id", "m.role", "m.content", "m.scene_description", "m.character_action", "m.nsfw_level", "m.created_at").
-		Column("cs.title", "cs.character_id").
-		Column("c.name", "c.avatar_url").
-		Join("JOIN chat_sessions cs ON cs.id = m.session_id").
-		Join("JOIN characters c ON c.id = cs.character_id").
-		Where("cs.user_id = ?", userID).
-		Where("cs.status != ?", "deleted")
+    baseQuery := GetDB().NewSelect().
+        // 使用 DB 模型以取得正確的表別名 (m)
+        Model((*dbmodel.MessageDB)(nil)).
+        Column("m.id", "m.session_id", "m.role", "m.content", "m.scene_description", "m.character_action", "m.nsfw_level", "m.created_at").
+        Column("cs.title", "cs.character_id").
+        Column("c.name", "c.avatar_url").
+        Join("JOIN chat_sessions cs ON cs.id = m.session_id").
+        Join("JOIN characters c ON c.id = cs.character_id").
+        Where("cs.user_id = ?", userID).
+        Where("cs.status != ?", "deleted")
 
 	// Add full-text search on message content
 	if query != "" {
@@ -162,13 +169,13 @@ func searchChatMessages(ctx context.Context, userID, query, characterID, dateFro
 
 	// Apply pagination and ordering
 	offset := (page - 1) * limit
-	var results []struct {
-		models.Message
-		SessionTitle   string `bun:"title"`
-		CharacterID    string `bun:"character_id"`
-		CharacterName  string `bun:"name"`
-		CharacterAvatar string `bun:"avatar_url"`
-	}
+    var results []struct {
+        dbmodel.MessageDB
+        SessionTitle   string `bun:"title"`
+        CharacterID    string `bun:"character_id"`
+        CharacterName  string `bun:"name"`
+        CharacterAvatar string `bun:"avatar_url"`
+    }
 
 	err = baseQuery.
 		Order("m.created_at DESC").
@@ -321,7 +328,7 @@ func GlobalSearch(c *gin.Context) {
 
 // performGlobalSearch executes global search across multiple content types
 func performGlobalSearch(ctx context.Context, userID, query, typeFilter string) (gin.H, error) {
-	db := database.GetDB()
+	db := GetDB()
 	if db == nil {
 		return nil, fmt.Errorf("database connection unavailable")
 	}
@@ -382,20 +389,21 @@ func performGlobalSearch(ctx context.Context, userID, query, typeFilter string) 
 
 // searchInChats searches for messages in chat sessions
 func searchInChats(ctx context.Context, db *bun.DB, userID, query string) ([]gin.H, int, error) {
-	var results []struct {
-		models.Message
-		SessionTitle   string `bun:"title"`
-		CharacterName  string `bun:"name"`
-	}
+    var results []struct {
+        dbmodel.MessageDB
+        SessionTitle   string `bun:"title"`
+        CharacterName  string `bun:"name"`
+    }
 
 	// Search in message content
-	err := db.NewSelect().
-		Model((*models.Message)(nil)).
-		Column("m.id", "m.session_id", "m.content", "m.created_at").
-		Column("cs.title").
-		Column("c.name").
-		Join("JOIN chat_sessions cs ON cs.id = m.session_id").
-		Join("JOIN characters c ON c.id = cs.character_id").
+    err := GetDB().NewSelect().
+        // 使用 DB 模型以取得正確的表別名 (m)
+        Model((*dbmodel.MessageDB)(nil)).
+        Column("m.id", "m.session_id", "m.content", "m.created_at").
+        Column("cs.title").
+        Column("c.name").
+        Join("JOIN chat_sessions cs ON cs.id = m.session_id").
+        Join("JOIN characters c ON c.id = cs.character_id").
 		Where("cs.user_id = ?", userID).
 		Where("cs.status != ?", "deleted").
 		Where("to_tsvector('simple', m.content) @@ plainto_tsquery('simple', ?)", query).
@@ -429,19 +437,11 @@ func searchInChats(ctx context.Context, db *bun.DB, userID, query string) ([]gin
 	return chatResults, len(results), nil
 }
 
-// searchInCharacters searches for characters by name and description
+// searchInCharacters searches for characters by name and description using memory-based system
 func searchInCharacters(ctx context.Context, db *bun.DB, query string) ([]gin.H, int, error) {
-	var characters []models.Character
-
-	// Search in character name and description
-	err := db.NewSelect().
-		Model(&characters).
-		Where("to_tsvector('simple', name || ' ' || description) @@ plainto_tsquery('simple', ?)", query).
-		Where("is_active = ?", true).
-		Order("name").
-		Limit(5).
-		Scan(ctx)
-
+	// Use the global character service instance
+	service := getCharacterServiceForSearch()
+	characters, err := service.SearchCharacters(ctx, query, 5)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -449,7 +449,11 @@ func searchInCharacters(ctx context.Context, db *bun.DB, query string) ([]gin.H,
 	// Convert to response format
 	characterResults := make([]gin.H, len(characters))
 	for i, char := range characters {
-		excerpt := char.Description
+		description := ""
+		if char.Metadata.Description != nil {
+			description = *char.Metadata.Description
+		}
+		excerpt := description
 		if len(excerpt) > 100 {
 			excerpt = excerpt[:100] + "..."
 		}
@@ -459,8 +463,8 @@ func searchInCharacters(ctx context.Context, db *bun.DB, query string) ([]gin.H,
 			"name":      char.Name,
 			"excerpt":   excerpt,
 			"type":      "character",
-			"relevance": calculateSearchRelevance(char.Name+" "+char.Description, query),
-			"avatar_url": char.AvatarURL,
+			"relevance": calculateSearchRelevance(char.Name+" "+description, query),
+			"avatar_url": char.Metadata.AvatarURL,
 		}
 	}
 

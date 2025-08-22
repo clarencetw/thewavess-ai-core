@@ -19,11 +19,12 @@ type APIError struct {
 
 // PaginationResponse 分頁回應格式
 type PaginationResponse struct {
-	CurrentPage int `json:"current_page" example:"1"`
-	TotalPages  int `json:"total_pages" example:"10"`
-	TotalCount  int `json:"total_count" example:"100"`
-	HasNext     bool `json:"has_next" example:"true"`
-	HasPrev     bool `json:"has_prev" example:"false"`
+	Page       int   `json:"page" example:"1"`
+	PageSize   int   `json:"page_size" example:"20"`
+	TotalPages int   `json:"total_pages" example:"10"`
+	TotalCount int64 `json:"total_count" example:"100"`
+	HasNext    bool  `json:"has_next" example:"true"`
+	HasPrev    bool  `json:"has_prev" example:"false"`
 }
 
 // PaginationRequest 分頁請求參數

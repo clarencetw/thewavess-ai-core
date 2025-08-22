@@ -52,6 +52,10 @@ docs/
 *.tmp
 *.temp
 .DS_Store
+tmp/
+
+# Air build errors log
+build-errors.log
 
 # Database data directories (keep structure, ignore data)
 data/postgres/data/

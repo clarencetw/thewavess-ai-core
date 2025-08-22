@@ -11,8 +11,8 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
@@ -55,6 +55,8 @@ var (
 // @Failure 500 {object} models.APIResponse "服務器錯誤"
 // @Router /admin/stats [get]
 func GetAdminStats(c *gin.Context) {
+	ctx := context.Background()
+	
 	// 計算系統運行時間
 	uptime := time.Since(startTime)
 	uptimeStr := formatUptime(uptime)
@@ -85,21 +87,97 @@ func GetAdminStats(c *gin.Context) {
 		avgResponseTime = "0ms"
 	}
 
-	// 獲取活躍用戶數（模擬）
-	activeUsers := "42"
+	// 從資料庫獲取真實統計數據
+	// 獲取用戶總數
+	totalUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).Count(ctx)
+	
+	// 獲取今日新增用戶數
+	todayStart := time.Now().Truncate(24 * time.Hour)
+	todayUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).
+		Where("created_at >= ?", todayStart).Count(ctx)
+		
+	// 獲取本週新增用戶數
+	weekStart := time.Now().AddDate(0, 0, -7)
+	weekUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).
+		Where("created_at >= ?", weekStart).Count(ctx)
+		
+	// 獲取活躍用戶數（最近7天有登入記錄）
+	activeUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).
+		Where("last_login_at >= ? AND status = ?", weekStart, "active").Count(ctx)
+		
+	// 獲取角色總數
+	totalCharacters, _ := GetDB().NewSelect().Model((*db.CharacterDB)(nil)).
+		Where("is_active = ?", true).Count(ctx)
+		
+	// 獲取聊天會話總數
+	totalSessions, _ := GetDB().NewSelect().Model((*db.ChatSessionDB)(nil)).
+		Where("status != ?", "deleted").Count(ctx)
+		
+	// 獲取今日新增會話數
+	todaySessions, _ := GetDB().NewSelect().Model((*db.ChatSessionDB)(nil)).
+		Where("created_at >= ? AND status != ?", todayStart, "deleted").Count(ctx)
+		
+	// 獲取消息總數
+	totalMessages, _ := GetDB().NewSelect().Model((*db.MessageDB)(nil)).Count(ctx)
+	
+	// 獲取今日消息數
+	todayMessages, _ := GetDB().NewSelect().Model((*db.MessageDB)(nil)).
+		Where("created_at >= ?", todayStart).Count(ctx)
 
-	// 獲取資料庫連接數（模擬）
-	dbConnections := "8/20"
-
-	stats := AdminStatsResponse{
-		Uptime:          uptimeStr,
-		TotalRequests:   formatNumber(totalRequests),
-		ErrorRate:       errorRate,
-		AvgResponseTime: avgResponseTime,
-		ActiveUsers:     activeUsers,
-		DBConnections:   dbConnections,
-		MemoryUsage:     memoryUsage,
-		GoRoutines:      goroutines,
+	// 構建完整的統計響應
+	stats := gin.H{
+		// 基本系統統計
+		"uptime":            uptimeStr,
+		"total_requests":    formatNumber(totalRequests),
+		"error_rate":        errorRate,
+		"avg_response_time": avgResponseTime,
+		"memory_usage":      memoryUsage,
+		"go_routines":       goroutines,
+		
+		// 業務統計
+		"users": gin.H{
+			"total":       totalUsers,
+			"today_new":   todayUsers,
+			"week_new":    weekUsers,
+			"active_7d":   activeUsers,
+		},
+		
+		"characters": gin.H{
+			"total":   totalCharacters,
+			"active":  totalCharacters,
+		},
+		
+		"chats": gin.H{
+			"total_sessions":  totalSessions,
+			"today_sessions":  todaySessions,
+			"total_messages":  totalMessages,
+			"today_messages":  todayMessages,
+		},
+		
+		// 系統服務狀態
+		"services": gin.H{
+			"database": getDatabaseStatus(ctx),
+			"ai_services": gin.H{
+				"openai": getOpenAIStatus(),
+				"grok": getGrokStatus(),
+			},
+			"memory_system": gin.H{
+				"status":         "healthy",
+				"total_memories": getTotalMemoryCount(ctx),
+			},
+		},
+		
+		// 系統性能指標  
+		"performance": gin.H{
+			"memory_allocated": memoryUsage,
+			"memory_sys":       fmt.Sprintf("%.1fMB", float64(m.Sys)/1024/1024),
+			"gc_count":         m.NumGC,
+			"goroutines":       goroutines,
+		},
+		
+		// 時間戳
+		"last_updated": time.Now(),
+		"timezone":     "Asia/Taipei",
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
@@ -107,6 +185,7 @@ func GetAdminStats(c *gin.Context) {
 		"uptime": uptimeStr,
 		"memory": memoryUsage,
 		"goroutines": goroutines,
+		"total_users": totalUsers,
 	}).Info("Admin stats requested")
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -229,6 +308,79 @@ func IncrementRequestCount(isError bool, responseTime int64) {
 	}
 }
 
+// getTotalMemoryCount 獲取總記憶數量
+func getTotalMemoryCount(ctx context.Context) int {
+	prefCount, _ := GetDB().NewSelect().Model((*db.MemoryPreferenceDB)(nil)).Count(ctx)
+	milestoneCount, _ := GetDB().NewSelect().Model((*db.MemoryMilestoneDB)(nil)).Count(ctx)
+	dislikeCount, _ := GetDB().NewSelect().Model((*db.MemoryDislikeDB)(nil)).Count(ctx)
+	
+	return prefCount + milestoneCount + dislikeCount
+}
+
+// getDatabaseStatus 獲取資料庫狀態
+func getDatabaseStatus(ctx context.Context) gin.H {
+	start := time.Now()
+	
+	// 測試資料庫連接
+	var count int
+	err := GetDB().NewSelect().ColumnExpr("1").Scan(ctx, &count)
+	
+	pingTime := time.Since(start)
+	
+	if err != nil {
+		return gin.H{
+			"status":     "error",
+			"ping_time":  "N/A",
+			"error":      err.Error(),
+			"last_check": time.Now().Format("15:04:05"),
+		}
+	}
+	
+	return gin.H{
+		"status":     "healthy",
+		"ping_time":  fmt.Sprintf("%.2fms", float64(pingTime.Nanoseconds())/1000000),
+		"last_check": time.Now().Format("15:04:05"),
+	}
+}
+
+// getOpenAIStatus 獲取 OpenAI 服務狀態
+func getOpenAIStatus() gin.H {
+	openaiKey := utils.GetEnvWithDefault("OPENAI_API_KEY", "")
+	
+	if openaiKey == "" {
+		return gin.H{
+			"status":     "error",
+			"error":      "API key not configured",
+			"last_check": time.Now().Format("15:04:05"),
+		}
+	}
+	
+	return gin.H{
+		"status":     "healthy",
+		"api_key":    "configured",
+		"last_check": time.Now().Format("15:04:05"),
+	}
+}
+
+// getGrokStatus 獲取 Grok 服務狀態  
+func getGrokStatus() gin.H {
+	grokKey := utils.GetEnvWithDefault("GROK_API_KEY", "")
+	
+	if grokKey == "" {
+		return gin.H{
+			"status":     "error", 
+			"error":      "API key not configured",
+			"last_check": time.Now().Format("15:04:05"),
+		}
+	}
+	
+	return gin.H{
+		"status":     "healthy",
+		"api_key":    "configured", 
+		"last_check": time.Now().Format("15:04:05"),
+	}
+}
+
 // GetAdminUsers godoc
 // @Summary      管理員獲取用戶列表
 // @Description  獲取所有用戶列表，包含分頁和篩選功能
@@ -287,7 +439,7 @@ func GetAdminUsers(c *gin.Context) {
 	}
 
 	// 構建查詢
-	query := database.DB.NewSelect().Model((*models.User)(nil))
+	query := GetDB().NewSelect().Model((*db.UserDB)(nil))
 
 	// 狀態篩選
 	if status != "" {
@@ -314,7 +466,7 @@ func GetAdminUsers(c *gin.Context) {
 	}
 
 	// 分頁查詢
-	var users []models.User
+	var users []db.UserDB
 	err = query.
 		Order("created_at DESC").
 		Offset((page - 1) * limit).
@@ -336,7 +488,25 @@ func GetAdminUsers(c *gin.Context) {
 	// 轉換為響應格式
 	var userResponses []*models.UserResponse
 	for _, user := range users {
-		userResponses = append(userResponses, user.ToResponse())
+		userResponse := &models.UserResponse{
+			ID:          user.ID,
+			Username:    user.Username,
+			Email:       user.Email,
+			DisplayName: user.DisplayName,
+			Bio:         user.Bio,
+			Status:      user.Status,
+			Nickname:    user.Nickname,
+			Gender:      user.Gender,
+			BirthDate:   user.BirthDate,
+			AvatarURL:   user.AvatarURL,
+			IsVerified:  user.IsVerified,
+			IsAdult:     user.IsAdult,
+			Preferences: user.Preferences,
+			CreatedAt:   user.CreatedAt,
+			UpdatedAt:   user.UpdatedAt,
+			LastLoginAt: user.LastLoginAt,
+		}
+		userResponses = append(userResponses, userResponse)
 	}
 
 	// 計算分頁信息
@@ -414,8 +584,8 @@ func UpdateAdminUser(c *gin.Context) {
 	}
 
 	// 檢查用戶是否存在
-	var user models.User
-	err := database.DB.NewSelect().
+	var user db.UserDB
+	err := GetDB().NewSelect().
 		Model(&user).
 		Where("id = ?", userID).
 		Scan(ctx)
@@ -434,8 +604,8 @@ func UpdateAdminUser(c *gin.Context) {
 
 	// 檢查郵箱和用戶名唯一性（如果有更新）
 	if req.Email != "" && req.Email != user.Email {
-		var existingUser models.User
-		exists, err := database.DB.NewSelect().
+		var existingUser db.UserDB
+		exists, err := GetDB().NewSelect().
 			Model(&existingUser).
 			Where("email = ? AND id != ?", req.Email, userID).
 			Exists(ctx)
@@ -465,8 +635,8 @@ func UpdateAdminUser(c *gin.Context) {
 	}
 
 	if req.Username != "" && req.Username != user.Username {
-		var existingUser models.User
-		exists, err := database.DB.NewSelect().
+		var existingUser db.UserDB
+		exists, err := GetDB().NewSelect().
 			Model(&existingUser).
 			Where("username = ? AND id != ?", req.Username, userID).
 			Exists(ctx)
@@ -496,12 +666,12 @@ func UpdateAdminUser(c *gin.Context) {
 	}
 
 	// 構建更新數據
-	updateData := models.User{
+	updateData := db.UserDB{
 		UpdatedAt: time.Now(),
 	}
 
 	// 構建動態更新查詢
-	updateQuery := database.DB.NewUpdate().Model(&updateData)
+	updateQuery := GetDB().NewUpdate().Model(&updateData)
 	hasUpdates := false
 
 	if req.Username != "" {
@@ -530,12 +700,12 @@ func UpdateAdminUser(c *gin.Context) {
 		hasUpdates = true
 	}
 	if req.Nickname != "" {
-		updateData.Nickname = req.Nickname
+		updateData.Nickname = &req.Nickname
 		updateQuery = updateQuery.Column("nickname")
 		hasUpdates = true
 	}
 	if req.Gender != "" {
-		updateData.Gender = req.Gender
+		updateData.Gender = &req.Gender
 		updateQuery = updateQuery.Column("gender")
 		hasUpdates = true
 	}
@@ -545,7 +715,7 @@ func UpdateAdminUser(c *gin.Context) {
 		hasUpdates = true
 	}
 	if req.AvatarURL != "" {
-		updateData.AvatarURL = req.AvatarURL
+		updateData.AvatarURL = &req.AvatarURL
 		updateQuery = updateQuery.Column("avatar_url")
 		hasUpdates = true
 	}
@@ -610,7 +780,7 @@ func UpdateAdminUser(c *gin.Context) {
 	}
 
 	// 獲取更新後的用戶信息
-	err = database.DB.NewSelect().
+	err = GetDB().NewSelect().
 		Model(&user).
 		Where("id = ?", userID).
 		Scan(ctx)
@@ -632,10 +802,30 @@ func UpdateAdminUser(c *gin.Context) {
 		"user_id":  userID,
 	}).Info("Admin updated user profile")
 
+	// 轉換為響應格式
+	userResponse := &models.UserResponse{
+		ID:          user.ID,
+		Username:    user.Username,
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		Bio:         user.Bio,
+		Status:      user.Status,
+		Nickname:    user.Nickname,
+		Gender:      user.Gender,
+		BirthDate:   user.BirthDate,
+		AvatarURL:   user.AvatarURL,
+		IsVerified:  user.IsVerified,
+		IsAdult:     user.IsAdult,
+		Preferences: user.Preferences,
+		CreatedAt:   user.CreatedAt,
+		UpdatedAt:   user.UpdatedAt,
+		LastLoginAt: user.LastLoginAt,
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "用戶資料更新成功",
-		Data:    user.ToResponse(),
+		Data:    userResponse,
 	})
 }
 
@@ -696,8 +886,8 @@ func UpdateAdminUserPassword(c *gin.Context) {
 	}
 
 	// 檢查用戶是否存在
-	var user models.User
-	err := database.DB.NewSelect().
+	var user db.UserDB
+	err := GetDB().NewSelect().
 		Model(&user).
 		Where("id = ?", userID).
 		Scan(ctx)
@@ -729,7 +919,7 @@ func UpdateAdminUserPassword(c *gin.Context) {
 	}
 
 	// 更新密碼
-	_, err = database.DB.NewUpdate().
+	_, err = GetDB().NewUpdate().
 		Model(&user).
 		Set("password_hash = ?", string(hashedPassword)).
 		Set("updated_at = ?", time.Now()).

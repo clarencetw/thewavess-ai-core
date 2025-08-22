@@ -18,6 +18,9 @@
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
 </head>
 <body class="min-h-full p-4 bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
@@ -47,6 +50,16 @@
         </div>
     </nav>
     
+    <!-- 角色選擇 -->
+    <div class="max-w-6xl mx-auto mb-6">
+        <div class="bg-white border rounded-lg p-4">
+            <label class="block text-sm font-medium text-gray-700 mb-2">選擇角色</label>
+            <select id="characterSelect" class="w-full p-2 border border-gray-300 rounded-md bg-white" onchange="onCharacterChange()">
+                <option value="">請選擇角色...</option>
+            </select>
+        </div>
+    </div>
+
     <!-- 主內容區域 -->
     <div class="max-w-6xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- 左側 - 情感狀態 -->
@@ -136,66 +149,56 @@
                 <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <button 
                         class="bg-pink-100 hover:bg-pink-200 text-pink-800 p-4 rounded text-center transition-colors"
-                        onclick="triggerEmotionEvent('romantic')"
+                        onclick="triggerEmotionEvent('gift')"
                     >
-                        <i class="fas fa-heart text-2xl mb-2"></i>
-                        <div class="text-sm">浪漫時刻</div>
+                        <i class="fas fa-gift text-2xl mb-2"></i>
+                        <div class="text-sm">送禮物</div>
+                        <div class="text-xs text-gray-600">+5好感</div>
                     </button>
                     
                     <button 
                         class="bg-blue-100 hover:bg-blue-200 text-blue-800 p-4 rounded text-center transition-colors"
-                        onclick="triggerEmotionEvent('surprise')"
+                        onclick="triggerEmotionEvent('compliment')"
                     >
-                        <i class="fas fa-gift text-2xl mb-2"></i>
-                        <div class="text-sm">驚喜</div>
-                    </button>
-                    
-                    <button 
-                        class="bg-green-100 hover:bg-green-200 text-green-800 p-4 rounded text-center transition-colors"
-                        onclick="triggerEmotionEvent('comfort')"
-                    >
-                        <i class="fas fa-hands-helping text-2xl mb-2"></i>
-                        <div class="text-sm">安慰</div>
-                    </button>
-                    
-                    <button 
-                        class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 p-4 rounded text-center transition-colors"
-                        onclick="triggerEmotionEvent('playful')"
-                    >
-                        <i class="fas fa-laugh text-2xl mb-2"></i>
-                        <div class="text-sm">玩鬧</div>
+                        <i class="fas fa-heart text-2xl mb-2"></i>
+                        <div class="text-sm">讚美</div>
+                        <div class="text-xs text-gray-600">+3好感</div>
                     </button>
                     
                     <button 
                         class="bg-red-100 hover:bg-red-200 text-red-800 p-4 rounded text-center transition-colors"
-                        onclick="triggerEmotionEvent('intimate')"
+                        onclick="triggerEmotionEvent('romantic_gesture')"
                     >
-                        <i class="fas fa-fire text-2xl mb-2"></i>
-                        <div class="text-sm">親密</div>
+                        <i class="fas fa-rose text-2xl mb-2"></i>
+                        <div class="text-sm">浪漫舉動</div>
+                        <div class="text-xs text-gray-600">+8好感</div>
                     </button>
                     
                     <button 
-                        class="bg-indigo-100 hover:bg-indigo-200 text-indigo-800 p-4 rounded text-center transition-colors"
-                        onclick="triggerEmotionEvent('mysterious')"
+                        class="bg-green-100 hover:bg-green-200 text-green-800 p-4 rounded text-center transition-colors"
+                        onclick="triggerEmotionEvent('deep_conversation')"
                     >
-                        <i class="fas fa-mask text-2xl mb-2"></i>
-                        <div class="text-sm">神秘</div>
+                        <i class="fas fa-comments text-2xl mb-2"></i>
+                        <div class="text-sm">深度對話</div>
+                        <div class="text-xs text-gray-600">+6好感</div>
                     </button>
                     
                     <button 
-                        class="bg-orange-100 hover:bg-orange-200 text-orange-800 p-4 rounded text-center transition-colors"
-                        onclick="triggerEmotionEvent('jealous')"
+                        class="bg-purple-100 hover:bg-purple-200 text-purple-800 p-4 rounded text-center transition-colors"
+                        onclick="triggerEmotionEvent('physical_touch')"
                     >
-                        <i class="fas fa-eye text-2xl mb-2"></i>
-                        <div class="text-sm">嫉妒</div>
+                        <i class="fas fa-hand-holding-heart text-2xl mb-2"></i>
+                        <div class="text-sm">親密接觸</div>
+                        <div class="text-xs text-gray-600">+4好感</div>
                     </button>
                     
                     <button 
-                        class="bg-gray-100 hover:bg-gray-200 text-gray-800 p-4 rounded text-center transition-colors"
-                        onclick="triggerEmotionEvent('calm')"
+                        class="bg-yellow-100 hover:bg-yellow-200 text-yellow-800 p-4 rounded text-center transition-colors"
+                        onclick="triggerEmotionEvent('special_moment')"
                     >
-                        <i class="fas fa-leaf text-2xl mb-2"></i>
-                        <div class="text-sm">平靜</div>
+                        <i class="fas fa-star text-2xl mb-2"></i>
+                        <div class="text-sm">特殊時刻</div>
+                        <div class="text-xs text-gray-600">+10好感</div>
                     </button>
                 </div>
             </div>
@@ -212,6 +215,18 @@
                 
                 <div class="space-y-3" id="milestonesList">
                     <!-- 動態生成里程碑 -->
+                </div>
+            </div>
+
+            <!-- 好感度提升攻略 -->
+            <div class="bg-white border rounded-lg p-6">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-lightbulb text-blue-400 mr-2"></i>
+                    好感度提升攻略
+                </h3>
+                
+                <div class="space-y-3" id="affectionTips">
+                    <!-- 動態生成提升建議 -->
                 </div>
             </div>
             
@@ -245,53 +260,24 @@
                 </div>
             </div>
             
-            <!-- 內容分析 -->
+            <!-- 好感度歷史 -->
             <div class="bg-white border rounded-lg p-6">
                 <h3 class="text-lg font-semibold mb-4">
-                    <i class="fas fa-analytics text-purple-400 mr-2"></i>
-                    內容分析
+                    <i class="fas fa-history text-green-400 mr-2"></i>
+                    好感度歷史
                 </h3>
                 
-                <div class="space-y-3">
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm">NSFW Level 1</span>
-                        <div class="flex-1 mx-3 bg-gray-200 rounded-full h-2">
-                            <div class="bg-green-400 h-2 rounded-full" style="width: 40%"></div>
-                        </div>
-                        <span class="text-sm text-gray-600">40%</span>
-                    </div>
-                    
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm">NSFW Level 2</span>
-                        <div class="flex-1 mx-3 bg-gray-200 rounded-full h-2">
-                            <div class="bg-yellow-400 h-2 rounded-full" style="width: 30%"></div>
-                        </div>
-                        <span class="text-sm text-gray-600">30%</span>
-                    </div>
-                    
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm">NSFW Level 3</span>
-                        <div class="flex-1 mx-3 bg-gray-200 rounded-full h-2">
-                            <div class="bg-orange-400 h-2 rounded-full" style="width: 20%"></div>
-                        </div>
-                        <span class="text-sm text-gray-600">20%</span>
-                    </div>
-                    
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm">NSFW Level 4</span>
-                        <div class="flex-1 mx-3 bg-gray-200 rounded-full h-2">
-                            <div class="bg-red-400 h-2 rounded-full" style="width: 8%"></div>
-                        </div>
-                        <span class="text-sm text-gray-600">8%</span>
-                    </div>
-                    
-                    <div class="flex justify-between items-center">
-                        <span class="text-sm">NSFW Level 5</span>
-                        <div class="flex-1 mx-3 bg-gray-200 rounded-full h-2">
-                            <div class="bg-red-600 h-2 rounded-full" style="width: 2%"></div>
-                        </div>
-                        <span class="text-sm text-gray-600">2%</span>
-                    </div>
+                <div class="space-y-3" id="affectionHistory">
+                    <!-- 動態生成歷史記錄 -->
+                </div>
+                
+                <div class="mt-4 pt-4 border-t">
+                    <button 
+                        class="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 py-2 px-4 rounded text-sm transition-colors"
+                        onclick="viewFullHistory()"
+                    >
+                        查看完整歷史
+                    </button>
                 </div>
             </div>
         </div>
@@ -302,27 +288,99 @@
     <script>
         let emotionData = null;
         let affectionData = null;
+        let selectedCharacterId = null;
+        let characters = [];
         
         // 頁面初始化
         document.addEventListener('DOMContentLoaded', async function() {
             await App.init();
             
-            // 載入情感數據
-            await loadEmotionData();
+            // 檢查認證狀態
+            if (!AppState.isAuthenticated) {
+                Router.navigate('/auth');
+                return;
+            }
+            
+            // 載入角色列表
+            await loadCharacters();
             
             // 設置定時刷新
             setInterval(refreshEmotionData, 30000); // 30秒刷新一次
         });
         
+        // 載入角色列表
+        async function loadCharacters() {
+            try {
+                const result = await SpecializedApiClients.Character.getList();
+                if (result.success && result.data?.characters) {
+                    characters = result.data.characters;
+                    populateCharacterSelect();
+                    
+                    // 自動選擇第一個角色
+                    if (characters.length > 0) {
+                        selectedCharacterId = characters[0].id;
+                        document.getElementById('characterSelect').value = selectedCharacterId;
+                        await loadEmotionData();
+                    }
+                } else {
+                    throw new Error('載入角色列表失敗');
+                }
+            } catch (error) {
+                UI.handleError(error, '載入角色列表');
+                UI.showToast('載入角色列表失敗', 'error');
+            }
+        }
+        
+        // 填充角色選擇器
+        function populateCharacterSelect() {
+            const select = document.getElementById('characterSelect');
+            select.innerHTML = '<option value="">請選擇角色...</option>';
+            
+            characters.forEach(character => {
+                const option = document.createElement('option');
+                option.value = character.id;
+                option.textContent = character.name;
+                select.appendChild(option);
+            });
+        }
+        
+        // 角色選擇改變
+        async function onCharacterChange() {
+            const select = document.getElementById('characterSelect');
+            selectedCharacterId = select.value;
+            
+            if (selectedCharacterId) {
+                await loadEmotionData();
+            } else {
+                clearAllData();
+            }
+        }
+        
+        // 清空所有數據顯示
+        function clearAllData() {
+            emotionData = null;
+            affectionData = null;
+            updateEmotionDisplay({ emotion: '請選擇角色', intensity: 0, duration: '--', trigger: '--', nsfw_level: 1 });
+            updateAffectionDisplay({ characters: [] });
+            displayMilestones([]);
+            displayAffectionTips([]);
+            displayAffectionHistory([]);
+            updateStatistics(null, null);
+        }
+        
         // 載入情感數據
         async function loadEmotionData() {
+            if (!selectedCharacterId) {
+                clearAllData();
+                return;
+            }
+            
             try {
                 // 載入當前情感狀態
-                const characterId = AppState.selectedCharacter?.id || 'char_001';
                 const emotionParams = new URLSearchParams({
-                    character_id: characterId
+                    character_id: selectedCharacterId
                 });
-                const emotionResult = await ApiClient.get(`/api/v1/emotion/status?${emotionParams.toString()}`);
+                const emotionResult = await SpecializedApiClients.Emotion.getStatus(selectedCharacterId);
                 if (emotionResult.success && emotionResult.data) {
                     emotionData = emotionResult.data;
                     updateEmotionDisplay(emotionData);
@@ -332,9 +390,9 @@
                 
                 // 載入好感度數據
                 const affectionParams = new URLSearchParams({
-                    character_id: characterId
+                    character_id: selectedCharacterId
                 });
-                const affectionResult = await ApiClient.get(`/api/v1/emotion/affection?${affectionParams.toString()}`);
+                const affectionResult = await SpecializedApiClients.Emotion.getAffection(selectedCharacterId);
                 if (affectionResult.success && affectionResult.data) {
                     affectionData = affectionResult.data;
                     updateAffectionDisplay(affectionData);
@@ -345,21 +403,26 @@
                 // 載入里程碑
                 await loadMilestones();
                 
+                // 載入好感度歷史
+                await loadAffectionHistory();
+                
                 // 更新統計數據
                 updateStatistics(emotionData, affectionData);
                 
             } catch (error) {
-                console.error('載入情感數據失敗:', error);
+                UI.handleError(error, '載入情感數據');
                 
                 // 顯示錯誤狀態
                 emotionData = null;
                 affectionData = null;
-                updateEmotionDisplay({ emotion: '未知', intensity: 0, duration: '--', trigger: '--', nsfw_level: 1 });
+                updateEmotionDisplay({ emotion: '載入失敗', intensity: 0, duration: '--', trigger: '--', nsfw_level: 1 });
                 updateAffectionDisplay({ characters: [] });
-                await loadMilestones();
+                displayMilestones([]);
+                displayAffectionTips([]);
+                displayAffectionHistory([]);
                 updateStatistics(null, null);
                 
-                UI.showToast('載入情感數據失敗', 'error');
+                UI.showToast('載入情感數據失敗: ' + error.message, 'error');
             }
         }
         
@@ -414,11 +477,12 @@
             
             // 處理真實 API 數據結構
             if (data.affection_level && data.character_id) {
-                // 真實 API 返回單個角色數據
+                // 獲取當前選中的角色資訊
+                const currentCharacter = characters.find(c => c.id === selectedCharacterId);
                 const character = {
                     id: data.character_id,
-                    name: data.character_id === 'char_001' ? '陸燁銘' : '沈言墨',
-                    avatar: `https://placehold.co/40x40/6366f1/ffffff?text=${data.character_id === 'char_001' ? '陸' : '沈'}`,
+                    name: currentCharacter ? currentCharacter.name : '未知角色',
+                    avatar_url: currentCharacter ? currentCharacter.avatar_url : null,
                     affection: data.affection_level.current,
                     max_affection: data.affection_level.max,
                     change: '+0'
@@ -432,6 +496,9 @@
                     affectionList.appendChild(item);
                 });
             }
+            
+            // 顯示好感度提升建議
+            displayAffectionTips(data);
         }
         
         // 創建好感度項目
@@ -451,7 +518,7 @@
             else if (affection >= 20) colorClass = 'bg-green-500';
             
             item.innerHTML = `
-                <img src="${character.avatar || 'https://placehold.co/40x40/6366f1/ffffff?text=' + encodeURIComponent(character.name[0])}" 
+                <img src="${character.avatar_url || 'https://placehold.co/40x40/6366f1/ffffff?text=' + encodeURIComponent(character.name[0])}" 
                      alt="${character.name}" class="w-10 h-10 rounded-full">
                 <div class="flex-1">
                     <div class="font-medium">${character.name}</div>
@@ -501,49 +568,84 @@
         
         // 載入里程碑
         async function loadMilestones() {
+            if (!selectedCharacterId) {
+                displayMilestones([]);
+                return;
+            }
+            
             try {
-                const characterId = AppState.selectedCharacter?.id || 'char_001';
                 const params = new URLSearchParams({
-                    character_id: characterId
+                    character_id: selectedCharacterId
                 });
-                const result = await ApiClient.get(`/api/v1/emotion/milestones?${params.toString()}`);
+                const result = await SpecializedApiClients.Emotion.getMilestones(selectedCharacterId);
                 
-                let milestones = [];
+                let achievedMilestones = [];
+                let upcomingMilestones = [];
+                
                 if (result.success && result.data) {
-                    milestones = result.data.milestones || [];
-                } else {
-                    milestones = [];
+                    achievedMilestones = result.data.achieved_milestones || [];
+                    upcomingMilestones = result.data.upcoming_milestones || [];
                 }
                 
-                displayMilestones(milestones);
+                displayMilestones(achievedMilestones, upcomingMilestones);
                 
             } catch (error) {
                 console.warn('載入里程碑失敗:', error);
-                displayMilestones([]);
+                displayMilestones([], []);
             }
         }
         
         // 顯示里程碑
-        function displayMilestones(milestones) {
+        function displayMilestones(achievedMilestones = [], upcomingMilestones = []) {
             const milestonesList = document.getElementById('milestonesList');
             milestonesList.innerHTML = '';
             
-            milestones.forEach(milestone => {
+            // 顯示已達成的里程碑
+            achievedMilestones.forEach(milestone => {
                 const item = document.createElement('div');
                 item.className = 'flex items-center space-x-3 p-3 bg-yellow-50 border border-yellow-200 rounded-lg';
                 
-                const timeStr = milestone.achieved_at ? Utils.formatDate(milestone.achieved_at) : '今天';
+                const timeStr = milestone.achieved_at ? new Date(milestone.achieved_at).toLocaleDateString('zh-TW') : '今天';
                 
                 item.innerHTML = `
                     <i class="fas fa-trophy text-yellow-500"></i>
                     <div class="flex-1">
-                        <div class="font-medium text-sm">${milestone.title}</div>
-                        <div class="text-xs text-gray-600">${timeStr}</div>
+                        <div class="font-medium text-sm">${milestone.name}</div>
+                        <div class="text-xs text-gray-600">${timeStr} • ${milestone.description}</div>
                     </div>
                 `;
                 
                 milestonesList.appendChild(item);
             });
+            
+            // 顯示未達成的里程碑
+            upcomingMilestones.slice(0, 3).forEach(milestone => {
+                const item = document.createElement('div');
+                item.className = 'flex items-center space-x-3 p-3 bg-gray-50 border border-gray-200 rounded-lg';
+                
+                const progress = milestone.progress || '0%';
+                const progressValue = parseInt(progress);
+                
+                item.innerHTML = `
+                    <i class="fas fa-lock text-gray-400"></i>
+                    <div class="flex-1">
+                        <div class="font-medium text-sm text-gray-700">${milestone.name}</div>
+                        <div class="text-xs text-gray-600">${milestone.description}</div>
+                        <div class="mt-1 flex items-center space-x-2">
+                            <div class="flex-1 bg-gray-200 rounded-full h-1">
+                                <div class="bg-blue-500 h-1 rounded-full" style="width: ${progress}"></div>
+                            </div>
+                            <span class="text-xs text-gray-500">${progress}</span>
+                        </div>
+                    </div>
+                `;
+                
+                milestonesList.appendChild(item);
+            });
+            
+            if (achievedMilestones.length === 0 && upcomingMilestones.length === 0) {
+                milestonesList.innerHTML = '<div class="text-center text-gray-500 py-4">暫無里程碑數據</div>';
+            }
         }
         
         // 觸發情感事件
@@ -551,11 +653,11 @@
             try {
                 UI.showGlobalLoading(true);
                 
-                const result = await ApiClient.post('/api/v1/emotion/event', {
-                    event_type: eventType,
-                    character_id: AppState.selectedCharacter?.id || 'char_001',
-                    intensity: Math.floor(Math.random() * 3) + 5 // 5-7的隨機強度
-                });
+                if (!selectedCharacterId) {
+                    throw new Error('請先選擇角色');
+                }
+                
+                const result = await SpecializedApiClients.Emotion.triggerEvent(selectedCharacterId, eventType, Math.floor(Math.random() * 3) + 5);
                 
                 if (result.success) {
                     UI.showToast(`觸發了${getEventName(eventType)}事件`, 'success');
@@ -569,7 +671,7 @@
                 }
                 
             } catch (error) {
-                console.error('觸發情感事件失敗:', error);
+                UI.handleError(error, '觸發情感事件');
                 
                 UI.showToast(`觸發事件失敗: ${error.message}`, 'error');
                 
@@ -581,24 +683,172 @@
         // 獲取事件名稱
         function getEventName(eventType) {
             const eventNames = {
-                'romantic': '浪漫',
-                'surprise': '驚喜',
-                'comfort': '安慰',
-                'playful': '玩鬧',
-                'intimate': '親密',
-                'mysterious': '神秘',
-                'jealous': '嫉妒',
-                'calm': '平靜'
+                'gift': '送禮物',
+                'compliment': '讚美',
+                'romantic_gesture': '浪漫舉動',
+                'deep_conversation': '深度對話',
+                'physical_touch': '親密接觸',
+                'special_moment': '特殊時刻'
             };
             return eventNames[eventType] || eventType;
         }
         
+        // 顯示好感度提升建議
+        function displayAffectionTips(affectionData) {
+            const tipsContainer = document.getElementById('affectionTips');
+            tipsContainer.innerHTML = '';
+            
+            let tips = [];
+            
+            if (affectionData && affectionData.progress) {
+                const currentAffection = affectionData.affection_level?.current || 0;
+                const nextThreshold = affectionData.progress?.to_next_level || 100;
+                const pointsNeeded = affectionData.progress?.points_needed || 0;
+                
+                // 根據當前好感度等級給出建議
+                if (currentAffection < 20) {
+                    tips = [
+                        { icon: 'fa-comments', tip: '多進行友好的對話，表現關心', color: 'blue' },
+                        { icon: 'fa-heart', tip: '經常給予讚美和鼓勵', color: 'pink' },
+                        { icon: 'fa-gift', tip: '適時送出小禮物表達心意', color: 'green' }
+                    ];
+                } else if (currentAffection < 40) {
+                    tips = [
+                        { icon: 'fa-share-alt', tip: '分享更多個人想法，增加互動頻率', color: 'purple' },
+                        { icon: 'fa-clock', tip: '花更多時間陪伴，建立深度連接', color: 'orange' },
+                        { icon: 'fa-smile', tip: '保持積極正面的態度', color: 'yellow' }
+                    ];
+                } else if (currentAffection < 60) {
+                    tips = [
+                        { icon: 'fa-heart-broken', tip: '進行深度交流，表達真摯情感', color: 'red' },
+                        { icon: 'fa-rose', tip: '創造浪漫時刻，增進感情', color: 'pink' },
+                        { icon: 'fa-handshake', tip: '展現理解和支持', color: 'blue' }
+                    ];
+                } else if (currentAffection < 80) {
+                    tips = [
+                        { icon: 'fa-diamond', tip: '表現專一和承諾，建立深度信任', color: 'indigo' },
+                        { icon: 'fa-key', tip: '分享內心秘密，展現脆弱的一面', color: 'gray' },
+                        { icon: 'fa-star', tip: '創造特殊回憶和里程碑時刻', color: 'yellow' }
+                    ];
+                } else {
+                    tips = [
+                        { icon: 'fa-crown', tip: '經歷重要決定，證明彼此的重要性', color: 'purple' },
+                        { icon: 'fa-infinity', tip: '規劃共同的未來和目標', color: 'blue' },
+                        { icon: 'fa-gem', tip: '維持完美的愛情狀態', color: 'pink' }
+                    ];
+                }
+                
+                if (pointsNeeded > 0) {
+                    tips.unshift({ 
+                        icon: 'fa-target', 
+                        tip: `還需要 ${pointsNeeded} 點好感度到達下一個階段`, 
+                        color: 'red' 
+                    });
+                }
+            } else {
+                // 預設建議
+                tips = [
+                    { icon: 'fa-user', tip: '選擇一個角色開始建立關係', color: 'gray' },
+                    { icon: 'fa-chat', tip: '通過對話了解角色的喜好', color: 'blue' },
+                    { icon: 'fa-heart', tip: '真誠的互動是提升好感的關鍵', color: 'red' }
+                ];
+            }
+            
+            tips.forEach(tip => {
+                const item = document.createElement('div');
+                item.className = `flex items-center space-x-3 p-3 bg-${tip.color}-50 border border-${tip.color}-200 rounded-lg`;
+                
+                item.innerHTML = `
+                    <i class="fas ${tip.icon} text-${tip.color}-500"></i>
+                    <div class="flex-1 text-sm text-${tip.color}-800">${tip.tip}</div>
+                `;
+                
+                tipsContainer.appendChild(item);
+            });
+        }
+        
+        // 載入好感度歷史
+        async function loadAffectionHistory() {
+            if (!selectedCharacterId) {
+                displayAffectionHistory([]);
+                return;
+            }
+            
+            try {
+                const params = new URLSearchParams({
+                    character_id: selectedCharacterId,
+                    days: '7' // 顯示最近7天
+                });
+                const result = await SpecializedApiClients.Emotion.getAffectionHistory(selectedCharacterId, 7);
+                
+                let history = [];
+                if (result.success && result.data && result.data.history) {
+                    history = result.data.history.slice(-5); // 只顯示最近5條
+                }
+                
+                displayAffectionHistory(history);
+                
+            } catch (error) {
+                console.warn('載入好感度歷史失敗:', error);
+                displayAffectionHistory([]);
+            }
+        }
+        
+        // 顯示好感度歷史
+        function displayAffectionHistory(history) {
+            const historyContainer = document.getElementById('affectionHistory');
+            historyContainer.innerHTML = '';
+            
+            if (history.length === 0) {
+                historyContainer.innerHTML = '<div class="text-center text-gray-500 py-4">暫無歷史記錄</div>';
+                return;
+            }
+            
+            history.forEach(record => {
+                const item = document.createElement('div');
+                const date = new Date(record.date).toLocaleDateString('zh-TW');
+                const changeClass = record.change >= 0 ? 'text-green-600' : 'text-red-600';
+                const changeIcon = record.change >= 0 ? 'fa-arrow-up' : 'fa-arrow-down';
+                
+                item.className = 'flex items-center justify-between py-2 px-3 bg-gray-50 rounded';
+                
+                item.innerHTML = `
+                    <div class="flex-1">
+                        <div class="text-sm font-medium">${record.event}</div>
+                        <div class="text-xs text-gray-500">${date}</div>
+                    </div>
+                    <div class="text-right">
+                        <div class="text-sm font-bold">${record.affection}</div>
+                        <div class="text-xs ${changeClass}">
+                            <i class="fas ${changeIcon}"></i> ${Math.abs(record.change)}
+                        </div>
+                    </div>
+                `;
+                
+                historyContainer.appendChild(item);
+            });
+        }
+        
+        // 查看完整歷史
+        function viewFullHistory() {
+            if (!selectedCharacterId) {
+                UI.showToast('請先選擇角色', 'warning');
+                return;
+            }
+            
+            // 可以導向到專門的歷史頁面或彈出詳細視窗
+            UI.showToast('完整歷史功能開發中...', 'info');
+        }
+        
         // 刷新情感數據
         async function refreshEmotionData() {
+            if (!selectedCharacterId) {
+                UI.showToast('請先選擇角色', 'warning');
+                return;
+            }
             await loadEmotionData();
             UI.showToast('情感數據已刷新', 'success');
         }
-        
         
         // 返回上一頁
         function goBack() {

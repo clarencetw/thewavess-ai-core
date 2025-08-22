@@ -18,6 +18,9 @@
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
 </head>
 <body class="h-full flex items-center justify-center p-4 bg-gray-50 text-gray-900">
     <!-- 主容器 -->
@@ -53,6 +56,19 @@
                     <i class="fas fa-user-plus mr-2"></i>
                     註冊
                 </button>
+            </div>
+            
+            <!-- 錯誤信息顯示區域 -->
+            <div id="errorMessage" class="hidden mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div class="flex">
+                    <div class="flex-shrink-0">
+                        <i class="fas fa-exclamation-circle text-red-400"></i>
+                    </div>
+                    <div class="ml-3">
+                        <h3 class="text-sm font-medium text-red-800">登入失敗</h3>
+                        <div class="mt-1 text-sm text-red-700" id="errorText"></div>
+                    </div>
+                </div>
             </div>
             
             <!-- 登入表單 -->
@@ -281,10 +297,17 @@
                 return;
             }
             
-            // 檢查是否已經登入
-            if (AppState.isAuthenticated) {
-                Router.navigate('/character');
-                return;
+            // 清除可能無效的認證狀態，避免自動跳轉
+            if (AppState.isAuthenticated && AppState.accessToken) {
+                // 靜默檢查認證狀態，但不自動跳轉
+                try {
+                    const profileResult = await SpecializedApiClients.User.getProfile();
+                    if (!profileResult.success) {
+                        ApiClient.logout();
+                    }
+                } catch (error) {
+                    ApiClient.logout();
+                }
             }
             
             // 初始化表單
@@ -327,6 +350,19 @@
                 loginForm.classList.add('hidden');
                 registerForm.classList.remove('hidden');
             }
+        }
+        
+        // 顯示錯誤信息
+        function showErrorMessage(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            const errorText = document.getElementById('errorText');
+            errorText.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+        
+        // 隱藏錯誤信息
+        function hideErrorMessage() {
+            document.getElementById('errorMessage').classList.add('hidden');
         }
         
         // 切換密碼可見性
@@ -426,6 +462,9 @@
         async function handleLogin(e) {
             e.preventDefault();
             
+            // 隱藏之前的錯誤信息
+            hideErrorMessage();
+            
             const loginBtn = document.getElementById('loginBtn');
             const username = document.getElementById('loginUsername').value;
             const password = document.getElementById('loginPassword').value;
@@ -433,12 +472,9 @@
             UI.showLoading(loginBtn);
             
             try {
-                const result = await ApiClient.post('/api/v1/auth/login', {
-                    username: username,
-                    password: password
-                });
+                const result = await SpecializedApiClients.Auth.login(username, password);
                 
-                if (result.success) {
+                if (result.success && result.data) {
                     // 保存認證信息
                     AppState.isAuthenticated = true;
                     AppState.accessToken = result.data.token;
@@ -452,17 +488,21 @@
                     });
                     Utils.storage.set('user', AppState.currentUser);
                     
-                    UI.showToast('登入成功！', 'success');
+                    UI.showToast('登入成功！正在跳轉...', 'success');
                     
                     // 跳轉到角色選擇頁面
                     setTimeout(() => {
                         Router.navigate('/character');
-                    }, 1000);
+                    }, 1500);
                 } else {
-                    throw new Error(result.error?.message || '登入失敗');
+                    // 登入失敗，顯示錯誤但不跳轉
+                    throw new Error(result.error?.message || result.message || '登入失敗，請檢查用戶名和密碼');
                 }
             } catch (error) {
-                UI.showToast('登入失敗: ' + error.message, 'error');
+                // 顯示錯誤信息區域
+                showErrorMessage(error.message);
+                // 也使用標準化錯誤處理
+                UI.handleError(error, '登入');
             } finally {
                 loginBtn.disabled = false;
                 loginBtn.innerHTML = '<i class="fas fa-sign-in-alt mr-2"></i>登入';
@@ -498,7 +538,7 @@
             UI.showLoading(registerBtn);
             
             try {
-                const result = await ApiClient.post('/api/v1/auth/register', {
+                const result = await SpecializedApiClients.Auth.register({
                     username: username,
                     email: email,
                     password: password
@@ -522,7 +562,7 @@
                     throw new Error(result.error?.message || '註冊失敗');
                 }
             } catch (error) {
-                UI.showToast('註冊失敗: ' + error.message, 'error');
+                UI.handleError(error, '註冊');
             } finally {
                 registerBtn.disabled = false;
                 registerBtn.innerHTML = '<i class="fas fa-user-plus mr-2"></i>註冊帳號';

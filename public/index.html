@@ -18,6 +18,9 @@
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
 </head>
 <body class="min-h-screen p-4 bg-gray-50 text-gray-900">
     <!-- 主容器 -->
@@ -131,13 +134,6 @@
                 查看 API 文檔
             </button>
             
-            <button 
-                class="bg-green-600 hover:bg-green-700 text-white px-6 py-3 rounded font-semibold"
-                onclick="showTestInterface()"
-            >
-                <i class="fas fa-flask mr-2"></i>
-                開發測試模式
-            </button>
         </div>
         
         <!-- 功能導航 -->
@@ -234,7 +230,7 @@
                 </div>
                 <h3 class="text-xl font-semibold mb-2">角色扮演系統</h3>
                 <p class="text-sm">
-                    多維度個性化 AI 角色，陸寒淵（霸道總裁）、沈言墨（溫柔醫生），專為女性向互動設計
+                    多維度個性化 AI 角色，沈宸（霸道執行長）、林知遠（溫柔心理師）、周曜（陽光歌手），完整數據庫驅動配置
                 </p>
             </div>
             
@@ -244,7 +240,7 @@
                 </div>
                 <h3 class="text-xl font-semibold mb-2">安全分級系統</h3>
                 <p class="text-sm">
-                    5 級智能 NSFW 內容分級，優雅且安全的成人內容處理，確保舒適的互動體驗
+                    5 級智能 NSFW 內容分級，OpenAI + Grok 雙引擎路由，優化敏感度設定，確保舒適的互動體驗
                 </p>
             </div>
         </div>
@@ -262,33 +258,6 @@
     <!-- Flowbite Toast 容器 -->
     <div id="toast-container" class="fixed top-5 right-5 z-50 space-y-2 md:top-5 md:right-5 sm:top-4 sm:right-4 sm:left-4 sm:right-auto sm:max-w-sm"></div>
     
-    <!-- 開發測試模式模態框 -->
-    <div id="testModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div class="bg-white border rounded-lg p-6 max-w-md w-full mx-4">
-            <h3 class="text-2xl font-bold mb-4">
-                <i class="fas fa-flask text-green-400 mr-2"></i>
-                開發測試模式
-            </h3>
-            <p class="mb-6">
-                這將開啟完整的測試界面，包含所有 API 端點的測試功能和監控工具。
-            </p>
-            <div class="flex gap-4">
-                <button 
-                    class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded flex-1"
-                    onclick="window.location.href='test.html'"
-                >
-                    <i class="fas fa-code mr-2"></i>
-                    進入測試模式
-                </button>
-                <button 
-                    class="bg-gray-600 hover:bg-gray-700 text-white px-4 py-2 rounded"
-                    onclick="UI.modal.hide('testModal')"
-                >
-                    取消
-                </button>
-            </div>
-        </div>
-    </div>
     
     <!-- JavaScript -->
     <script src="/public/assets/common.js"></script>
@@ -327,7 +296,7 @@
                 updateOverallStatus();
                 
             } catch (error) {
-                console.error('系統狀態檢查失敗:', error);
+                UI.handleError(error, '系統狀態檢查', false);
                 UI.showToast('系統狀態檢查失敗', 'error');
             } finally {
                 refreshBtn.disabled = false;
@@ -350,9 +319,14 @@
         // 檢查 API 服務
         async function checkApiService() {
             try {
-                const result = await ApiClient.get('/health');
-                updateStatusIndicator('api', true, '正常運行');
-                systemOnline = true;
+                const result = await SpecializedApiClients.Monitor.getHealth();
+                // 檢查 API 服務狀態
+                const apiHealthy = result.data?.services?.api === 'healthy' || 
+                                 result.services?.api === 'healthy' ||
+                                 result.data?.status === 'healthy' ||
+                                 result.status === 'healthy';
+                updateStatusIndicator('api', apiHealthy, apiHealthy ? '正常運行' : '服務異常');
+                systemOnline = apiHealthy;
             } catch (error) {
                 updateStatusIndicator('api', false, '連接失敗');
                 systemOnline = false;
@@ -362,8 +336,11 @@
         // 檢查資料庫
         async function checkDatabase() {
             try {
-                const result = await ApiClient.get('/health');
-                const dbHealthy = result.database === 'healthy' || result.data?.database === 'healthy';
+                const result = await SpecializedApiClients.Monitor.getHealth();
+                // 正確解析 API 返回的數據結構
+                const dbHealthy = result.data?.services?.database === 'healthy' || 
+                                result.services?.database === 'healthy' ||
+                                result.data?.database === 'healthy';
                 updateStatusIndicator('db', dbHealthy, dbHealthy ? '連接正常' : '連接異常');
             } catch (error) {
                 updateStatusIndicator('db', false, '無法檢查');
@@ -400,7 +377,7 @@
         async function getSystemInfo() {
             try {
                 // 獲取版本信息
-                const versionResult = await ApiClient.get('/api/v1/version');
+                const versionResult = await SpecializedApiClients.System.getVersion();
                 if (versionResult.success && versionResult.data) {
                     document.getElementById('systemVersion').textContent = versionResult.data.version || 'v1.0.0';
                 } else {
@@ -408,7 +385,7 @@
                 }
                 
                 // 從 /health 獲取更多信息
-                const healthResult = await ApiClient.get('/health');
+                const healthResult = await SpecializedApiClients.Monitor.getHealth();
                 if (healthResult.service === 'thewavess-ai-core') {
                     // 更新時間戳顯示
                     const timestamp = new Date(healthResult.timestamp);
@@ -417,10 +394,10 @@
                 }
                 
                 // API 端點數量 (實際統計)
-                document.getElementById('apiEndpoints').textContent = '19';
+                document.getElementById('apiEndpoints').textContent = '78';
                 
             } catch (error) {
-                console.error('獲取系統信息失敗:', error);
+                UI.handleError(error, '獲取系統信息', false);
                 document.getElementById('systemVersion').textContent = '未知';
                 document.getElementById('apiEndpoints').textContent = '--';
                 document.getElementById('uptime').textContent = '--';
@@ -443,12 +420,6 @@
             }
         }
         
-        // 開始應用
-        
-        // 顯示測試界面
-        function showTestInterface() {
-            UI.modal.show('testModal');
-        }
     </script>
 </body>
 </html>

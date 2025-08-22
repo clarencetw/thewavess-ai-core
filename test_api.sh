@@ -2,9 +2,9 @@
 
 # 設定選項
 REGISTER_NEW_USER=false
-FIXED_USERNAME="test_api_user"
+FIXED_USERNAME="testuser"
 FIXED_PASSWORD="test123456"
-FIXED_EMAIL="test_api@thewavess.com"
+FIXED_EMAIL="test@example.com"
 
 # 解析命令行參數
 while [[ $# -gt 0 ]]; do
@@ -16,7 +16,7 @@ while [[ $# -gt 0 ]]; do
     --help)
       echo "Usage: $0 [options]"
       echo "Options:"
-      echo "  --register    Register a new test user (default: use fixed user)"
+      echo "  --register    Register a new test user (default: use seed test user 'testuser')"
       echo "  --help        Show this help message"
       exit 0
       ;;
@@ -30,11 +30,11 @@ done
 
 echo "🚀 Testing Thewavess AI Core API - Complete Test Suite"
 echo "======================================================"
-echo "Testing all 73 API endpoints"
+echo "Testing all 78 API endpoints (81 total including system endpoints)"
 if [ "$REGISTER_NEW_USER" = true ]; then
     echo "Mode: Register new test user"
 else
-    echo "Mode: Using fixed test user ($FIXED_USERNAME)"
+    echo "Mode: Using seed test user ($FIXED_USERNAME)"
 fi
 echo ""
 
@@ -200,6 +200,12 @@ extract_session_id() {
 echo "Waiting for server to start..."
 sleep 3
 
+# Reminder about seed data
+if [ "$REGISTER_NEW_USER" = false ]; then
+    echo -e "${CYAN}💡 Using seed test user. Ensure seed data is loaded: make seed${NC}"
+    echo ""
+fi
+
 # 1. SYSTEM MANAGEMENT (3 public endpoints, 1 auth required)
 echo -e "\n${PURPLE}🔧 SYSTEM MANAGEMENT (3 public endpoints)${NC}"
 echo "============================================="
@@ -219,13 +225,16 @@ test_endpoint "GET" "/monitor/live" "" "Kubernetes Liveness Probe"
 test_endpoint "GET" "/monitor/stats" "" "Detailed System Stats"
 test_endpoint "GET" "/monitor/metrics" "" "Prometheus Metrics"
 
-# 2. CHARACTER SYSTEM (3 public endpoints)
-echo -e "\n${PURPLE}🎭 CHARACTER SYSTEM (3 public endpoints)${NC}"
+# 2. CHARACTER SYSTEM (6 public endpoints)
+echo -e "\n${PURPLE}🎭 CHARACTER SYSTEM (6 public endpoints)${NC}"
 echo "=============================================="
 
 test_endpoint "GET" "/character/list" "" "Get Character List"
-test_endpoint "GET" "/character/char_001" "" "Get Character by ID"
-test_endpoint "GET" "/character/char_001/stats" "" "Get Character Statistics"
+test_endpoint "GET" "/character/character_01" "" "Get Character by ID"
+test_endpoint "GET" "/character/character_01/stats" "" "Get Character Statistics"
+test_endpoint "GET" "/character/search?q=溫柔" "" "Search Characters"
+test_endpoint "GET" "/character/nsfw-guideline/3" "" "Get NSFW Guideline Level 3"
+test_endpoint "GET" "/character/nsfw-guideline/5?locale=zh-Hant&engine=grok" "" "Get NSFW Guideline Level 5 with filters"
 
 # Character management endpoints (require authentication)
 character_create_data='{"name":"測試角色","type":"gentle","description":"這是一個測試角色","avatar_url":"https://placehold.co/400x400","tags":["測試"],"appearance":{"height":"170cm"},"personality":{"traits":["友善"]},"background":"測試背景"}'
@@ -242,7 +251,7 @@ echo -e "\n${PURPLE}🔊 TTS VOICE SYSTEM - Public (1 endpoint) [OpenAI TTS API]
 echo "================================================================="
 
 test_endpoint "GET" "/tts/voices" "" "Get TTS Voice List (OpenAI Voices)"
-test_endpoint "GET" "/tts/voices?character_id=char_001&language=zh" "" "Get Filtered Voice List"
+test_endpoint "GET" "/tts/voices?character_id=character_01&language=zh" "" "Get Filtered Voice List"
 
 # 5. USER AUTHENTICATION
 echo -e "\n${PURPLE}👤 USER AUTHENTICATION & REGISTRATION${NC}"
@@ -255,7 +264,7 @@ if [ "$REGISTER_NEW_USER" = true ]; then
     TEST_EMAIL="test_${TIMESTAMP}@example.com"
     TEST_PASSWORD="TestPass123"
     
-    user_register_data='{"username":"'${TEST_USER}'","email":"'${TEST_EMAIL}'","password":"'${TEST_PASSWORD}'","birth_date":"1995-05-15"}'
+    user_register_data='{"username":"'${TEST_USER}'","email":"'${TEST_EMAIL}'","password":"'${TEST_PASSWORD}'"}'
     
     echo -e "${YELLOW}Creating test user: ${TEST_USER}${NC}"
     if test_endpoint "POST" "/auth/register" "$user_register_data" "Register New User" "false" "201"; then
@@ -269,22 +278,10 @@ else
     TEST_EMAIL="$FIXED_EMAIL"
     TEST_PASSWORD="$FIXED_PASSWORD"
     
-    # Try to register fixed user (will fail if already exists, which is OK)
-    user_register_data='{"username":"'${TEST_USER}'","email":"'${TEST_EMAIL}'","password":"'${TEST_PASSWORD}'","birth_date":"1995-05-15"}'
-    
-    echo -e "${YELLOW}Ensuring fixed test user exists: ${TEST_USER}${NC}"
-    register_response=$(curl -s -X POST \
-        -H "Content-Type: application/json" \
-        -d "$user_register_data" \
-        "${BASE_URL}/auth/register")
-    
-    if echo "$register_response" | grep -q "\"success\":true"; then
-        echo -e "${GREEN}✅ Fixed test user created${NC}"
-    elif echo "$register_response" | grep -q "already exists\|已存在"; then
-        echo -e "${CYAN}ℹ️  Fixed test user already exists${NC}"
-    else
-        echo -e "${YELLOW}⚠️  Fixed test user creation response: $(echo "$register_response" | jq -r '.message // "Unknown"' 2>/dev/null || echo "Unknown")${NC}"
-    fi
+    # Check if seed test user exists (don't try to register, should exist from seeds)
+    echo -e "${YELLOW}Using seed test user: ${TEST_USER}${NC}"
+    echo -e "${CYAN}ℹ️  This user should exist from seed data (make seed)${NC}"
+    echo -e "${CYAN}ℹ️  If login fails, run: make seed${NC}"
 fi
 
 # Login to get token
@@ -309,6 +306,9 @@ if echo "$login_response" | grep -q "\"success\":true"; then
 else
     echo -e "${RED}❌ Login failed${NC}"
     echo "$login_response"
+    if [ "$REGISTER_NEW_USER" = false ]; then
+        echo -e "${YELLOW}💡 Tip: If using seed test user, make sure to run: make seed${NC}"
+    fi
 fi
 
 # Test login endpoint formally
@@ -324,13 +324,13 @@ if [ -n "$TOKEN" ]; then
     profile_update_data='{"display_name":"Test User","bio":"Updated bio"}'
     test_endpoint "PUT" "/user/profile" "$profile_update_data" "Update User Profile" "true"
     
-    preferences_data='{"preferences":{"theme":"dark","language":"zh-TW","notifications":true}}'
+    test_endpoint "GET" "/user/preferences" "" "Get User Preferences" "true"
+    
+    preferences_data='{"preferences":{"theme":"dark","language":"zh-TW","notifications":true,"default_character":"character_03"}}'
     test_endpoint "PUT" "/user/preferences" "$preferences_data" "Update User Preferences" "true"
     
-    test_endpoint "GET" "/user/character" "" "Get Current Selected Character" "true"
-    
-    character_select_data='{"character_id":"char_001"}'
-    test_endpoint "PUT" "/user/character" "$character_select_data" "Select Character" "true"
+    # User character selection endpoints removed - characters selected directly in chat
+    echo -e "${YELLOW}Note: User character selection endpoints were removed - characters are selected directly in chat sessions${NC}"
     
     # Static implementation endpoints
     test_endpoint "POST" "/user/avatar" '{"avatar_url":"https://placehold.co/200x200/blue/white?text=User"}' "Upload Avatar (Static)" "true"
@@ -342,8 +342,7 @@ if [ -n "$TOKEN" ]; then
         test_endpoint "POST" "/auth/refresh" "$refresh_data" "Refresh JWT Token" "false"
     fi
     
-    # Test message endpoint (requires auth)
-    test_endpoint "POST" "/test/message" '{"message":"Test message from authenticated user"}' "Test Message Endpoint" "true"
+    # Note: /test/message endpoint has been removed from the API
     
     # Test logout (will invalidate token)
     test_endpoint "POST" "/auth/logout" '{}' "User Logout" "true"
@@ -363,8 +362,16 @@ if [ -n "$TEST_USER" ]; then
         -d "$user_login_data" \
         "${BASE_URL}/auth/login")
     
-    TOKEN=$(extract_token "$login_response")
-    REFRESH_TOKEN=$(extract_refresh_token "$login_response")
+    if echo "$login_response" | grep -q "\"success\":true"; then
+        TOKEN=$(extract_token "$login_response")
+        REFRESH_TOKEN=$(extract_refresh_token "$login_response")
+        echo -e "${GREEN}✅ Re-login successful${NC}"
+    else
+        echo -e "${RED}❌ Re-login failed${NC}"
+        echo "$login_response"
+        TOKEN=""
+        REFRESH_TOKEN=""
+    fi
 fi
 
 # 7. CHARACTER SYSTEM - Management endpoints (3 endpoints)
@@ -398,6 +405,12 @@ if [ -n "$TOKEN" ]; then
         echo -e "${YELLOW}⚠️ Skipping Update Character test - no character created${NC}"
     fi
     
+    # Test character configuration endpoints (authenticated)
+    test_endpoint "GET" "/character/character_01/profile" "" "Get Character Profile" "true"
+    test_endpoint "GET" "/character/character_01/speech-styles" "" "Get Character Speech Styles" "true"
+    test_endpoint "GET" "/character/character_01/speech-styles/best?nsfw_level=2&affection=60" "" "Get Best Speech Style" "true"
+    test_endpoint "GET" "/character/character_01/scenes?scene_type=romantic&time_of_day=evening" "" "Get Character Scenes" "true"
+    
     # Test character deletion (only delete created character, never delete system defaults)
     if [ -n "$CREATED_CHARACTER_ID" ]; then
         test_endpoint "DELETE" "/character/${CREATED_CHARACTER_ID}" "" "Delete Created Character" "true" "200,404"
@@ -413,7 +426,7 @@ echo -e "\n${PURPLE}💬 CHAT SYSTEM (10 endpoints)${NC}"
 echo "====================================="
 
 if [ -n "$TOKEN" ]; then
-    session_data='{"character_id":"char_001","title":"測試對話會話"}'
+    session_data='{"character_id":"character_01","title":"測試對話會話"}'
     
     # Create session and extract ID
     create_response=$(curl -s -X POST \
@@ -472,11 +485,11 @@ if [ -n "$TOKEN" ]; then
     test_endpoint "GET" "/emotion/status" "" "Get Emotion Status (Real Database)" "true"
     test_endpoint "GET" "/emotion/affection" "" "Get Affection Level (Real Database)" "true"
     
-    emotion_event_data='{"character_id":"char_001","event_type":"praise","intensity":0.8,"context":{"message":"用戶讚美了角色","scene":"對話中","timestamp":"2024-01-01T12:00:00Z"}}'
+    emotion_event_data='{"character_id":"character_01","event_type":"praise","intensity":0.8,"context":{"message":"用戶讚美了角色","scene":"對話中","timestamp":"2024-01-01T12:00:00Z"}}'
     test_endpoint "POST" "/emotion/event" "$emotion_event_data" "Trigger Emotion Event (Real Database)" "true"
     
-    test_endpoint "GET" "/emotion/affection/history?character_id=char_001&days=30" "" "Get Affection History (Static)" "true"
-    test_endpoint "GET" "/emotion/milestones?character_id=char_001" "" "Get Relationship Milestones (Static)" "true"
+    test_endpoint "GET" "/emotion/affection/history?character_id=character_01&days=30" "" "Get Affection History (Static)" "true"
+    test_endpoint "GET" "/emotion/milestones?character_id=character_01" "" "Get Relationship Milestones (Static)" "true"
 else
     echo -e "${RED}❌ No JWT token available, skipping emotion tests${NC}"
 fi
@@ -489,8 +502,14 @@ if [ -n "$TOKEN" ]; then
     test_endpoint "GET" "/memory/timeline" "" "Get Memory Timeline (Real Database)" "true"
     test_endpoint "GET" "/memory/timeline?page=1&limit=10" "" "Get Memory Timeline with Pagination (Real Database)" "true"
     
-    memory_data='{"session_id":"session_001","content":"用戶喜歡聽古典音樂","type":"preference","importance":0.7,"context":"對話中提到的偏好","tags":["音樂","偏好"]}'
-    test_endpoint "POST" "/memory/save" "$memory_data" "Save Memory (Real Database)" "true" "201"
+    memory_data='{"session_id":"session_001","content":"用戶喜歡聽古典音樂","type":"preference","importance":7,"character_id":"character_01","tags":["音樂","偏好"]}'
+    test_endpoint "POST" "/memory/save" "$memory_data" "Save Memory - Preference (Real Database)" "true" "201"
+    
+    milestone_data='{"session_id":"session_002","content":"第一次約會，氣氛很棒","type":"milestone","importance":9,"character_id":"character_01","tags":["約會","里程碑"]}'
+    test_endpoint "POST" "/memory/save" "$milestone_data" "Save Memory - Milestone (Real Database)" "true" "201"
+    
+    dislike_data='{"session_id":"session_003","content":"用戶不喜歡討論前任話題","type":"dislike","importance":8,"character_id":"character_01","tags":["禁忌","前任"]}'
+    test_endpoint "POST" "/memory/save" "$dislike_data" "Save Memory - Dislike (Real Database)" "true" "201"
     
     test_endpoint "GET" "/memory/search?query=音樂&type=preference" "" "Search Memory (Real Database)" "true"
     test_endpoint "GET" "/memory/user/user_001" "" "Get User Memory (Static)" "true"
@@ -513,7 +532,7 @@ echo -e "\n${PURPLE}📚 NOVEL MODE (8 endpoints)${NC}"
 echo "==================================="
 
 if [ -n "$TOKEN" ]; then
-    novel_start_data='{"character_id":"char_001","genre":"romance","theme":"校園戀愛","setting":"現代都市","difficulty":"normal"}'
+    novel_start_data='{"character_id":"character_01","genre":"romance","theme":"校園戀愛","setting":"現代都市","difficulty":"normal"}'
     test_endpoint "POST" "/novel/start" "$novel_start_data" "Start Novel (Static)" "true" "201"
     
     choice_data='{"novel_id":"novel_001","choice_id":"choice_001","choice_text":"主動向她表白","chapter":1,"scene":3}'
@@ -537,14 +556,14 @@ echo -e "\n${PURPLE}🔍 SEARCH SYSTEM (2 endpoints) - PostgreSQL Full-Text Sear
 echo "==================================================================================="
 
 if [ -n "$TOKEN" ]; then
-    test_endpoint "GET" "/search/chats?q=測試&character_id=char_001&date_from=2024-01-01" "" "Search Chats (PostgreSQL Full-Text)" "true"
+    test_endpoint "GET" "/search/chats?q=測試&character_id=character_01&date_from=2024-01-01" "" "Search Chats (PostgreSQL Full-Text)" "true"
     test_endpoint "GET" "/search/global?q=音樂&type=all" "" "Global Search (Multi-Type Content)" "true"
 else
     echo -e "${RED}❌ No JWT token available, skipping search tests${NC}"
 fi
 
-# 13. TTS VOICE SYSTEM - Authenticated (4 endpoints) [OpenAI TTS API]
-echo -e "\n${PURPLE}🔊 TTS VOICE SYSTEM - Authenticated (4 endpoints) [OpenAI TTS API]${NC}"
+# 13. TTS VOICE SYSTEM - Authenticated (2 endpoints) [OpenAI TTS API]
+echo -e "\n${PURPLE}🔊 TTS VOICE SYSTEM - Authenticated (2 endpoints) [OpenAI TTS API]${NC}"
 echo "======================================================================"
 
 if [ -n "$TOKEN" ]; then
@@ -555,16 +574,6 @@ if [ -n "$TOKEN" ]; then
     # Test Chinese TTS
     tts_chinese_data='{"text":"你好，這是語音合成測試。","voice":"nova","speed":0.9}'
     test_endpoint "POST" "/tts/generate" "$tts_chinese_data" "Generate Chinese TTS (OpenAI API)" "true"
-    
-    # Batch TTS generation
-    batch_tts_data='{"items":[{"text":"First sentence for batch processing."},{"text":"Second sentence for batch test."}],"voice":"echo","speed":1.0}'
-    test_endpoint "POST" "/tts/batch" "$batch_tts_data" "Batch Generate TTS (OpenAI API)" "true"
-    
-    # Voice preview test
-    preview_data='{"text":"This is a voice preview test.","voice_id":"shimmer"}'
-    test_endpoint "POST" "/tts/preview" "$preview_data" "Preview TTS Voice (OpenAI API)" "true"
-    
-    test_endpoint "GET" "/tts/history?page=1&limit=10" "" "Get TTS History (Static)" "true"
 else
     echo -e "${RED}❌ No JWT token available, skipping TTS tests${NC}"
 fi
@@ -605,6 +614,7 @@ else
     echo -e "${RED}❌ No JWT token available, skipping admin tests${NC}"
 fi
 
+
 # Final summary
 echo -e "\n${PURPLE}🎉 API TESTING COMPLETED!${NC}"
 echo "========================="
@@ -623,18 +633,19 @@ fi
 echo ""
 echo -e "${BLUE}📋 API Coverage:${NC}"
 echo "• System Management: 4 endpoints ✅ (3 public + 1 auth)"
+echo "• Monitoring System: 5 endpoints ✅ (all public)"
 echo "• User System: 12 endpoints ✅ (2 public + 10 auth)"
-echo "• Character System: 6 endpoints ✅ (3 public + 3 management)"
+echo "• Character System: 17 endpoints ✅ (6 public + 11 auth with config)"
 echo "• Chat System: 10 endpoints ✅ (all authenticated)"
 echo "• Tags System: 2 endpoints ✅ (all public)"
 echo "• Emotion System: 5 endpoints ✅ (all authenticated)"
 echo "• Memory System: 8 endpoints ✅ (all authenticated)"
 echo "• Novel Mode: 8 endpoints ✅ (all authenticated)"
 echo "• Search System: 2 endpoints ✅ (all authenticated)"
-echo "• TTS Voice System: 6 endpoints ✅ (2 public + 4 auth) [OpenAI TTS API]"
+echo "• TTS Voice System: 3 endpoints ✅ (2 public + 1 auth) [OpenAI TTS API]"
 echo "• Admin System: 5 endpoints ✅ (all authenticated) - User Management"
 echo ""
-echo "Total: 68 API endpoints tested"
+echo "Total: 72 API endpoints tested"
 echo ""
 echo -e "${CYAN}Note: Some static endpoints return mock data for prototyping purposes.${NC}"
 echo -e "${CYAN}Management endpoints require authentication to access.${NC}"

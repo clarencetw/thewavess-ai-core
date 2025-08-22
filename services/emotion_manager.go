@@ -6,8 +6,7 @@ import (
 	"strings"
 	"sync"
 	"time"
-	"github.com/clarencetw/thewavess-ai-core/database"
-	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -70,8 +69,8 @@ func (em *EmotionManager) GetEmotionState(userID, characterID string) *EmotionSt
 	
 	// 從資料庫載入情感狀態
 	ctx := context.Background()
-	var dbEmotion models.EmotionState
-	err := database.DB.NewSelect().
+    var dbEmotion db.EmotionStateDB
+	err := GetDB().NewSelect().
 		Model(&dbEmotion).
 		Where("user_id = ? AND character_id = ?", userID, characterID).
 		Scan(ctx)
@@ -102,21 +101,21 @@ func (em *EmotionManager) GetEmotionState(userID, characterID string) *EmotionSt
 		}
 		
 		// 保存到資料庫
-		newDbEmotion := &models.EmotionState{
-			ID:                utils.GenerateID(16),
-			UserID:           userID,
-			CharacterID:      characterID,
-			Affection:        currentEmotion.Affection,
-			Mood:             currentEmotion.Mood,
-			Relationship:     currentEmotion.Relationship,
-			IntimacyLevel:    currentEmotion.IntimacyLevel,
-			TotalInteractions: 0,
-			LastInteraction:  time.Now(),
-			CreatedAt:        time.Now(),
-			UpdatedAt:        time.Now(),
-		}
+        newDbEmotion := &db.EmotionStateDB{
+            ID:                utils.GenerateUUID(),
+            UserID:           userID,
+            CharacterID:      characterID,
+            Affection:        currentEmotion.Affection,
+            Mood:             currentEmotion.Mood,
+            Relationship:     currentEmotion.Relationship,
+            IntimacyLevel:    currentEmotion.IntimacyLevel,
+            TotalInteractions: 0,
+            LastInteraction:  time.Now(),
+            CreatedAt:        time.Now(),
+            UpdatedAt:        time.Now(),
+        }
 		
-		_, err = database.DB.NewInsert().Model(newDbEmotion).Exec(ctx)
+		_, err = GetDB().NewInsert().Model(newDbEmotion).Exec(ctx)
 		if err != nil {
 			utils.Logger.WithError(err).Error("保存新情感狀態到資料庫失敗")
 		} else {
@@ -521,8 +520,8 @@ func (em *EmotionManager) SaveEmotionSnapshot(userID, characterID, trigger, cont
     // 1. 更新情感狀態到資料庫
     // TODO(數據擴充): 可另建一張 explanation 表或在 emotion_history.context 中寫入「規則命中明細」，
     // 以便於前端或BI系統完整還原每次變動的原因（關鍵字、NSFW 等級、長度獎勵、動量/冷卻等）。
-    _, err := database.DB.NewUpdate().
-        Model((*models.EmotionState)(nil)).
+    _, err := GetDB().NewUpdate().
+        Model((*db.EmotionStateDB)(nil)).
         Set("affection = ?", newEmotion.Affection).
 		Set("mood = ?", newEmotion.Mood).
 		Set("relationship = ?", newEmotion.Relationship).
@@ -538,8 +537,9 @@ func (em *EmotionManager) SaveEmotionSnapshot(userID, characterID, trigger, cont
 	}
 	
 	// 2. 保存情感歷史記錄到資料庫
-	emotionHistory := &models.EmotionHistory{
-		ID:              utils.GenerateID(16),
+	// 使用簡單結構避免關聯問題
+	emotionHistoryDB := &db.EmotionHistoryDB{
+		ID:              utils.GenerateUUID(),
 		UserID:          userID,
 		CharacterID:     characterID,
 		OldAffection:    oldEmotion.Affection,
@@ -548,7 +548,7 @@ func (em *EmotionManager) SaveEmotionSnapshot(userID, characterID, trigger, cont
 		OldMood:         oldEmotion.Mood,
 		NewMood:         newEmotion.Mood,
 		TriggerType:     trigger,
-		TriggerContent:  contextContent,
+		TriggerContent:  &contextContent,
 		Context:         map[string]interface{}{
 			"old_relationship":  oldEmotion.Relationship,
 			"new_relationship":  newEmotion.Relationship,
@@ -558,7 +558,7 @@ func (em *EmotionManager) SaveEmotionSnapshot(userID, characterID, trigger, cont
 		CreatedAt:       time.Now(),
 	}
 	
-	_, err = database.DB.NewInsert().Model(emotionHistory).Exec(ctx)
+	_, err = GetDB().NewInsert().Model(emotionHistoryDB).Exec(ctx)
 	if err != nil {
 		utils.Logger.WithError(err).Error("保存情感歷史記錄到資料庫失敗")
 	}
@@ -566,8 +566,8 @@ func (em *EmotionManager) SaveEmotionSnapshot(userID, characterID, trigger, cont
 	// 3. 檢查並保存新的里程碑到資料庫
 	newMilestones := em.CheckMilestones(userID, characterID, oldEmotion, newEmotion)
 	for _, milestone := range newMilestones {
-		dbMilestone := &models.EmotionMilestone{
-			ID:             utils.GenerateID(16),
+		dbMilestone := &db.EmotionMilestoneDB{
+			ID:             utils.GenerateUUID(),
 			UserID:         userID,
 			CharacterID:    characterID,
 			MilestoneType:  milestone.Type,
@@ -576,7 +576,7 @@ func (em *EmotionManager) SaveEmotionSnapshot(userID, characterID, trigger, cont
 			AchievedAt:     milestone.AchievedAt,
 		}
 		
-		_, err = database.DB.NewInsert().Model(dbMilestone).Exec(ctx)
+		_, err = GetDB().NewInsert().Model(dbMilestone).Exec(ctx)
 		if err != nil {
 			utils.Logger.WithError(err).Error("保存情感里程碑到資料庫失敗")
 		} else {

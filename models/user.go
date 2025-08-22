@@ -1,51 +1,33 @@
 package models
 
 import (
-	"context"
 	"time"
-
-	"github.com/uptrace/bun"
 )
 
-// User 用戶模型
+// User 用戶領域模型
 type User struct {
-	bun.BaseModel `bun:"table:users,alias:u"`
-
-	ID           string                 `bun:"id,pk" json:"id"`
-	Username     string                 `bun:"username,unique,notnull" json:"username"`
-	Email        string                 `bun:"email,unique,notnull" json:"email"`
-	Password     string                 `bun:"password_hash,notnull" json:"-"`
-	DisplayName  *string                `bun:"display_name" json:"display_name,omitempty"`
-	Bio          *string                `bun:"bio" json:"bio,omitempty"`
-	Status       string                 `bun:"status,default:'active'" json:"status"`
-	Nickname     string                 `bun:"nickname" json:"nickname,omitempty"`
-	Gender       string                 `bun:"gender" json:"gender,omitempty"`
-	BirthDate    *time.Time             `bun:"birth_date" json:"birth_date,omitempty"`
-	AvatarURL    string                 `bun:"avatar_url" json:"avatar_url,omitempty"`
-	IsVerified   bool                   `bun:"is_verified,default:false" json:"is_verified"`
-	IsAdult      bool                   `bun:"is_adult,default:false" json:"is_adult"`
-	Preferences  map[string]interface{} `bun:"preferences,type:jsonb" json:"preferences,omitempty"`
-	CreatedAt    time.Time              `bun:"created_at,nullzero,default:now()" json:"created_at"`
-	UpdatedAt    time.Time              `bun:"updated_at,nullzero,default:now()" json:"updated_at"`
-	LastLoginAt  *time.Time             `bun:"last_login_at" json:"last_login_at,omitempty"`
+	ID           string                 `json:"id"`
+	Username     string                 `json:"username"`
+	Email        string                 `json:"email"`
+	Password     string                 `json:"-"`
+	DisplayName  *string                `json:"display_name,omitempty"`
+	Bio          *string                `json:"bio,omitempty"`
+	Status       string                 `json:"status"`
+	Nickname     *string                `json:"nickname,omitempty"`
+	Gender       *string                `json:"gender,omitempty"`
+	BirthDate    *time.Time             `json:"birth_date,omitempty"`
+	AvatarURL    *string                `json:"avatar_url,omitempty"`
+	IsVerified   bool                   `json:"is_verified"`
+	IsAdult      bool                   `json:"is_adult"`
+	Preferences  map[string]interface{} `json:"preferences,omitempty"`
+	CreatedAt    time.Time              `json:"created_at"`
+	UpdatedAt    time.Time              `json:"updated_at"`
+	LastLoginAt  *time.Time             `json:"last_login_at,omitempty"`
 
 	// 關聯
-	Sessions []*ChatSession `bun:"rel:has-many,join:id=user_id" json:"sessions,omitempty"`
+	Sessions []*ChatSession `json:"sessions,omitempty"`
 }
 
-// TableName 返回數據庫表名
-func (u *User) TableName() string {
-	return "users"
-}
-
-// BeforeAppendModel 在模型操作前執行
-func (u *User) BeforeAppendModel(ctx context.Context, query bun.Query) error {
-	switch query.(type) {
-	case *bun.UpdateQuery:
-		u.UpdatedAt = time.Now()
-	}
-	return nil
-}
 
 // UserCreateRequest 用戶創建請求
 type UserCreateRequest struct {
@@ -74,10 +56,10 @@ type UserResponse struct {
 	DisplayName *string                `json:"display_name,omitempty"`
 	Bio         *string                `json:"bio,omitempty"`
 	Status      string                 `json:"status"`
-	Nickname    string                 `json:"nickname,omitempty"`
-	Gender      string                 `json:"gender,omitempty"`
+	Nickname    *string                `json:"nickname,omitempty"`
+	Gender      *string                `json:"gender,omitempty"`
 	BirthDate   *time.Time             `json:"birth_date,omitempty"`
-	AvatarURL   string                 `json:"avatar_url,omitempty"`
+	AvatarURL   *string                `json:"avatar_url,omitempty"`
 	IsVerified  bool                   `json:"is_verified"`
 	IsAdult     bool                   `json:"is_adult"`
 	Preferences map[string]interface{} `json:"preferences,omitempty"`

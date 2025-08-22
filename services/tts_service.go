@@ -119,9 +119,10 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 // mapVoiceToOpenAI 將角色語音映射到 OpenAI TTS 語音
 func (s *TTSService) mapVoiceToOpenAI(voice string) openai.SpeechVoice {
 	voiceMapping := map[string]openai.SpeechVoice{
-		"voice_001": openai.VoiceAlloy,  // 陸燁銘標準音
-		"voice_002": openai.VoiceEcho,   // 陸燁銘深情音
-		"voice_003": openai.VoiceFable,  // 沈言墨溫雅音
+		"voice_001": openai.VoiceAlloy,  // 沈宸標準音
+		"voice_002": openai.VoiceEcho,   // 沈宸深情音
+		"voice_003": openai.VoiceFable,  // 林知遠溫雅音
+		"voice_004": openai.VoiceOnyx,   // 周曜活潑音
 		"default":   openai.VoiceAlloy,
 	}
 
@@ -201,27 +202,35 @@ func (s *TTSService) GetAvailableVoices() []map[string]interface{} {
 	return []map[string]interface{}{
 		{
 			"voice_id":     "voice_001",
-			"name":         "陸燁銘標準音",
-			"character_id": "char_001",
-			"character":    "陸燁銘",
+			"name":         "沈宸標準音",
+			"character_id": "character_01",
+			"character":    "沈宸",
 			"openai_voice": "alloy",
 			"description":  "成熟穩重的男性聲音",
 		},
 		{
 			"voice_id":     "voice_002",
-			"name":         "陸燁銘深情音",
-			"character_id": "char_001",
-			"character":    "陸燁銘",
+			"name":         "沈宸深情音",
+			"character_id": "character_01",
+			"character":    "沈宸",
 			"openai_voice": "echo",
 			"description":  "深情磁性的男性聲音",
 		},
 		{
 			"voice_id":     "voice_003",
-			"name":         "沈言墨溫雅音",
-			"character_id": "char_002",
-			"character":    "沈言墨",
+			"name":         "林知遠溫雅音",
+			"character_id": "character_02",
+			"character":    "林知遠",
 			"openai_voice": "fable",
 			"description":  "溫雅知性的男性聲音",
+		},
+		{
+			"voice_id":     "voice_004",
+			"name":         "周曜活潑音",
+			"character_id": "character_03",
+			"character":    "周曜",
+			"openai_voice": "onyx",
+			"description":  "清亮陽光的男性聲音",
 		},
 	}
 }

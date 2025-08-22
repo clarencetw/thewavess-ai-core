@@ -6,7 +6,6 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -66,7 +65,16 @@ type ServicesStatus struct {
 
 var monitorStartTime = time.Now()
 
-// HealthCheck 基礎健康檢查
+// HealthCheck godoc
+// @Summary      系統健康檢查
+// @Description  檢查系統整體健康狀態，包括服務運行時間、資料庫連接狀態等基本信息
+// @Tags         Monitor
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} models.APIResponse{data=HealthResponse} "系統健康"
+// @Success      503 {object} models.APIResponse{data=HealthResponse} "系統服務降級"
+// @Failure      500 {object} models.APIResponse{error=models.APIError} "內部服務器錯誤"
+// @Router       /monitor/health [get]
 func HealthCheck(c *gin.Context) {
 	utils.Logger.Info("執行健康檢查")
 
@@ -78,9 +86,9 @@ func HealthCheck(c *gin.Context) {
 	}
 
 	// 測試資料庫連接
-	if database.DB != nil {
+	if GetDB() != nil {
 		ctx := c.Request.Context()
-		if err := database.DB.PingContext(ctx); err != nil {
+		if err := GetDB().PingContext(ctx); err != nil {
 			utils.Logger.WithError(err).Error("資料庫連接檢查失敗")
 			dbStatus = "unhealthy"
 			services["database"] = "unhealthy"
@@ -125,7 +133,15 @@ func HealthCheck(c *gin.Context) {
 	})
 }
 
-// GetSystemStats 獲取詳細系統狀態
+// GetSystemStats godoc
+// @Summary      獲取系統詳細狀態
+// @Description  獲取系統詳細運行狀態，包括硬體信息、記憶體使用、資料庫狀態、外部服務配置等完整監控信息
+// @Tags         Monitor
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} models.APIResponse{data=SystemStatsResponse} "獲取成功"
+// @Failure      500 {object} models.APIResponse{error=models.APIError} "獲取系統狀態失敗"
+// @Router       /monitor/stats [get]
 func GetSystemStats(c *gin.Context) {
 	utils.Logger.Info("獲取系統狀態統計")
 
@@ -140,10 +156,10 @@ func GetSystemStats(c *gin.Context) {
 		Status:    "disconnected",
 	}
 
-	if database.DB != nil {
+	if GetDB() != nil {
 		ctx := c.Request.Context()
 		start := time.Now()
-		if err := database.DB.PingContext(ctx); err == nil {
+		if err := GetDB().PingContext(ctx); err == nil {
 			dbInfo.Connected = true
 			dbInfo.Status = "connected"
 			dbInfo.PingLatency = time.Since(start).Round(time.Microsecond).String()
@@ -192,7 +208,15 @@ func GetSystemStats(c *gin.Context) {
 	})
 }
 
-// GetMetrics 獲取監控指標（Prometheus格式）
+// GetMetrics godoc
+// @Summary      獲取Prometheus監控指標
+// @Description  以Prometheus格式輸出系統監控指標，包括運行時間、記憶體使用量、Goroutine數量、GC統計等
+// @Tags         Monitor
+// @Accept       json
+// @Produce      text/plain
+// @Success      200 {string} string "Prometheus格式的監控指標"
+// @Failure      500 {object} models.APIResponse{error=models.APIError} "獲取指標失敗"
+// @Router       /monitor/metrics [get]
 func GetMetrics(c *gin.Context) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
@@ -221,16 +245,25 @@ thewavess_gc_total ` + formatUint32(memStats.NumGC) + `
 	c.String(http.StatusOK, metrics)
 }
 
-// Ready 就緒檢查（用於Kubernetes readiness probe）
+// Ready godoc
+// @Summary      服務就緒檢查
+// @Description  檢查服務是否已就緒可以接受流量，驗證關鍵依賴項（資料庫、AI引擎配置）是否正常，適用於Kubernetes readiness probe
+// @Tags         Monitor
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} object{ready=bool,services=object,timestamp=string} "服務已就緒"
+// @Success      503 {object} object{ready=bool,services=object,timestamp=string} "服務未就緒"
+// @Failure      500 {object} models.APIResponse{error=models.APIError} "就緒檢查失敗"
+// @Router       /monitor/ready [get]
 func Ready(c *gin.Context) {
 	// 檢查關鍵服務是否就緒
 	ready := true
 	services := make(map[string]bool)
 
 	// 檢查資料庫
-	if database.DB != nil {
+	if GetDB() != nil {
 		ctx := c.Request.Context()
-		if err := database.DB.PingContext(ctx); err != nil {
+		if err := GetDB().PingContext(ctx); err != nil {
 			ready = false
 			services["database"] = false
 		} else {
@@ -262,7 +295,15 @@ func Ready(c *gin.Context) {
 	})
 }
 
-// Live 存活檢查（用於Kubernetes liveness probe）
+// Live godoc
+// @Summary      服務存活檢查
+// @Description  檢查服務是否仍在運行，用於確認應用程式進程存活狀態，適用於Kubernetes liveness probe
+// @Tags         Monitor
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} object{alive=bool,timestamp=string,uptime=string} "服務存活"
+// @Failure      500 {object} models.APIResponse{error=models.APIError} "存活檢查失敗"
+// @Router       /monitor/live [get]
 func Live(c *gin.Context) {
 	// 簡單的存活檢查
 	c.JSON(http.StatusOK, gin.H{

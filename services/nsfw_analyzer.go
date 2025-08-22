@@ -1,7 +1,9 @@
 package services
 
 import (
+	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 
@@ -10,6 +12,25 @@ import (
 	"golang.org/x/text/transform"
 	"golang.org/x/text/unicode/norm"
 )
+
+// NSFWThresholds NSFW分級門檻配置
+type NSFWThresholds struct {
+	// Level 2 門檻
+	RomanticL2Threshold int `json:"romantic_l2_threshold"`
+	
+	// Level 3 門檻
+	IntimateL3Threshold int `json:"intimate_l3_threshold"`
+	
+	// Level 4 門檻
+	IntimateL4Threshold int `json:"intimate_l4_threshold"`
+	FetishL4Threshold   int `json:"fetish_l4_threshold"`
+	RoleplayL4Threshold int `json:"roleplay_l4_threshold"`
+	
+	// Level 5 門檻
+	ExplicitL5Threshold int `json:"explicit_l5_threshold"`
+	ExtremeL5Threshold  int `json:"extreme_l5_threshold"`
+	IllegalL5Threshold  int `json:"illegal_l5_threshold"`
+}
 
 // NSFWAnalyzer NSFW內容分析器（女性向 + NSFW 陪伴）
 // 說明：
@@ -29,73 +50,102 @@ type NSFWAnalyzer struct {
 	illegalKeywords    []string // 違法/未成年/獸交/亂倫/非自願（一律 Level 5）
 	emojiKeywords      []string // 常見表意 emoji
 	obfuscatedKeywords []string // 變形/拆字/火星文/簡寫
+	
+	// 配置門檻
+	thresholds NSFWThresholds
+}
+
+// loadThresholds 從環境變數載入門檻配置
+func loadThresholds() NSFWThresholds {
+	return NSFWThresholds{
+		RomanticL2Threshold: getEnvInt("NSFW_ROMANTIC_L2_THRESHOLD", 2), // 調整：需要2個浪漫詞彙才升到L2
+		IntimateL3Threshold: getEnvInt("NSFW_INTIMATE_L3_THRESHOLD", 2), // 調整：需要2個親密詞彙才升到L3
+		IntimateL4Threshold: getEnvInt("NSFW_INTIMATE_L4_THRESHOLD", 3), // 調整：需要3個intimate詞彙才升到L4
+		FetishL4Threshold:   getEnvInt("NSFW_FETISH_L4_THRESHOLD", 2),   // 調整：需要2個特殊詞彙才升到L4
+		RoleplayL4Threshold: getEnvInt("NSFW_ROLEPLAY_L4_THRESHOLD", 2), // 調整：需要2個角色扮演詞彙才升到L4
+		ExplicitL5Threshold: getEnvInt("NSFW_EXPLICIT_L5_THRESHOLD", 1), // 明確內容保持敏感
+		ExtremeL5Threshold:  getEnvInt("NSFW_EXTREME_L5_THRESHOLD", 1),  // 極端內容保持敏感
+		IllegalL5Threshold:  getEnvInt("NSFW_ILLEGAL_L5_THRESHOLD", 1),  // 違法內容保持敏感
+	}
+}
+
+// getEnvInt 從環境變數獲取整數值，如果不存在或無效則使用預設值
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
 }
 
 // NewNSFWAnalyzer 創建NSFW分析器
 func NewNSFWAnalyzer() *NSFWAnalyzer {
 	return &NSFWAnalyzer{
 		romanticKeywords: []string{
-			// 中文浪漫詞彙
-			"喜歡你", "愛你", "想你", "想念你", "思念", "心動", "臉紅", "害羞", "溫柔", "甜蜜",
-			"浪漫", "約會", "一起", "陪伴", "守護", "照顧", "呵護", "寵愛", "疼愛", "在意", "關心",
-			"美麗", "可愛", "迷人", "魅力", "吸引", "心跳", "怦然", "悸動", "擁有你",
-			"想要", "渴望", "需要你", "想碰你", "想感受你", "想親近", "想靠近",
-			// 英文浪漫詞彙
+			// 中文浪漫詞彙（簡繁對齊）
+			"喜歡你", "喜欢你", "愛你", "爱你", "想你", "想念你", "思念", "心動", "心动", "臉紅", "脸红", "害羞", "溫柔", "温柔", "甜蜜",
+			"浪漫", "約會", "约会", "一起", "陪伴", "守護", "守护", "照顧", "照顾", "呵護", "呵护", "寵愛", "宠爱", "疼愛", "疼爱", "在意", "關心", "关心",
+			"美麗", "美丽", "可愛", "可爱", "迷人", "魅力", "吸引", "心跳", "怦然", "悸動", "悸动", "擁有你", "拥有你",
+			"貼近", "贴近", "靠近", "想親近", "想亲近", "想靠近",
+			// 英文浪漫詞彙（新增建議詞彙）
 			"love", "like", "miss", "miss you", "romantic", "date", "together", "care", "gentle",
 			"beautiful", "cute", "charming", "attractive", "heartbeat", "sweet", "darling", "babe",
-			"hug", "cuddle", "hold hands",
+			"hug", "cuddle", "hold hands", "adore", "affection", "fond", "crush", "romantic vibes", "butterflies",
 		},
 		intimateKeywords: []string{
-			// 中文親密詞彙
-			"親密", "親吻", "親親", "啾", "擁抱", "抱著", "抱住", "抱緊", "床", "床上",
-			"脫", "脫掉", "解開", "摸", "撫", "愛撫", "靠著", "依偎", "激情", "慾望",
-			"性感", "誘惑", "挑逗", "調情", "情慾", "肉體", "身體", "胸", "胸口", "胸前", "奶",
-			"腰", "腿", "大腿", "貼近", "緊緊", "緊抱", "輕撫", "撫摸", "肌膚", "肌膚相親",
-			"體溫", "呼吸", "心跳", "柔軟", "溫暖", "顫抖", "酥麻", "觸碰", "感受", "溫度", "親近",
-			"靠近", "耳邊", "呢喃", "舔耳",
-			"想要你", "渴望你", "需要你", "想感受", "想觸碰", "想貼近", "想擁有",
+			// 中文親密詞彙（簡繁對齊 + 新增建議詞彙）
+			"親密", "亲密", "親吻", "亲吻", "親親", "亲亲", "啾", "擁抱", "拥抱", "抱著", "抱着", "抱住", "抱緊", "抱紧",
+			"脫", "脱", "脫掉", "脱掉", "解開", "解开", "摸", "撫", "抚", "愛撫", "爱抚", "靠著", "靠着", "偎依", "激情", "慾望", "欲望",
+			"性感", "誘惑", "诱惑", "挑逗", "調情", "调情", "情慾", "情欲", "肉體", "肉体", "身體", "身体", "胸", "胸口", "胸前",
+			"腰", "腿", "大腿", "貼近", "贴近", "緊緊", "紧紧", "緊抱", "紧抱", "輕撫", "轻抚", "撫摸", "抚摸", "肌膚", "肌肤", "肌膚相親", "肌肤相亲",
+			"體溫", "体温", "呼吸", "心跳", "柔軟", "柔软", "溫暖", "温暖", "顫抖", "颤抖", "酥麻", "觸碰", "触碰", "感受", "溫度", "温度", "親近", "亲近",
+			"靠近", "耳邊", "耳边", "呢喃", "舔耳",
+			"想要你", "渴望你", "需要你", "想感受", "想觸碰", "想触碰", "想貼近", "想贴近", "想擁有", "想拥有",
 
-			// 新增：親密動作詞彙 - 從romantic移動到intimate
-			"抱抱", "親親", "想抱你", "想靠近你", "想見你", "想陪你", "想擁抱",
-			"想牽手", "牽手", "依偎", "撒嬌", "抱緊", "溫馨", "貼心",
+			// 新增：親密動作詞彙（簡繁對齊）
+			"抱抱", "想抱你", "想靠近你", "想見你", "想见你", "想陪你", "想擁抱", "想拥抱",
+			"想牽手", "想牵手", "牽手", "牵手", "依偎", "撒嬌", "撒娇", "抱緊", "抱紧", "溫馨", "温馨", "貼心", "贴心",
+			"親熱", "亲热", "貼身", "贴身", "靠在", "貼著", "贴着",
 
 			// 新增：更多聲音和動作描述
-			"輕哼", "低吟", "嬌喘", "輕顫", "戰慄", "痙攣", "抽搐", "扭擺",
-			"嘶聲", "嬌吟", "輕嘆", "長嘆", "急促", "緩慢", "節奏", "韻律",
-			"纏綿", "糾纏", "交織", "融合", "貼合", "密合", "咬唇", "輕咬",
-			"舔舐", "品嚐", "吞嚥", "吸允", "含住", "包裹", "環抱", "圍繞",
-			"滑動", "游移", "徘徊", "探尋", "尋找", "發現", "挖掘", "深探",
+			"輕哼", "轻哼", "低吟", "嬌喘", "娇喘", "輕顫", "轻颤", "戰慄", "战栗", "痙攣", "痉挛", "抽搐", "扭擺", "扭摆",
+			"嘶聲", "嘶声", "嬌吟", "娇吟", "輕嘆", "轻叹", "長嘆", "长叹", "急促", "緩慢", "缓慢", "節奏", "节奏", "韻律", "韵律",
+			"纏綿", "缠绵", "糾纏", "纠缠", "交織", "交织", "融合", "貼合", "贴合", "密合", "咬唇", "輕咬", "轻咬",
+			"舔舐", "品嚐", "品尝", "吞嚥", "吞咽", "吸允", "含住", "包裹", "環抱", "环抱", "圍繞", "围绕",
+			"滑動", "滑动", "游移", "徘徊", "探尋", "探寻", "尋找", "寻找", "發現", "发现", "挖掘", "深探",
 
-			// 新增：身體狀態描述 - 將這些從explicit移到intimate以降低觸發門檻
-			"濕", "濕潤", "濕透", "滴水", "濕漉", "濕答答",
-
-			// 英文親密詞彙
-			"kiss", "kissing", "peck", "make out", "touch", "caress", "embrace", "cuddle",
+			// 英文親密詞彙（新增建議詞彙，移除易誤判詞彙）
+			"kiss", "kissing", "peck", "make out", "makeout", "touch", "caress", "embrace", "cuddle", "cuddling", "spooning",
 			"intimate", "passion", "desire", "sexy", "seduce", "tease", "flirt",
-			"body", "chest", "boobs", "waist", "leg", "thigh", "skin",
+			"body", "chest", "boobs", "waist", "leg", "thigh", "skin", "close to me", "cheek to cheek",
 			"warm", "soft", "shiver", "tremble", "breathe", "heartbeat",
 
 			// 新增英文聲音動作詞彙
 			"whisper", "murmur", "sigh", "gasp", "pant", "breathe heavily", "moan softly",
 			"quiver", "shake", "vibrate", "pulse", "throb", "flutter", "ripple",
-			"glide", "slide", "brush", "graze", "stroke", "caress", "massage",
-			"wet", "moist", "damp", "soaked",
+			"glide", "slide", "brush", "graze", "stroke", "massage",
 		},
 		explicitKeywords: []string{
-			// 中文明確詞彙（Level 4 專用）
-			"做愛", "愛愛", "啪啪啪", "啪", "性行為", "性愛", "高潮", "射", "射精", "中出",
+			// 中文明確詞彙（Level 4-5 專用，簡繁對齊 + 新增建議）
+			"做愛", "做爱", "愛愛", "爱爱", "啪啪啪", "啪", "性行為", "性行为", "性愛", "性爱", "高潮", "射", "射精", "中出",
 			"插", "抽插", "舔", "舔舐", "吸", "吮吸", "咬", "口交", "乳交", "腿交", "手交",
-			"脫光", "全裸", "赤裸", "裸露", "露出",
-			"陰莖", "陰道", "陰蒂", "陰核", "陰唇", "陰毛", "乳房", "胸部", "乳頭", "奶頭",
-			"私處", "下體", "性器", "雞雞", "小穴", "蜜穴",
-			"奶子", "屁股", "臀部", "內褲", "胸罩", "比基尼", "絲襪", "高跟鞋",
+			"脫光", "脱光", "全裸", "赤裸", "裸露", "露出",
+			"陰莖", "阴茎", "陰道", "阴道", "陰蒂", "阴蒂", "陰核", "阴核", "陰唇", "阴唇", "陰毛", "阴毛", "乳房", "胸部", "乳頭", "乳头", "奶頭", "奶头",
+			"私處", "私处", "下體", "下体", "性器", "雞雞", "鸡鸡", "小穴", "蜜穴",
+			"屁股", "臀部", "內褲", "内裤", "胸罩", "內衣", "内衣",
 			"勃起", "硬了",
-			"快感", "刺激", "敏感", "喘息", "呻吟", "扭動",
+			"快感", "刺激", "敏感", "喘息", "呻吟", "扭動", "扭动",
+			
+			// 新增建議詞彙（中文）
+			"打炮", "開房", "开房", "房事", "嘿咻", "做那種事", "做那种事", "做那件事",
+			"乳暈", "乳晕", "乳溝", "乳沟", "陰部", "阴部", "私密處", "私密处", "下身",
+			"胸器", "巨乳", "玉乳", "床戲", "床戏", "A片", "色情", "黃圖", "黄图", "黃片", "黄片", "春宮", "春宫", "AV",
 
 			// 新增：更激進的器官俗稱
 			"陽具", "陽棒", "肉棒", "肉根", "巨根", "大屌", "粗屌", "龜頭", "蛋蛋", "睪丸",
 			"花穴", "陰穴", "逼", "騷穴", "嫩穴", "粉穴", "濕穴", "緊穴",
-			"奶", "咪咪", "雙峰", "酥胸", "豐滿", "飽滿", "挺立",
+			"咪咪", "雙峰", "酥胸", "豐滿", "飽滿", "挺立",
 
 			// 新增：性行為動作描述
 			"進入", "插入", "深入", "頂到", "撞擊", "衝撞", "摩擦", "律動", "起伏",
@@ -147,13 +197,20 @@ func NewNSFWAnalyzer() *NSFWAnalyzer {
 			"sex", "seggs", "fuck", "fucking", "bang", "screw", "cum", "cumming", "orgasm", "climax",
 			"penetrate", "penetration", "naked", "nude", "nsfw",
 			"penis", "vagina", "breast", "boobs", "nipple", "areola", "pussy", "cock", "dick", "ass",
-			"butt", "booty", "wet", "hard", "horny", "moan", "pleasure", "stimulate", "sensitive",
+			"butt", "booty", "horny", "moan", "pleasure", "stimulate", "sensitive",
 			"bj", "hj", "blowjob", "handjob", "doggy", "missionary", "cowgirl", "69", "deepthroat",
 
 			// 新增英文激進詞彙
 			"thrust", "pound", "ram", "drill", "pump", "stroke", "grind", "ride",
 			"juicy", "slick", "dripping", "soaked", "throbbing", "pulsing", "swollen",
 			"gasp", "pant", "whimper", "whine", "cry out", "scream", "ahh", "ohh", "mmm",
+
+			// 新增英文口交等行為詞彙 (根據NSFW_KEYWORDS_REVIEW.md)
+			"oral", "rimming", "rimjob", "fingering", "handjobs", "jerk off", "fap", "fapping",
+			"tits", "titties", "titjob", "boobjob", "milf", "lewd", "lewds", "nude selfie",
+
+			// 新增平台相關詞彙
+			"porn", "p0rn", "pr0n", "hentai", "ecchi", "oppai", "paizuri",
 		},
 		extremeKeywords: []string{
 			// 極度明確的動作詞彙（Level 5 專用 - 大幅擴充）
@@ -186,6 +243,9 @@ func NewNSFWAnalyzer() *NSFWAnalyzer {
 			"劇烈抽搐", "不斷顫抖", "止不住抖", "抖個不停", "抖成篩子",
 			"癱在床上", "軟如爛泥", "動彈不得", "四肢無力", "渾身酥軟",
 
+			// 新增中文極端詞彙 (根據NSFW_KEYWORDS_REVIEW.md)
+			"潮吹", "性虐", "窒息玩法",
+
 			// 粗俗極端詞彙
 			"操我", "插我", "肏我", "幹我", "上我", "搞我", "弄我",
 			"雞巴", "屌", "肉棒", "陽具", "巨根", "肉莖", "龜頭",
@@ -204,43 +264,59 @@ func NewNSFWAnalyzer() *NSFWAnalyzer {
 			"whore", "slut", "bitch", "horny", "naughty", "dirty",
 			"fucking", "screwing", "banging", "pounding", "drilling", "ramming",
 			"cumming", "ejaculate", "climax", "orgasm", "masturbate", "fingering",
+
+			// 新增英文極端詞彙 (根據NSFW_KEYWORDS_REVIEW.md)
+			"breeding", "deep anal", "bdsm",
 		},
 		roleplayKeywords: []string{
 			// 角色扮演/女性向常見情境
-			"女僕", "OL", "秘書", "護士", "老師", "上司", "霸總", "總裁",
-			"制服", "制服控", "cos", "cosplay", "角色扮演", "貓女", "兔女郎",
+			"女僕", "女仆", "OL", "秘書", "護士", "老師", "醫生", "医生", "學生", "学生", "上司", "霸總", "總裁", "警察", "女王",
+			"制服", "制服控", "cos", "cosplay", "角色扮演", "貓女", "兔女郎", "眼鏡娘", "眼镜控",
 			"浴室", "浴袍", "浴巾", "淋浴", "泡澡", "燭光",
+			"辦公室", "办公室", "酒店", "旅館", "旅馆", "情侶酒店",
+
+			// 英文角色扮演
+			"nurse", "teacher", "boss", "office lady", "secretary", "maid", "cosplay", "role play",
 		},
 		fetishKeywords: []string{
 			// 情趣道具/輕度癖好
-			"情趣", "挑逗", "呻吟", "跳蛋", "按摩棒", "震動棒", "自慰棒", "潤滑液", "潤滑",
-			"手銬", "眼罩", "項圈", "口塞", "拍打", "滴蠟", "鞭", "束縛",
-			"足", "腳", "足控", "足交", "絲襪腳", "絲襪", "高跟鞋",
+			"情趣", "挑逗", "跳蛋", "按摩棒", "震動棒", "自慰棒", "潤滑液", "潤滑",
+			"手銬", "眼罩", "項圈", "口塞", "口球", "拍打", "滴蠟", "蜜蠟", "鞭", "束縛", "繩縛", "绳缚", "結縛",
+			"乳夾", "乳夹", "肛塞", "貞操帶", "贞操带", "乳貼", "乳贴", "緊身衣", "紧身衣",
+			"足", "腳", "足控", "足交", "絲襪腳", "絲襪", "網襪", "网袜", "情趣絲襪", "高跟鞋", "比基尼",
 			"情趣內衣", "情趣睡衣", "丁字褲",
 			// EN
 			"toy", "toys", "vibrator", "dildo", "bullet", "lube", "collar", "gag", "choke",
 			"heels", "stockings", "fishnet",
+			"bondage", "rope play", "clamps", "anal beads", "gag ball", "chokers", "latex", "leather",
 		},
 		illegalKeywords: []string{
-			// 未成年/亂倫/非自願/獸交（一律極高風險）
+			// 全球禁止內容：未成年/亂倫/非自願/獸交（一律極高風險）
 			"未成年", "未滿", "小學生", "中學生", "高中生", "蘿莉", "萝莉", "loli", "正太", "shota",
-			"亂倫", "近親", "母子", "父女", "兄妹", "姐弟", "叔姪", "亂倫",
-			"強暴", "強姦", "強奸", "迷姦", "下藥", "非自願", "強迫", "不情願",
+			"亂倫", "近親", "母子", "父女", "兄妹", "姐弟", "叔姪",
+			"強暴", "強姦", "強奸", "迷姦", "迷藥", "迷药", "下藥", "下药", "強制", "强制", "偷拍", "灌醉", "非自願", "強迫", "不情願",
 			"獸交", "畜交", "動物", "狗交", "馬交",
 			// EN
 			"minor", "underage", "teen", "child", "children", "incest", "rape", "raped", "raping",
 			"bestiality", "beast", "non-consent", "nonconsensual", "drugged",
+			"date drug", "roofies", "rohypnol", "spiked drink", "voyeur",
 		},
 		emojiKeywords: []string{
 			// 常見表意 Emoji
 			"🍆", "🍑", "💦", "👅", "😈", "😏", "🥵", "🫦", "💋", "🛏", "🔞",
+			// 新增根據NSFW_KEYWORDS_REVIEW.md
+			"🍒", "👙", "🩲", "🔥", "❤️‍🔥",
 		},
 		obfuscatedKeywords: []string{
 			// 變形/拆字/火星文/簡寫（盡量收斂）
 			"f*ck", "f**k", "f u c k", "f.u.c.k", "fucc", "fuxk", "phub",
 			"s3x", "secks", "sx", "seggs", "s.e.x",
 			"c0ck", "c0cks", "d1ck", "p*ssy", "pussy*", "p\u002as\u002asy",
+			// 新增根據NSFW_KEYWORDS_REVIEW.md
+			"porn", "p0rn", "pr0n", "onlyfans", "of", "fansly", "lewd", "lewds",
+			"p*rn", "p.orn", "0nlyfans", "f*nsly",
 		},
+		thresholds: loadThresholds(),
 	}
 }
 
@@ -260,11 +336,10 @@ func (na *NSFWAnalyzer) AnalyzeContent(message string) (int, *ContentAnalysis) {
 	emojiCount := na.countKeywords(messageLower, messageSquashed, na.emojiKeywords)
 	obfuscatedCount := na.countKeywords(messageLower, messageSquashed, na.obfuscatedKeywords)
 
-	// emoji 與變形字樣提升對應類別權重
+	// emoji 與變形字樣提升對應類別權重（調整過度升級問題）
 	intimateCount += emojiCount
-	explicitCount += roleplayCount
-	explicitCount += fetishCount
-	explicitCount += obfuscatedCount
+	// 調整：roleplay 和 fetish 不直接升級到 explicit，保持在各自級別
+	explicitCount += obfuscatedCount // 變形詞彙通常確實是 explicit
 	extremeCount += illegalCount * 2 // 違法類加倍計入極端
 
 	// 計算總分和級別
@@ -320,7 +395,7 @@ func (na *NSFWAnalyzer) countKeywords(messageLower string, messageSquashed strin
 	return count
 }
 
-// calculateLevel 計算NSFW級別
+// calculateLevel 計算NSFW級別（修正版：按 L5→L4→L3→L2→L1 順序判定，避免覆蓋邏輯）
 func (na *NSFWAnalyzer) calculateLevel(romantic, intimate, explicit, extreme, illegal, fetish, roleplay int) (int, *ContentAnalysis) {
 	var level int
 	var categories []string
@@ -328,61 +403,41 @@ func (na *NSFWAnalyzer) calculateLevel(romantic, intimate, explicit, extreme, il
 	var confidence float64
 	var shouldUseGrok bool
 
-	// Level 5: 極度明確內容 或 含違法類（進一步降低門檻）
-	if illegal >= 1 || extreme >= 1 || (explicit >= 1) {
+	// Level 5: 極度明確內容 或 含全球禁止內容 或 explicit 內容（使用配置門檻）
+	if illegal >= na.thresholds.IllegalL5Threshold || extreme >= na.thresholds.ExtremeL5Threshold || explicit >= na.thresholds.ExplicitL5Threshold {
 		level = 5
-		categories = []string{"extreme", "explicit", "nsfw"}
-		if illegal >= 1 {
-			categories = append(categories, "illegal") // 標註違法風險
-		}
+		categories = na.buildCategories(romantic, intimate, explicit, extreme, illegal, fetish, roleplay, 5)
 		isNSFW = true
 		confidence = 0.95
 		shouldUseGrok = true
-		// Level 4: 明確成人內容（大幅降低門檻）
-	} else if intimate >= 2 || (intimate >= 1 && romantic >= 1) || fetish >= 1 || roleplay >= 1 {
+	} else if intimate >= na.thresholds.IntimateL4Threshold || fetish >= na.thresholds.FetishL4Threshold || roleplay >= na.thresholds.RoleplayL4Threshold {
+		// Level 4: 明確成人內容（移除 explicit 條件，已在 L5 處理）
 		level = 4
-		categories = []string{"explicit", "nsfw", "sexual"}
-		if fetish >= 1 {
-			categories = append(categories, "fetish")
-		}
-		if roleplay >= 1 {
-			categories = append(categories, "roleplay")
-		}
+		categories = na.buildCategories(romantic, intimate, explicit, extreme, illegal, fetish, roleplay, 4)
 		isNSFW = true
 		confidence = 0.90
-		shouldUseGrok = true // Level 4 使用 Grok 處理明確成人內容
-		// Level 3: 親密內容（大幅降低門檻）
-	} else if intimate >= 1 || (romantic >= 1) {
+		shouldUseGrok = true
+	} else if intimate >= na.thresholds.IntimateL3Threshold {
+		// Level 3: 親密內容（移除 romantic 條件，讓 L2 可達）
 		level = 3
-		categories = []string{"intimate", "nsfw", "suggestive"}
+		categories = na.buildCategories(romantic, intimate, explicit, extreme, illegal, fetish, roleplay, 3)
 		isNSFW = true
 		confidence = 0.85
 		shouldUseGrok = false
-		// Level 2: 浪漫暗示（降低門檻）
-	} else if romantic >= 1 {
+	} else if romantic >= na.thresholds.RomanticL2Threshold {
+		// Level 2: 浪漫暗示（現在可達）
 		level = 2
-		categories = []string{"romantic", "suggestive"}
+		categories = na.buildCategories(romantic, intimate, explicit, extreme, illegal, fetish, roleplay, 2)
 		isNSFW = false
 		confidence = 0.80
 		shouldUseGrok = false
-		// Level 1: 日常對話
 	} else {
+		// Level 1: 日常對話
 		level = 1
 		categories = []string{"normal", "safe"}
 		isNSFW = false
 		confidence = 0.90
 		shouldUseGrok = false
-	}
-
-	// 特殊調整：進一步優化級別判定
-	if extreme >= 1 || illegal >= 1 {
-		level = 5
-		shouldUseGrok = true
-		confidence = 0.95
-	} else if explicit >= 1 {
-		level = 5 // explicit 關鍵詞直接進入 Level 5
-		shouldUseGrok = true
-		confidence = 0.95
 	}
 
 	analysis := &ContentAnalysis{
@@ -394,6 +449,65 @@ func (na *NSFWAnalyzer) calculateLevel(romantic, intimate, explicit, extreme, il
 	}
 
 	return level, analysis
+}
+
+// buildCategories 根據實際命中的類別構建標籤列表（避免重複和雙層級標註）
+func (na *NSFWAnalyzer) buildCategories(romantic, intimate, explicit, extreme, illegal, fetish, roleplay int, level int) []string {
+	categories := []string{}
+	
+	// 按命中次數添加對應類別
+	if illegal >= 1 {
+		categories = append(categories, "illegal")
+	}
+	if extreme >= 1 {
+		categories = append(categories, "extreme")
+	}
+	if explicit >= 1 {
+		categories = append(categories, "explicit")
+	}
+	if fetish >= 1 {
+		categories = append(categories, "fetish")
+	}
+	if roleplay >= 1 {
+		categories = append(categories, "roleplay")
+	}
+	if intimate >= 1 {
+		categories = append(categories, "intimate")
+	}
+	if romantic >= 1 {
+		categories = append(categories, "romantic")
+	}
+	
+	// 根據級別添加通用標籤（避免重複）
+	switch level {
+	case 5:
+		if !contains(categories, "explicit") && !contains(categories, "extreme") {
+			categories = append(categories, "nsfw")
+		}
+	case 4:
+		if !contains(categories, "explicit") {
+			categories = append(categories, "sexual")
+		}
+		categories = append(categories, "nsfw")
+	case 3:
+		categories = append(categories, "nsfw", "suggestive")
+	case 2:
+		categories = append(categories, "suggestive")
+	case 1:
+		categories = append(categories, "safe")
+	}
+	
+	return categories
+}
+
+// contains 檢查字符串切片中是否包含指定字符串
+func contains(slice []string, item string) bool {
+	for _, s := range slice {
+		if s == item {
+			return true
+		}
+	}
+	return false
 }
 
 // normalizeText 文本標準化（NFKC + toLower + 移除多餘空白/標點並提供 squashed 版本）

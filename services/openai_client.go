@@ -315,25 +315,27 @@ func (c *OpenAIClient) generateMockResponse(request *OpenAIRequest) *OpenAIRespo
 	}
 }
 
-// Note: CharacterConfig and related functions are now in prompt_shared.go
 
 // BuildCharacterPrompt 構建角色提示詞（使用統一模板）
-func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext, nsfwLevel int) []OpenAIMessage {
+func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescription string, conversationContext *ConversationContext, nsfwLevel int) []OpenAIMessage {
 	// 構建記憶提示詞
 	memoryPrompt := ""
-	if context != nil && context.MemoryPrompt != "" {
-		memoryPrompt = context.MemoryPrompt
+	if conversationContext != nil && conversationContext.MemoryPrompt != "" {
+		memoryPrompt = conversationContext.MemoryPrompt
 	}
 
 	// 使用統一的prompt模板
-	systemPrompt := BuildUnifiedPromptTemplate(
-		characterID,
-		userMessage,
-		sceneDescription,
-		context,
-		nsfwLevel,
-		memoryPrompt,
-	)
+	characterService := GetCharacterService()
+	promptBuilder := NewPromptBuilder(characterService)
+	ctx := context.Background()
+	systemPrompt := promptBuilder.
+		WithCharacter(ctx, characterID).
+		WithContext(conversationContext).
+		WithNSFWLevel(nsfwLevel).
+		WithUserMessage(userMessage).
+		WithSceneDescription(sceneDescription).
+		WithMemory(memoryPrompt).
+		Build(ctx)
 
 	messages := []OpenAIMessage{
 		{
@@ -343,8 +345,8 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 	}
 
 	// 添加對話歷史（最近幾條）
-	if context != nil {
-		for i, msg := range context.RecentMessages {
+	if conversationContext != nil {
+		for i, msg := range conversationContext.RecentMessages {
 			if i >= 5 { // 只保留最近5條消息
 				break
 			}

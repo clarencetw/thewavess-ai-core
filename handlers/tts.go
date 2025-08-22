@@ -1,10 +1,12 @@
 package handlers
 
 import (
+	"context"
 	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -13,13 +15,31 @@ import (
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
-var ttsService *services.TTSService
+var (
+	ttsService            *services.TTSService
+	characterServiceForTTS *services.CharacterService
+)
+
+// GenerateTTSRequest TTS生成請求結構
+type GenerateTTSRequest struct {
+	Text        string  `json:"text" binding:"required" example:"你好，今天過得怎麼樣？"`
+	Voice       string  `json:"voice" example:"voice_001"`
+	Speed       float64 `json:"speed" example:"1.0"`
+	CharacterID string  `json:"character_id" example:"character_01"`
+}
 
 func getTTSService() *services.TTSService {
 	if ttsService == nil {
 		ttsService = services.NewTTSService()
 	}
 	return ttsService
+}
+
+func getCharacterServiceForTTS() *services.CharacterService {
+	if characterServiceForTTS == nil {
+		characterServiceForTTS = services.GetCharacterService()
+	}
+	return characterServiceForTTS
 }
 
 // GenerateTTS godoc
@@ -29,7 +49,7 @@ func getTTSService() *services.TTSService {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        request body object true "TTS生成請求"
+// @Param        request body GenerateTTSRequest true "TTS生成請求"
 // @Success      200 {object} models.APIResponse "生成成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
@@ -52,9 +72,7 @@ func GenerateTTS(c *gin.Context) {
 		Text        string  `json:"text" binding:"required"`
 		Voice       string  `json:"voice"`
 		Speed       float64 `json:"speed"`
-		Pitch       float64 `json:"pitch"`
 		CharacterID string  `json:"character_id"`
-		Emotion     string  `json:"emotion"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -73,7 +91,12 @@ func GenerateTTS(c *gin.Context) {
 		req.Speed = 1.0
 	}
 	if req.Voice == "" {
-		req.Voice = "voice_001"
+		// 如果有角色ID，嘗試獲取預設聲音
+		if req.CharacterID != "" {
+			req.Voice = getDefaultVoiceForCharacter(c.Request.Context(), req.CharacterID)
+		} else {
+			req.Voice = "voice_001"
+		}
 	}
 
 	// 調用 TTS 服務生成語音
@@ -91,16 +114,14 @@ func GenerateTTS(c *gin.Context) {
 
 	// 構建回應數據
 	ttsResult := gin.H{
-		"tts_id":    utils.GenerateID(16),
+		"tts_id":    utils.GenerateTTSID(),
 		"user_id":   userID,
 		"text":      req.Text,
 		"voice":     req.Voice,
-		"character": getCharacterByVoice(req.Voice),
+		"character": getCharacterByVoice(c.Request.Context(), req.Voice, req.CharacterID),
 		"settings": gin.H{
-			"speed":    req.Speed,
-			"pitch":    req.Pitch,
-			"emotion":  req.Emotion,
-			"quality":  "high",
+			"speed":   req.Speed,
+			"quality": "high",
 		},
 		"result": gin.H{
 			"audio_data":    base64.StdEncoding.EncodeToString(response.AudioData), // Base64編碼的音頻數據
@@ -109,6 +130,7 @@ func GenerateTTS(c *gin.Context) {
 			"file_size":     formatFileSize(response.Size),
 			"format":        response.Format,
 			"sample_rate":   "44100Hz",
+			"voice_name":    getVoiceNameByID(c.Request.Context(), req.Voice),
 		},
 		"processing": gin.H{
 			"started_at":   time.Now(),
@@ -130,121 +152,6 @@ func GenerateTTS(c *gin.Context) {
 	})
 }
 
-// BatchGenerateTTS godoc
-// @Summary      批量生成語音
-// @Description  批量將多個文字轉換為語音
-// @Tags         TTS
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        request body object true "批量TTS請求"
-// @Success      200 {object} models.APIResponse "生成成功"
-// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
-// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /tts/batch [post]
-func BatchGenerateTTS(c *gin.Context) {
-	// 檢查認證
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: "未授權訪問",
-			},
-		})
-		return
-	}
-
-	var req struct {
-		Items []struct {
-			Text        string  `json:"text" binding:"required"`
-			Voice       string  `json:"voice"`
-			CharacterID string  `json:"character_id"`
-			Emotion     string  `json:"emotion"`
-		} `json:"items" binding:"required"`
-		Settings gin.H `json:"settings"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "請求參數錯誤: " + err.Error(),
-			},
-		})
-		return
-	}
-
-	// 設置默認語音
-	defaultVoice := "voice_001"
-	defaultSpeed := 1.0
-
-	// 提取文字列表
-	texts := make([]string, len(req.Items))
-	for i, item := range req.Items {
-		texts[i] = item.Text
-	}
-
-	// 調用批量 TTS 服務
-	responses, err := getTTSService().BatchGenerateSpeech(c.Request.Context(), texts, defaultVoice, defaultSpeed)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "BATCH_TTS_FAILED",
-				Message: "批量語音生成失敗: " + err.Error(),
-			},
-		})
-		return
-	}
-
-	// 構建批量結果
-	batchResults := []gin.H{}
-	for i, item := range req.Items {
-		voice := item.Voice
-		if voice == "" {
-			voice = defaultVoice
-		}
-		
-		result := gin.H{
-			"index":      i + 1,
-			"text":       item.Text,
-			"voice":      voice,
-			"character":  getCharacterByVoice(voice),
-			"audio_data": responses[i].AudioData,
-			"duration":   responses[i].Duration,
-			"file_size":  formatFileSize(responses[i].Size),
-			"status":     "completed",
-		}
-		batchResults = append(batchResults, result)
-	}
-
-	batchResponse := gin.H{
-		"batch_id":    utils.GenerateID(16),
-		"user_id":     userID,
-		"total_items": len(req.Items),
-		"results":     batchResults,
-		"summary": gin.H{
-			"successful":      len(req.Items),
-			"failed":          0,
-			"total_duration":  "62.5s",
-			"total_size":      "1.2MB",
-			"processing_time": "8.3s",
-		},
-		"download": gin.H{
-			"zip_url":    "https://example.com/tts/batch_" + utils.GenerateID(32) + ".zip",
-			"expires_at": time.Now().Add(24 * time.Hour),
-		},
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Message: "批量語音生成成功",
-		Data:    batchResponse,
-	})
-}
 
 // GetVoiceList godoc
 // @Summary      獲取語音列表
@@ -263,9 +170,24 @@ func GetVoiceList(c *gin.Context) {
 	// 從 TTS 服務獲取語音列表
 	availableVoices := getTTSService().GetAvailableVoices()
 	
+	// 從資料庫獲取所有角色信息
+	characters, err := getCharacterServiceForTTS().GetActiveCharacters(c.Request.Context())
+	if err != nil {
+		utils.Logger.WithError(err).Error("獲取角色列表失敗")
+	}
+
 	// 擴展語音信息
 	voices := []gin.H{}
 	for _, voice := range availableVoices {
+		// 尋找對應角色
+		var character *models.Character
+		for _, char := range characters {
+			if char.ID == voice["character_id"] {
+				character = char
+				break
+			}
+		}
+
 		voiceInfo := gin.H{
 			"voice_id":     voice["voice_id"],
 			"name":         voice["name"],
@@ -276,10 +198,19 @@ func GetVoiceList(c *gin.Context) {
 			"language":     "zh-TW",
 			"gender":       "male",
 			"age_range":    "25-35",
-			"personality":  getPersonalityByCharacter(voice["character"].(string)),
-			"emotions":     getEmotionsByCharacter(voice["character"].(string)),
 			"quality":      "premium",
 			"is_default":   voice["voice_id"] == "voice_001",
+		}
+
+		// 如果找到角色，使用資料庫中的信息
+		if character != nil {
+			voiceInfo["personality"] = character.Metadata.Tags // 使用標籤作為性格特點
+			voiceInfo["emotions"] = getEmotionsByCharacterType(string(character.Type)) // 根據角色類型獲取情感
+			voiceInfo["character"] = character.Name
+		} else {
+			// 如果找不到角色，使用預設值
+			voiceInfo["personality"] = []string{"溫和", "成熟"}
+			voiceInfo["emotions"] = []string{"neutral", "gentle"}
 		}
 		voices = append(voices, voiceInfo)
 	}
@@ -312,244 +243,110 @@ func GetVoiceList(c *gin.Context) {
 				"character_id": characterID,
 				"language":     language,
 			},
-			"categories": gin.H{
-				"by_character": gin.H{
-					"陸燁銘": 2,
-					"沈言墨": 1,
-				},
-				"by_quality": gin.H{
-					"premium":  3,
-					"standard": 0,
-				},
-			},
+			"categories": generateVoiceCategories(filteredVoices, characters),
 		},
 	})
 }
 
-// PreviewTTS godoc
-// @Summary      預覽語音
-// @Description  生成語音預覽片段
-// @Tags         TTS
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        request body object true "預覽請求"
-// @Success      200 {object} models.APIResponse "預覽成功"
-// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
-// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /tts/preview [post]
-func PreviewTTS(c *gin.Context) {
-	// 檢查認證
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: "未授權訪問",
-			},
-		})
-		return
-	}
 
-	var req struct {
-		Text    string `json:"text" binding:"required"`
-		VoiceID string `json:"voice_id" binding:"required"`
-		Emotion string `json:"emotion"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "請求參數錯誤: " + err.Error(),
-			},
-		})
-		return
-	}
-
-	// 調用 TTS 服務生成預覽語音
-	response, err := getTTSService().GenerateSpeech(c.Request.Context(), req.Text, req.VoiceID, 1.0)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "TTS_PREVIEW_FAILED",
-				Message: "語音預覽生成失敗: " + err.Error(),
-			},
-		})
-		return
-	}
-
-	// 構建預覽回應
-	preview := gin.H{
-		"preview_id": utils.GenerateID(16),
-		"user_id":    userID,
-		"text":       req.Text,
-		"voice_id":   req.VoiceID,
-		"emotion":    req.Emotion,
-		"audio": gin.H{
-			"audio_data": base64.StdEncoding.EncodeToString(response.AudioData), // Base64編碼的音頻數據
-			"audio_url":  fmt.Sprintf("data:audio/%s;base64,%s", response.Format, base64.StdEncoding.EncodeToString(response.AudioData)), // 可直接播放的 Data URL
-			"duration":   response.Duration,
-			"file_size":  formatFileSize(response.Size),
-			"format":     response.Format,
-			"expires_at": time.Now().Add(1 * time.Hour),
-		},
-		"voice_info": gin.H{
-			"name":      getVoiceNameByID(req.VoiceID),
-			"character": getCharacterByVoice(req.VoiceID),
-			"emotion":   req.Emotion,
-			"quality":   "preview",
-		},
-		"generated_at": time.Now(),
-		"note":         "預覽音質為標準品質，正式生成將使用高品質音效",
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Message: "語音預覽生成成功",
-		Data:    preview,
-	})
-}
-
-// GetTTSHistory godoc
-// @Summary      獲取語音歷史
-// @Description  獲取用戶的語音生成歷史記錄
-// @Tags         TTS
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        page query int false "頁碼" default(1)
-// @Param        limit query int false "每頁數量" default(20)
-// @Success      200 {object} models.APIResponse "獲取成功"
-// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /tts/history [get]
-func GetTTSHistory(c *gin.Context) {
-	// 檢查認證
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: "未授權訪問",
-			},
-		})
-		return
-	}
-
-	// 靜態數據回應 - 模擬語音歷史
-	history := []gin.H{
-		{
-			"tts_id":       "tts_001",
-			"text":         "你今天過得怎麼樣？",
-			"voice_name":   "陸燁銘標準音",
-			"character":    "陸燁銘",
-			"emotion":      "gentle",
-			"audio_url":    "https://example.com/tts/tts_001.mp3",
-			"duration":     "3.2s",
-			"generated_at": time.Now().AddDate(0, 0, -1),
-			"status":       "completed",
-		},
-		{
-			"tts_id":       "tts_002",
-			"text":         "我一直在想你...",
-			"voice_name":   "陸燁銘深情音",
-			"character":    "陸燁銘",
-			"emotion":      "romantic",
-			"audio_url":    "https://example.com/tts/tts_002.mp3",
-			"duration":     "4.1s",
-			"generated_at": time.Now().AddDate(0, 0, -2),
-			"status":       "completed",
-		},
-		{
-			"tts_id":       "tts_003",
-			"text":         "有什麼我可以幫助你的嗎？",
-			"voice_name":   "沈言墨溫雅音",
-			"character":    "沈言墨",
-			"emotion":      "caring",
-			"audio_url":    "https://example.com/tts/tts_003.mp3",
-			"duration":     "3.8s",
-			"generated_at": time.Now().AddDate(0, 0, -3),
-			"status":       "completed",
-		},
-	}
-
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Message: "獲取語音歷史成功",
-		Data: gin.H{
-			"user_id":      userID,
-			"history":      history,
-			"total_count":  len(history),
-			"statistics": gin.H{
-				"total_generated":   156,
-				"this_month":        23,
-				"favorite_voice":    "陸燁銘標準音",
-				"total_duration":    "15m 32s",
-				"storage_used":      "12.8MB",
-			},
-		},
-	})
-}
 
 
 // 輔助函數
 
 // getCharacterByVoice 根據語音ID獲取角色名稱
-func getCharacterByVoice(voiceID string) string {
-	voiceMap := map[string]string{
-		"voice_001": "陸燁銘",
-		"voice_002": "陸燁銘", 
-		"voice_003": "沈言墨",
+func getCharacterByVoice(ctx context.Context, voiceID, characterID string) string {
+	// 如果有直接提供角色ID，先嘗試獲取
+	if characterID != "" {
+		character, err := getCharacterServiceForTTS().GetCharacter(ctx, characterID)
+		if err == nil && character != nil {
+			return character.Name
+		}
+	}
+
+	// 從 TTS 服務獲取語音對應關係
+	availableVoices := getTTSService().GetAvailableVoices()
+	for _, voice := range availableVoices {
+		if voice["voice_id"] == voiceID {
+			if charID, ok := voice["character_id"].(string); ok && charID != "" {
+				character, err := getCharacterServiceForTTS().GetCharacter(ctx, charID)
+				if err == nil && character != nil {
+					return character.Name
+				}
+			}
+			if charName, ok := voice["character"].(string); ok {
+				return charName
+			}
+		}
 	}
 	
-	if character, exists := voiceMap[voiceID]; exists {
-		return character
-	}
-	return "陸燁銘" // 默認角色
+	return "沈宸" // 默認角色
 }
 
 // getVoiceNameByID 根據語音ID獲取語音名稱
-func getVoiceNameByID(voiceID string) string {
-	voiceMap := map[string]string{
-		"voice_001": "陸燁銘標準音",
-		"voice_002": "陸燁銘深情音",
-		"voice_003": "沈言墨溫雅音",
+func getVoiceNameByID(ctx context.Context, voiceID string) string {
+	// 從 TTS 服務獲取語音信息
+	availableVoices := getTTSService().GetAvailableVoices()
+	for _, voice := range availableVoices {
+		if voice["voice_id"] == voiceID {
+			if name, ok := voice["name"].(string); ok {
+				return name
+			}
+		}
 	}
 	
-	if name, exists := voiceMap[voiceID]; exists {
-		return name
-	}
-	return "陸燁銘標準音" // 默認語音
+	return "沈宸標準音" // 默認語音
 }
 
-// getPersonalityByCharacter 根據角色獲取性格標籤
-func getPersonalityByCharacter(character string) []string {
-	personalityMap := map[string][]string{
-		"陸燁銘": {"霸道", "溫柔", "成熟", "深情", "磁性"},
-		"沈言墨": {"溫雅", "知性", "儒雅", "溫和"},
+// getDefaultVoiceForCharacter 根據角色ID獲取預設語音
+func getDefaultVoiceForCharacter(ctx context.Context, characterID string) string {
+	// 從 TTS 服務獲取語音列表，尋找第一個匹配的語音
+	availableVoices := getTTSService().GetAvailableVoices()
+	for _, voice := range availableVoices {
+		if voice["character_id"] == characterID {
+			if voiceID, ok := voice["voice_id"].(string); ok {
+				return voiceID
+			}
+		}
 	}
 	
-	if personality, exists := personalityMap[character]; exists {
-		return personality
-	}
-	return []string{"溫和", "成熟"} // 默認性格
+	return "voice_001" // 默認語音
 }
 
-// getEmotionsByCharacter 根據角色獲取支持的情感
-func getEmotionsByCharacter(character string) []string {
-	emotionsMap := map[string][]string{
-		"陸燁銘": {"neutral", "romantic", "serious", "gentle", "dominant", "passionate"},
-		"沈言墨": {"gentle", "wise", "caring", "scholarly", "warm"},
+// getEmotionsByCharacterType 根據角色類型獲取支持的情感
+func getEmotionsByCharacterType(characterType string) []string {
+	switch strings.ToLower(characterType) {
+	case "dominant":
+		return []string{"neutral", "romantic", "serious", "gentle", "dominant", "passionate"}
+	case "gentle":
+		return []string{"gentle", "wise", "caring", "warm", "understanding"}
+	case "playful":
+		return []string{"cheerful", "playful", "excited", "warm", "energetic"}
+	default:
+		return []string{"neutral", "gentle"} // 默認情感
 	}
-	
-	if emotions, exists := emotionsMap[character]; exists {
-		return emotions
+}
+
+// generateVoiceCategories 產生語音分類統計
+func generateVoiceCategories(voices []gin.H, characters []*models.Character) gin.H {
+	characterCount := make(map[string]int)
+	qualityCount := make(map[string]int)
+
+	for _, voice := range voices {
+		// 統計角色分類
+		if charName, ok := voice["character"].(string); ok {
+			characterCount[charName]++
+		}
+
+		// 統計品質分類
+		if quality, ok := voice["quality"].(string); ok {
+			qualityCount[quality]++
+		}
 	}
-	return []string{"neutral", "gentle"} // 默認情感
+
+	return gin.H{
+		"by_character": characterCount,
+		"by_quality":   qualityCount,
+	}
 }
 
 // formatFileSize 格式化文件大小

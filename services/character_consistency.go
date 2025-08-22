@@ -1,10 +1,12 @@
 package services
 
 import (
+	"context"
 	"fmt"
 	"strings"
 	"time"
 	
+	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/sirupsen/logrus"
 )
@@ -12,6 +14,7 @@ import (
 // CharacterConsistencyChecker 角色一致性檢查器
 type CharacterConsistencyChecker struct {
 	characterTraits map[string]*CharacterTraits
+	characterService *CharacterService
 }
 
 // CharacterTraits 角色特徵定義
@@ -50,76 +53,192 @@ type ConsistencyViolation struct {
 func NewCharacterConsistencyChecker() *CharacterConsistencyChecker {
 	checker := &CharacterConsistencyChecker{
 		characterTraits: make(map[string]*CharacterTraits),
+		characterService: GetCharacterService(),
 	}
 	
-	// 初始化預設角色特徵
-	checker.initializeCharacterTraits()
+	// 從數據庫初始化角色特徵
+	checker.loadCharacterTraitsFromDB()
 	
 	return checker
 }
 
-// initializeCharacterTraits 初始化角色特徵定義
-func (cc *CharacterConsistencyChecker) initializeCharacterTraits() {
-	// 陸寒淵 - 霸道總裁
-	cc.characterTraits["char_001"] = &CharacterTraits{
-		CharacterID: "char_001",
-		Name:       "陸寒淵",
-		Age:        28,
-		Occupation: "總裁",
-		Personality: []string{
-			"霸道", "冷酷外表", "內心深情", "掌控慾強", "保護欲", 
-			"工作狂", "完美主義", "直接", "威嚴", "溫柔反差",
-		},
-		SpeakingStyle: []string{
-			"簡潔有力", "低沉磁性", "命令式語氣", "偶爾溫柔", 
-			"不多廢話", "威嚴感", "佔有慾表達",
-		},
-		Vocabularies: []string{
-			"我的", "只有我", "聽話", "乖", "過來", "不准", 
-			"給我", "讓我來", "你是我的", "掌控", "照顧你",
-		},
-		Restrictions: []string{
-			"不會過度示弱", "不會長篇大論", "不會使用可愛語氣", 
-			"不會過分謙遜", "保持商業精英形象",
-		},
+// loadCharacterTraitsFromDB 從數據庫載入角色特徵定義
+func (cc *CharacterConsistencyChecker) loadCharacterTraitsFromDB() {
+	ctx := context.Background()
+	
+	// 獲取所有活躍角色
+	characters, err := cc.characterService.GetActiveCharacters(ctx)
+	if err != nil {
+		utils.Logger.WithError(err).Error("載入角色特徵失敗，使用預設配置")
+		cc.loadDefaultTraits()
+		return
+	}
+	
+	// 為每個角色建立特徵配置
+	for _, character := range characters {
+		traits := cc.buildTraitsFromCharacter(character)
+		cc.characterTraits[character.ID] = traits
+		
+		utils.Logger.WithFields(logrus.Fields{
+			"character_id": character.ID,
+			"name":         character.Name,
+			"type":         character.Type,
+		}).Info("載入角色特徵配置")
+	}
+}
+
+// buildTraitsFromCharacter 根據角色數據建立特徵配置
+func (cc *CharacterConsistencyChecker) buildTraitsFromCharacter(character *models.Character) *CharacterTraits {
+	// 獲取本地化信息
+	var localization *models.CharacterL10N
+	if character.Content.Localizations != nil {
+		if l10n, exists := character.Content.Localizations["zh-TW"]; exists {
+			localization = &l10n
+		}
+	}
+	
+	// 如果沒有本地化信息，使用預設值
+	if localization == nil {
+		localization = &models.CharacterL10N{
+			Name:        &character.Name,
+			Description: stringPtr("AI 角色"),
+			Profession:  stringPtr("AI 助手"),
+			Age:         stringPtr("25"),
+		}
+	}
+	
+	// 解析年齡
+	age := 25
+	if localization.Age != nil && *localization.Age != "" {
+		if parsedAge := parseAge(*localization.Age); parsedAge > 0 {
+			age = parsedAge
+		}
+	}
+	
+	// 根據角色類型建立特徵
+	name := character.Name
+	if localization.Name != nil {
+		name = *localization.Name
+	}
+	
+	occupation := "AI 助手"
+	if localization.Profession != nil {
+		occupation = *localization.Profession
+	}
+	
+	traits := &CharacterTraits{
+		CharacterID: character.ID,
+		Name:        name,
+		Age:         age,
+		Occupation:  occupation,
+		Personality: character.Metadata.Tags, // 使用資料庫中的標籤作為性格特點
 		ConsistencyRules: map[string]float64{
-			"speaking_style":   0.25, // 說話風格權重
-			"personality":      0.30, // 性格一致性權重
-			"vocabulary":       0.20, // 用詞選擇權重
-			"behavior":         0.25, // 行為表現權重
+			"speaking_style": 0.25,
+			"personality":    0.30,
+			"vocabulary":     0.20,
+			"behavior":       0.25,
 		},
 	}
 	
-	// 沈言墨 - 溫柔醫生
-	cc.characterTraits["char_002"] = &CharacterTraits{
-		CharacterID: "char_002",
-		Name:       "沈言墨",
-		Age:        25,
-		Occupation: "醫學生",
-		Personality: []string{
-			"溫和", "細心", "關懷", "專業", "內向", 
-			"善良", "責任感", "耐心", "溫暖", "可靠",
-		},
-		SpeakingStyle: []string{
-			"溫和語調", "關切詢問", "專業建議", "輕聲細語", 
-			"體貼用詞", "醫學知識分享", "鼓勵性語言",
-		},
-		Vocabularies: []string{
-			"小心", "注意", "健康", "身體", "休息", "關心", 
-			"溫和", "慢慢來", "不用擔心", "我在這裡", "照顧自己",
-		},
-		Restrictions: []string{
-			"不會粗暴", "不會忽略健康問題", "不會使用命令語氣", 
-			"不會過於霸道", "保持專業素養",
-		},
+	// 從資料庫獲取語音風格和詞彙
+	cc.loadTraitsFromDatabase(character, traits)
+	
+	return traits
+}
+
+// loadTraitsFromDatabase 從資料庫載入角色特徵細節
+func (cc *CharacterConsistencyChecker) loadTraitsFromDatabase(character *models.Character, traits *CharacterTraits) {
+	// 從角色的語音風格中獲取特徵
+	if len(character.Behavior.SpeechStyles) > 0 {
+		speechStyle := character.Behavior.SpeechStyles[0] // 使用第一個活躍的語音風格
+		
+		// 語音風格描述
+		if speechStyle.Description != nil {
+			traits.SpeakingStyle = []string{*speechStyle.Description}
+		}
+		if speechStyle.Tone != nil {
+			traits.SpeakingStyle = append(traits.SpeakingStyle, *speechStyle.Tone)
+		}
+		
+		// 詞彙從關鍵詞中獲取
+		traits.Vocabularies = append(speechStyle.PositiveKeywords, speechStyle.NegativeKeywords...)
+		
+		// 限制從負面關鍵詞推導
+		for _, negative := range speechStyle.NegativeKeywords {
+			traits.Restrictions = append(traits.Restrictions, "不會使用「"+negative+"」")
+		}
+		
+		// 根據語音風格類型調整一致性權重
+		switch speechStyle.StyleType {
+		case models.StyleTypeRomantic:
+			traits.ConsistencyRules["speaking_style"] = 0.30
+		case models.StyleTypeIntimate:
+			traits.ConsistencyRules["vocabulary"] = 0.30
+		}
+	}
+	
+	// 如果沒有從資料庫獲取到足夠資料，使用類型預設值作為後備
+	if len(traits.SpeakingStyle) == 0 {
+		cc.setDefaultTraitsByType(character.Type, traits)
+	}
+}
+
+// setDefaultTraitsByType 根據角色類型設置預設特徵（後備）
+func (cc *CharacterConsistencyChecker) setDefaultTraitsByType(characterType models.CharacterType, traits *CharacterTraits) {
+	switch characterType {
+	case models.CharacterTypeDominant:
+		traits.SpeakingStyle = []string{"簡潔有力", "命令式語氣"}
+		traits.Vocabularies = []string{"命令", "掌控", "靠近"}
+		traits.Restrictions = []string{"不會過度示弱", "不會使用可愛語氣"}
+		
+	case models.CharacterTypeGentle:
+		traits.SpeakingStyle = []string{"溫和語調", "專業分析"}
+		traits.Vocabularies = []string{"理解", "溫柔", "觀察"}
+		traits.Restrictions = []string{"不會粗俗", "保持專業界線"}
+		traits.ConsistencyRules["speaking_style"] = 0.30
+		
+	case models.CharacterTypePlayful:
+		traits.SpeakingStyle = []string{"活潑有趣", "熱情表達"}
+		traits.Vocabularies = []string{"開心", "陽光", "溫暖"}
+		traits.Restrictions = []string{"不會冷漠", "保持陽光正面"}
+		
+	default:
+		traits.SpeakingStyle = []string{"自然對話"}
+		traits.Vocabularies = []string{"理解", "溫暖"}
+		traits.Restrictions = []string{"保持角色一致性"}
+	}
+}
+
+// loadDefaultTraits 載入預設特徵配置（作為後備）
+func (cc *CharacterConsistencyChecker) loadDefaultTraits() {
+	// 基本預設配置
+	cc.characterTraits["character_01"] = &CharacterTraits{
+		CharacterID: "character_01",
+		Name:       "沈宸",
+		Age:        33,
+		Occupation: "企業集團執行長",
+		Personality: []string{"霸道", "掌控欲強", "自信", "直接", "大方"},
+		SpeakingStyle: []string{"簡潔有力", "命令式語氣"},
+		Vocabularies: []string{"我的", "靠近", "命令", "掌控"},
+		Restrictions: []string{"不會過度示弱", "不會使用可愛語氣"},
 		ConsistencyRules: map[string]float64{
-			"speaking_style":   0.30, // 說話風格權重更高
-			"personality":      0.25, // 性格一致性
-			"vocabulary":       0.25, // 用詞溫和程度
-			"behavior":         0.20, // 關懷行為
+			"speaking_style": 0.25, "personality": 0.30, 
+			"vocabulary": 0.20, "behavior": 0.25,
 		},
 	}
 }
+
+// parseAge 解析年齡字符串
+func parseAge(ageStr string) int {
+	// 簡單的年齡解析，可以根據需要擴展
+	switch ageStr {
+	case "25": return 25
+	case "30": return 30
+	case "33": return 33
+	default: return 25
+	}
+}
+
 
 // CheckCharacterConsistency 檢查角色回應的一致性
 func (cc *CharacterConsistencyChecker) CheckCharacterConsistency(characterID, response string, context *ConversationContext) *ConsistencyCheckResult {
@@ -207,12 +326,12 @@ func (cc *CharacterConsistencyChecker) checkSpeakingStyle(traits *CharacterTrait
 	violations := []ConsistencyViolation{}
 	
 	switch traits.CharacterID {
-	case "char_001": // 陸寒淵
-		// 檢查是否過於冗長（霸道總裁應該簡潔）
+	case "character_01": // 沈宸
+		// 檢查是否過於冗長（霸道企業家應該簡潔）
 		if len([]rune(response)) > 200 {
 			violations = append(violations, ConsistencyViolation{
 				Type:        "speaking_style",
-				Description: "回應過於冗長，不符合霸道總裁簡潔有力的風格",
+				Description: "回應過於冗長，不符合霸道企業家簡潔有力的風格",
 				Severity:    "medium",
 				Weight:      0.3,
 				Context:     fmt.Sprintf("回應長度: %d 字符", len([]rune(response))),
@@ -225,7 +344,7 @@ func (cc *CharacterConsistencyChecker) checkSpeakingStyle(traits *CharacterTrait
 			if strings.Contains(response, pattern) {
 				violations = append(violations, ConsistencyViolation{
 					Type:        "speaking_style",
-					Description: "使用了過於謙遜的語言，不符合霸道總裁角色",
+					Description: "使用了過於謙遜的語言，不符合霸道企業家角色",
 					Severity:    "high",
 					Weight:      0.4,
 					Context:     fmt.Sprintf("檢測到謙遜用詞: %s", pattern),
@@ -233,14 +352,14 @@ func (cc *CharacterConsistencyChecker) checkSpeakingStyle(traits *CharacterTrait
 			}
 		}
 		
-	case "char_002": // 沈言墨
+	case "character_02": // 林知遠
 		// 檢查是否使用了粗暴的語言
-		harshPatterns := []string{"閉嘴", "滾", "給我", "不准", "必須"}
+		harshPatterns := []string{"閉嘴", "滾", "強烈指令", "粗俗"}
 		for _, pattern := range harshPatterns {
 			if strings.Contains(response, pattern) {
 				violations = append(violations, ConsistencyViolation{
 					Type:        "speaking_style",
-					Description: "使用了粗暴的語言，不符合溫柔醫生的風格",
+					Description: "使用了粗暴的語言，不符合溫柔心理師的風格",
 					Severity:    "high",
 					Weight:      0.5,
 					Context:     fmt.Sprintf("檢測到粗暴用詞: %s", pattern),
@@ -248,22 +367,56 @@ func (cc *CharacterConsistencyChecker) checkSpeakingStyle(traits *CharacterTrait
 			}
 		}
 		
-		// 檢查是否包含關懷元素
-		carePatterns := []string{"小心", "注意", "休息", "健康", "身體", "感覺"}
-		hasCareElement := false
-		for _, pattern := range carePatterns {
+		// 檢查是否包含專業元素
+		professionalPatterns := []string{"觀察", "理解", "情感", "專業", "溫柔", "親密"}
+		hasProfessionalElement := false
+		for _, pattern := range professionalPatterns {
 			if strings.Contains(response, pattern) {
-				hasCareElement = true
+				hasProfessionalElement = true
 				break
 			}
 		}
-		if !hasCareElement && len([]rune(response)) > 50 {
+		if !hasProfessionalElement && len([]rune(response)) > 50 {
 			violations = append(violations, ConsistencyViolation{
 				Type:        "speaking_style",
-				Description: "較長回應中缺乏關懷元素，不符合醫生角色特點",
+				Description: "較長回應中缺乏專業元素，不符合心理師角色特點",
 				Severity:    "low",
 				Weight:      0.2,
-				Context:     "未檢測到關懷用詞",
+				Context:     "未檢測到專業用詞",
+			})
+		}
+		
+	case "character_03": // 周曜
+		// 檢查是否使用了過於冷漠的語言
+		coldPatterns := []string{"冷漠", "距離感", "理性", "壓抑"}
+		for _, pattern := range coldPatterns {
+			if strings.Contains(response, pattern) {
+				violations = append(violations, ConsistencyViolation{
+					Type:        "speaking_style",
+					Description: "使用了過於冷漠的語言，不符合熱情歌手的風格",
+					Severity:    "high",
+					Weight:      0.4,
+					Context:     fmt.Sprintf("檢測到冷漠用詞: %s", pattern),
+				})
+			}
+		}
+		
+		// 檢查是否包含熱情元素
+		enthusiasticPatterns := []string{"開心", "熱情", "陽光", "溫暖", "音樂", "親暱"}
+		hasEnthusiasticElement := false
+		for _, pattern := range enthusiasticPatterns {
+			if strings.Contains(response, pattern) {
+				hasEnthusiasticElement = true
+				break
+			}
+		}
+		if !hasEnthusiasticElement && len([]rune(response)) > 50 {
+			violations = append(violations, ConsistencyViolation{
+				Type:        "speaking_style",
+				Description: "較長回應中缺乏熱情元素，不符合歌手角色特點",
+				Severity:    "low",
+				Weight:      0.2,
+				Context:     "未檢測到熱情用詞",
 			})
 		}
 	}
@@ -276,9 +429,9 @@ func (cc *CharacterConsistencyChecker) checkPersonality(traits *CharacterTraits,
 	violations := []ConsistencyViolation{}
 	
 	switch traits.CharacterID {
-	case "char_001": // 陸寒淵
+	case "character_01": // 沈宸
 		// 檢查掌控慾表達
-		controlPatterns := []string{"我的", "跟我", "聽我", "讓我", "交給我"}
+		controlPatterns := []string{"我的", "靠近", "命令", "盯著", "佔有", "掌握"}
 		hasControlElement := false
 		for _, pattern := range controlPatterns {
 			if strings.Contains(response, pattern) {
@@ -298,21 +451,74 @@ func (cc *CharacterConsistencyChecker) checkPersonality(traits *CharacterTraits,
 			})
 		}
 		
-	case "char_002": // 沈言墨
-		// 檢查溫和性格表達
-		gentlePatterns := []string{"溫柔", "輕輕", "慢慢", "輕撫", "細心", "溫暖"}
-		_ = gentlePatterns // 暫時未使用，保留用於未來擴展
+	case "character_02": // 林知遠
+		// 檢查溫柔專業性格表達
+		gentlePatterns := []string{"溫柔", "凝視", "理解", "專業", "深層", "內斂"}
+		hasGentleElement := false
+		for _, pattern := range gentlePatterns {
+			if strings.Contains(response, pattern) {
+				hasGentleElement = true
+				break
+			}
+		}
+		
+		// 對於較長回應，應該體現溫柔專業性格
+		if len([]rune(response)) > 100 && !hasGentleElement {
+			violations = append(violations, ConsistencyViolation{
+				Type:        "personality",
+				Description: "回應中缺乏溫柔專業性格的體現",
+				Severity:    "medium",
+				Weight:      0.3,
+				Context:     "較長回應未體現溫柔專業特質",
+			})
+		}
 		
 		// 檢查是否過於激進
-		aggressivePatterns := []string{"強烈", "激烈", "猛烈", "狂", "瘋狂"}
+		aggressivePatterns := []string{"強烈", "激烈", "猛烈", "狂", "瘋狂", "情緒失控"}
 		for _, pattern := range aggressivePatterns {
 			if strings.Contains(response, pattern) {
 				violations = append(violations, ConsistencyViolation{
 					Type:        "personality",
-					Description: "使用了過於激進的描述，不符合溫和性格",
+					Description: "使用了過於激進的描述，不符合溫柔性格",
 					Severity:    "medium",
 					Weight:      0.4,
 					Context:     fmt.Sprintf("檢測到激進用詞: %s", pattern),
+				})
+			}
+		}
+		
+	case "character_03": // 周曜
+		// 檢查熱情活潑性格表達
+		enthusiasticPatterns := []string{"熱情", "開朗", "親切", "活潑", "陽光", "溫暖"}
+		hasEnthusiasticElement := false
+		for _, pattern := range enthusiasticPatterns {
+			if strings.Contains(response, pattern) {
+				hasEnthusiasticElement = true
+				break
+			}
+		}
+		
+		// 對於較長回應，應該體現熱情性格
+		if len([]rune(response)) > 100 && !hasEnthusiasticElement {
+			violations = append(violations, ConsistencyViolation{
+				Type:        "personality",
+				Description: "回應中缺乏熱情性格的體現",
+				Severity:    "medium",
+				Weight:      0.3,
+				Context:     "較長回應未體現熱情特質",
+			})
+		}
+		
+		// 檢查是否過於冷漠或壓抑
+		coldPatterns := []string{"冷漠", "壓抑", "理性", "距離感"}
+		for _, pattern := range coldPatterns {
+			if strings.Contains(response, pattern) {
+				violations = append(violations, ConsistencyViolation{
+					Type:        "personality",
+					Description: "使用了過於冷漠的描述，不符合熱情性格",
+					Severity:    "medium",
+					Weight:      0.4,
+					Context:     fmt.Sprintf("檢測到冷漠用詞: %s", pattern),
 				})
 			}
 		}
@@ -411,30 +617,43 @@ func (cc *CharacterConsistencyChecker) generateSuggestions(traits *CharacterTrai
 	}
 	
 	switch traits.CharacterID {
-	case "char_001": // 陸寒淵
+	case "character_01": // 沈宸
 		if violationTypes["speaking_style"] {
 			suggestions = append(suggestions, "保持簡潔有力的語言風格，避免冗長描述")
 			suggestions = append(suggestions, "使用更多命令式和肯定式語氣")
 		}
 		if violationTypes["personality"] {
-			suggestions = append(suggestions, "增加掌控慾和保護欲的表達")
-			suggestions = append(suggestions, "體現霸道總裁的威嚴感和佔有慾")
+			suggestions = append(suggestions, "增加掌控慾和保護慾的表達")
+			suggestions = append(suggestions, "體現霸道企業家的威嚴感和支配性")
 		}
 		if violationTypes["vocabulary"] {
-			suggestions = append(suggestions, "多使用「我的」、「聽話」、「讓我來」等特徵詞彙")
+			suggestions = append(suggestions, "多使用「我的」、「靠近」、「命令」等特徵詞彙")
 		}
 		
-	case "char_002": // 沈言墨
+	case "character_02": // 林知遠
 		if violationTypes["speaking_style"] {
-			suggestions = append(suggestions, "保持溫和細膩的語言風格")
-			suggestions = append(suggestions, "增加關懷和健康相關的表達")
+			suggestions = append(suggestions, "保持溫和專業的語言風格")
+			suggestions = append(suggestions, "增加專業分析和理解相關的表達")
 		}
 		if violationTypes["personality"] {
-			suggestions = append(suggestions, "強化溫柔體貼的性格特點")
-			suggestions = append(suggestions, "避免過於激進或強勢的表達")
+			suggestions = append(suggestions, "強化溫柔專業的性格特點")
+			suggestions = append(suggestions, "避免過於激進或情緒失控的表達")
 		}
 		if violationTypes["vocabulary"] {
-			suggestions = append(suggestions, "多使用「小心」、「注意身體」、「溫柔」等特徵詞彙")
+			suggestions = append(suggestions, "多使用「觀察」、「理解」、「專業」等特徵詞彙")
+		}
+		
+	case "character_03": // 周曜
+		if violationTypes["speaking_style"] {
+			suggestions = append(suggestions, "保持活潑陽光的語言風格")
+			suggestions = append(suggestions, "增加熱情和音樂相關的表達")
+		}
+		if violationTypes["personality"] {
+			suggestions = append(suggestions, "強化熱情開朗的性格特點")
+			suggestions = append(suggestions, "避免過於冷漠或距離感的表達")
+		}
+		if violationTypes["vocabulary"] {
+			suggestions = append(suggestions, "多使用「開心」、「音樂」、「溫暖」等特徵詞彙")
 		}
 	}
 	

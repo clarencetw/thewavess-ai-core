@@ -19,158 +19,18 @@
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
     <!-- 簡約化自定義樣式 -->
+    <!-- 使用統一的樣式文件 -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
     <style>
-        /* 基礎設定 */
-        .line-clamp-1 {
-            display: -webkit-box;
-            -webkit-line-clamp: 1;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        
-        .line-clamp-none {
-            display: block;
-        }
-        
+        /* 頁面專用樣式 */
         body {
             overflow-x: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         
-        /* 簡化的動作敘述 */
-        .action-narrative {
-            background: #f8f9fa;
-            border-left: 3px solid #6366f1;
-            padding: 8px 12px;
-            margin-top: 8px;
-            font-style: italic;
-            font-size: 0.875rem;
-            color: #4b5563;
-            border-radius: 4px;
-        }
-        
-        /* 簡化的場景描述 */
-        .scene-description {
-            background: #f1f5f9;
-            border-left: 3px solid #0ea5e9;
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            font-size: 0.875rem;
-            color: #475569;
-            border-radius: 4px;
-        }
-        
-        /* 消息內容 */
         .message-content {
             line-height: 1.6;
-        }
-        
-        /* 簡化的按鈕樣式 */
-        .btn-simple {
-            background: #ffffff;
-            border: 1px solid #e5e7eb;
-            color: #374151;
-            padding: 8px 16px;
-            border-radius: 6px;
-            transition: all 0.15s ease;
-        }
-        
-        .btn-simple:hover {
-            background: #f9fafb;
-            border-color: #d1d5db;
-        }
-        
-        .btn-primary {
-            background: #6366f1;
-            border: 1px solid #6366f1;
-            color: white;
-        }
-        
-        .btn-primary:hover {
-            background: #5856eb;
-        }
-        
-        /* 去除過度的陰影和圓角 */
-        .card-minimal {
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-        }
-        
-        /* 統一的間距 */
-        .space-minimal > * + * {
-            margin-top: 1rem;
-        }
-        
-        /* TTS 按鈕樣式 */
-        .tts-button {
-            background: transparent;
-            border: none;
-            color: #6b7280;
-            cursor: pointer;
-            transition: all 0.2s ease;
-            padding: 6px;
-            border-radius: 4px;
-            min-width: 24px;
-            min-height: 24px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        
-        .tts-button:hover {
-            color: #3b82f6;
-            background: #f3f4f6;
-        }
-        
-        .tts-button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-        }
-        
-        .tts-button.playing {
-            color: #3b82f6;
-            animation: pulse 1.5s infinite;
-        }
-        
-        .tts-button.loading {
-            color: #f59e0b;
-            animation: spin 1s linear infinite;
-        }
-        
-        /* 手機版 TTS 按鈕優化 */
-        @media (max-width: 768px) {
-            .tts-button {
-                padding: 8px;
-                min-width: 32px;
-                min-height: 32px;
-            }
-            
-            .tts-button i {
-                font-size: 14px !important;
-            }
-        }
-        
-        /* 觸控設備優化 */
-        @media (hover: none) and (pointer: coarse) {
-            .tts-button:hover {
-                background: transparent;
-            }
-            
-            .tts-button:active {
-                background: #e5e7eb;
-                transform: scale(0.95);
-            }
-        }
-        
-        @keyframes pulse {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
-        }
-        
-        @keyframes spin {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
         }
     </style>
     
@@ -337,36 +197,6 @@
                 </div>
             </div>
             
-            <!-- 簡化的內容分析 -->
-            <div class="card-minimal p-4">
-                <h3 class="font-medium mb-4">內容分析</h3>
-                
-                <div class="space-y-3">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">等級</span>
-                        <span id="currentNsfwLevel" class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">Level 1</span>
-                    </div>
-                    
-                    <div class="text-xs text-gray-600" id="nsfwDescription">
-                        日常對話內容，安全適宜
-                    </div>
-                    
-                    <div class="text-xs text-gray-500">
-                        AI 引擎: <span id="currentEngine">OpenAI</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 簡化的對話記錄 -->
-            <div class="card-minimal p-4 flex-1">
-                <h3 class="font-medium mb-4">對話記錄</h3>
-                
-                <div class="space-y-2 overflow-y-auto max-h-40" id="chatHistory">
-                    <div class="text-sm text-center py-4 text-gray-500">
-                        暫無歷史記錄
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
     
@@ -416,36 +246,6 @@
                 </div>
             </div>
             
-            <!-- 內容分析 -->
-            <div class="space-y-3">
-                <h4 class="font-medium">內容分析</h4>
-                
-                <div class="space-y-2">
-                    <div class="flex items-center justify-between">
-                        <span class="text-sm">等級</span>
-                        <span id="mobileCurrentNsfwLevel" class="bg-gray-100 text-gray-700 px-2 py-1 rounded text-xs">Level 1</span>
-                    </div>
-                    
-                    <div class="text-xs text-gray-600" id="mobileNsfwDescription">
-                        日常對話內容，安全適宜
-                    </div>
-                    
-                    <div class="text-xs text-gray-500">
-                        AI 引擎: <span id="mobileCurrentEngine">OpenAI</span>
-                    </div>
-                </div>
-            </div>
-            
-            <!-- 對話記錄 -->
-            <div class="space-y-3">
-                <h4 class="font-medium">對話記錄</h4>
-                
-                <div class="space-y-2 max-h-40 overflow-y-auto" id="mobileChatHistory">
-                    <div class="text-sm text-center py-4 text-gray-500">
-                        暫無歷史記錄
-                    </div>
-                </div>
-            </div>
         </div>
     </div>
     
@@ -510,8 +310,8 @@
                 return;
             }
             
-            // 載入選中的角色
-            currentCharacter = AppState.selectedCharacter || Utils.storage.get('selectedCharacter');
+            // 載入選中的角色（按順序獲取）
+            currentCharacter = await getCurrentCharacter();
             if (!currentCharacter) {
                 Router.navigate('/character');
                 return;
@@ -527,11 +327,42 @@
             setupEventListeners();
         });
         
+        // 獲取角色頭像URL
+        function getCharacterAvatar(character) {
+            if (!character) return '';
+            return character.avatar_url || '';
+        }
+        
+        // 獲取當前角色
+        async function getCurrentCharacter() {
+            // 首先從本地存儲獲取（從 character.html 傳遞的）
+            let storedCharacter = Utils.storage.get('selectedCharacter');
+            if (storedCharacter) {
+                return storedCharacter;
+            }
+            
+            // 直接從 AppState 獲取選中的角色
+            if (AppState.selectedCharacter) {
+                return AppState.selectedCharacter;
+            }
+            
+            // 如果沒有選中角色，嘗試從預設角色獲取
+            if (AppState.preferences?.default_character) {
+                const result = await ApiClient.get(`/api/v1/character/${AppState.preferences.default_character}`);
+                if (result.success && result.data) {
+                    AppState.selectedCharacter = result.data;
+                    return result.data;
+                }
+            }
+            
+            return null;
+        }
+        
         // 初始化頁面
         function initializePage() {
             // 設置角色信息
-            document.getElementById('characterAvatar').src = currentCharacter.avatar;
-            document.getElementById('welcomeAvatar').src = currentCharacter.avatar;
+            document.getElementById('characterAvatar').src = getCharacterAvatar(currentCharacter);
+            document.getElementById('welcomeAvatar').src = getCharacterAvatar(currentCharacter);
             document.getElementById('characterName').textContent = currentCharacter.name;
             document.getElementById('characterStatus').textContent = '在線';
             
@@ -544,13 +375,9 @@
         
         // 設置歡迎消息
         function setupWelcomeMessage() {
-            const welcomeMessages = {
-                'char_001': '你好，我是陸寒淵。很高興認識你...有什麼需要我幫助的嗎？',
-                'char_002': '你好呀，我是沈言墨。今天過得怎麼樣？需要聊聊嗎？',
-                'char_003': '歡迎來到知識的世界，我是林夜白。有什麼想了解的嗎？'
-            };
-            
-            const welcomeMessage = welcomeMessages[currentCharacter.id] || '你好！很高興與你對話。';
+            // 使用角色 metadata 中的歡迎消息，如果沒有則使用通用消息
+            const welcomeMessage = currentCharacter.metadata?.welcome_message || 
+                                 `你好，我是${currentCharacter.name}。很高興與你對話！`;
             
             // 更新頁面上的歡迎消息
             document.getElementById('welcomeMessage').textContent = welcomeMessage;
@@ -559,10 +386,34 @@
         // 設置快速回復
         function setupQuickReplies() {
             const quickReplies = [
+                // 問候類
                 { text: '你好', value: '你好' },
+                { text: '早安', value: '早安，今天過得怎麼樣？' },
+                { text: '晚安', value: '晚安，要好好休息喔' },
+                
+                // 日常聊天
                 { text: '今天過得如何？', value: '今天過得如何？' },
                 { text: '想聊聊', value: '我想和你聊聊' },
-                { text: '工作話題', value: '聊聊工作的事' }
+                { text: '心情不好', value: '我今天心情不太好' },
+                { text: '很開心', value: '我今天很開心！' },
+                
+                // 話題類
+                { text: '工作話題', value: '聊聊工作的事' },
+                { text: '興趣愛好', value: '聊聊你的興趣愛好' },
+                { text: '電影推薦', value: '能推薦一些好看的電影嗎？' },
+                { text: '音樂分享', value: '最近有聽什麼好聽的音樂嗎？' },
+                
+                // 情感互動
+                { text: '想你了', value: '我想你了' },
+                { text: '謝謝你', value: '謝謝你陪伴我' },
+                { text: '安慰我', value: '能安慰我一下嗎？' },
+                { text: '鼓勵我', value: '給我一些鼓勵吧' },
+                
+                // 遊戲互動
+                { text: '講個笑話', value: '講個笑話給我聽' },
+                { text: '猜謎遊戲', value: '我們來玩猜謎遊戲吧' },
+                { text: '聊聊夢想', value: '聊聊彼此的夢想' },
+                { text: '假如遊戲', value: '假如你有超能力會做什麼？' }
             ];
             
             const container = document.getElementById('quickReplies');
@@ -575,7 +426,7 @@
         async function initializeChat() {
             try {
                 // 查詢該角色的現有會話
-                const sessionsResult = await ApiClient.get(`/api/v1/chat/sessions?character_id=${currentCharacter.id}`);
+                const sessionsResult = await SpecializedApiClients.Chat.getSessions(currentCharacter.id);
                 
                 if (sessionsResult.success && sessionsResult.data && sessionsResult.data.sessions && sessionsResult.data.sessions.length > 0) {
                     // 使用最新的會話（按創建時間排序）
@@ -604,7 +455,7 @@
                 await createNewChatSession();
                 
             } catch (error) {
-                console.error('初始化聊天失敗:', error);
+                UI.handleError(error, '初始化聊天');
                 UI.showToast('初始化聊天失敗，創建本地會話', 'warning');
                 createLocalSession();
             }
@@ -613,10 +464,7 @@
         // 創建新的聊天會話
         async function createNewChatSession() {
             try {
-                const result = await ApiClient.post('/api/v1/chat/session', {
-                    character_id: currentCharacter.id,
-                    title: `與 ${currentCharacter.name} 的對話`
-                });
+                const result = await SpecializedApiClients.Chat.createSession(currentCharacter.id, `與 ${currentCharacter.name} 的對話`);
                 
                 if (result.success) {
                     currentSession = result.data;
@@ -645,8 +493,7 @@
                     throw new Error(result.error?.message || '創建會話失敗');
                 }
             } catch (error) {
-                console.error('創建會話失敗:', error);
-                UI.showToast('創建會話失敗: ' + error.message, 'error');
+                UI.handleError(error, '創建會話');
                 
                 // 創建本地會話
                 createLocalSession();
@@ -662,7 +509,7 @@
             
             try {
                 console.log('載入歷史記錄，會話ID:', currentSession.id);
-                const result = await ApiClient.get(`/api/v1/chat/session/${currentSession.id}/history`);
+                const result = await SpecializedApiClients.Chat.getHistory(currentSession.id);
                 
                 if (result.success && result.data && result.data.messages && result.data.messages.length > 0) {
                     // 清空現有消息，將重新載入歷史記錄
@@ -676,7 +523,9 @@
                                 timestamp: message.created_at
                             });
                         } else if (message.role === 'assistant') {
-                            addMessageToChat('ai', message.content, {
+                            // 使用標準的 content 欄位
+                            const dialogueContent = message.content || '';
+                            addMessageToChat('ai', dialogueContent, {
                                 scene_description: message.scene_description,
                                 character_action: message.character_action,
                                 nsfw_level: message.nsfw_level || 1,
@@ -701,8 +550,6 @@
                         timestamp: msg.created_at
                     }));
                     
-                    // 更新側邊欄歷史記錄
-                    updateChatHistorySidebar();
                     
                     const messageCount = result.data.messages ? result.data.messages.length : 0;
                     UI.showToast(`載入了 ${messageCount} 條歷史消息`, 'info');
@@ -711,7 +558,7 @@
                     console.log('沒有歷史記錄，保持歡迎消息');
                 }
             } catch (error) {
-                console.error('載入對話歷史失敗:', error);
+                UI.handleError(error, '載入對話歷史');
                 UI.showToast('載入歷史記錄失敗', 'warning');
             }
         }
@@ -753,14 +600,9 @@
             }
             
             try {
-                // 使用角色信息中的場景描述，如果沒有則使用默認描述
-                const defaultScenes = {
-                    'char_001': '陸寒淵坐在他的專屬辦公室裡，陽光透過落地窗灑在他英俊的側臉上',
-                    'char_002': '沈言墨穿著整潔的白大褂，在溫馨的診療室裡溫和地看著你',
-                    'char_003': '你們在一個安靜舒適的環境中準備開始對話'
-                };
-                
-                const sceneText = defaultScenes[currentCharacter.id] || '你們在一個安靜舒適的環境中準備開始對話...';
+                // 使用角色 metadata 中的場景描述
+                const sceneText = currentCharacter.metadata?.default_scene || 
+                                `${currentCharacter.name}在一個舒適的環境中，準備與你開始對話...`;
                 document.getElementById('sceneText').textContent = sceneText;
             } catch (error) {
                 console.log('更新場景描述時發生錯誤:', error);
@@ -817,10 +659,7 @@
             
             try {
                 // 發送到 API
-                const result = await ApiClient.post('/api/v1/chat/message', {
-                    session_id: currentSession.id,
-                    message: message
-                });
+                const result = await SpecializedApiClients.Chat.sendMessage(currentSession.id, message);
                 
                 if (result.success && result.data) {
                     // 處理 AI 回應
@@ -829,12 +668,7 @@
                     throw new Error(result.error?.message || 'AI 回應失敗');
                 }
             } catch (error) {
-                console.error('發送消息失敗:', error);
-                
-                // 生成本地回應
-                generateLocalResponse(message);
-                
-                UI.showToast('已切換到離線模式', 'warning');
+                UI.handleError(error, '發送消息');
             } finally {
                 setAIResponding(false);
             }
@@ -862,6 +696,10 @@
         
         // 添加消息到聊天區
         function addMessageToChat(sender, content, metadata = {}) {
+            // 確保 content 不是 undefined 或 null
+            if (!content) {
+                content = '';
+            }
             const messagesList = document.getElementById('messagesList');
             const messageDiv = document.createElement('div');
             
@@ -899,7 +737,7 @@
                 const messageId = 'msg_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
                 
                 messageDiv.innerHTML = `
-                    <img class="w-6 h-6 md:w-8 md:h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                    <img class="w-6 h-6 md:w-8 md:h-8 rounded-full flex-shrink-0" src="${getCharacterAvatar(currentCharacter)}" alt="AI">
                     <div class="bg-white border border-gray-200 shadow-xl rounded-lg p-2 md:p-3 max-w-[85%] md:max-w-[80%]">
                         ${sceneHtml}
                         ${dialogue ? `<p class="message-content text-sm md:text-base">${dialogue}</p>` : ''}
@@ -908,7 +746,9 @@
                             <span>${metadata.timestamp ? Utils.formatShortTime(metadata.timestamp) : Utils.formatShortTime(new Date())}</span>
                             <div class="flex items-center space-x-2">
                                 ${metadata.nsfw_level ? `<span class="bg-gray-600 text-white px-1 py-0.5 rounded text-xs">L${metadata.nsfw_level}</span>` : ''}
-                                <button class="tts-button" onclick="toggleTTS('${messageId}', '${content.replace(/'/g, "&#39;").replace(/"/g, "&quot;")}')") title="語音播放" data-message-id="${messageId}">
+                                ${metadata.ai_engine ? `<span class="bg-blue-500 text-white px-1 py-0.5 rounded text-xs">${metadata.ai_engine === 'grok' ? 'Grok' : 'GPT'}</span>` : ''}
+                                ${metadata.response_time ? `<span class="bg-green-500 text-white px-1 py-0.5 rounded text-xs">${metadata.response_time}ms</span>` : ''}
+                                <button class="tts-button" onclick="toggleTTS('${messageId}', '${content.replace(/'/g, "&#39;").replace(/"/g, "&quot;")}')" title="語音播放" data-message-id="${messageId}">
                                     <i class="fas fa-volume-up text-xs"></i>
                                 </button>
                                 <button class="hover:text-blue-500 transition-colors" onclick="regenerateMessage(this)" title="重新生成">
@@ -943,86 +783,86 @@
                 messageId: sender === 'ai' ? messageDiv.querySelector('[data-message-id]')?.getAttribute('data-message-id') : null
             });
             
-            // 更新側邊欄歷史記錄
-            updateChatHistorySidebar();
         }
         
         // 處理 AI 回應
-        function handleAIResponse(responseData) {
-            // 添加 AI 消息 - 使用實際的API響應字段
-            addMessageToChat('ai', responseData.content || responseData.character_dialogue, {
-                scene_description: responseData.scene_description,
-                character_action: responseData.character_action,
-                nsfw_level: responseData.nsfw_level || 0,
-                ai_engine: responseData.ai_engine
+        function handleAIResponse(apiResponse) {
+            console.log('收到 AI 回應:', apiResponse);
+            
+            // 使用標準化函數處理 API 響應
+            const normalizedData = ResponseNormalizer.normalizeMessageResponse(apiResponse);
+            console.log('標準化後的數據:', normalizedData);
+            
+            if (!normalizedData) {
+                console.error('Invalid API response:', apiResponse);
+                UI.showToast('無效的 API 響應', 'error');
+                return;
+            }
+            
+            // 添加 AI 消息
+            addMessageToChat('ai', normalizedData.content, {
+                scene_description: normalizedData.scene_description,
+                character_action: normalizedData.character_action,
+                nsfw_level: normalizedData.nsfw_level,
+                ai_engine: normalizedData.ai_engine,
+                response_time: normalizedData.response_time,
+                special_event: normalizedData.special_event
             });
             
+            // 檢查引擎選擇是否正確
+            const engineValid = NSFWSystem.validateEngine(normalizedData.nsfw_level, normalizedData.ai_engine);
+            if (!engineValid) {
+                console.warn(`Engine mismatch: Level ${normalizedData.nsfw_level} should use ${NSFWSystem.getExpectedEngine(normalizedData.nsfw_level)}, but got ${normalizedData.ai_engine}`);
+            }
+            
             // 更新情感狀態
-            if (responseData.emotion_state) {
-                updateEmotionState(responseData.emotion_state);
+            if (normalizedData.emotion_state) {
+                const emotion = ResponseNormalizer.normalizeEmotionResponse(normalizedData.emotion_state);
+                updateEmotionState(emotion);
             }
             
             // 更新 NSFW 檢測信息
-            updateNSFWDisplay(responseData.nsfw_level || 0, responseData.ai_engine);
+            updateNSFWDisplay(normalizedData.nsfw_level, normalizedData.ai_engine);
             
             // 更新場景描述
-            if (responseData.scene_description) {
-                document.getElementById('sceneText').textContent = responseData.scene_description;
+            if (normalizedData.scene_description) {
+                document.getElementById('sceneText').textContent = normalizedData.scene_description;
+            }
+            
+            // 顯示特殊事件
+            if (normalizedData.special_event && normalizedData.special_event.type) {
+                let eventDescription = normalizedData.special_event.description || '';
+                
+                // 翻譯關係里程碑中的英文關係狀態
+                if (normalizedData.special_event.type === 'relationship_milestone') {
+                    eventDescription = eventDescription
+                        .replace(/stranger/g, '陌生人')
+                        .replace(/acquaintance/g, '認識')
+                        .replace(/friend/g, '朋友')
+                        .replace(/close_friend/g, '好友')  
+                        .replace(/romantic/g, '浪漫')
+                        .replace(/lover/g, '戀人');
+                }
+                
+                const eventMsg = `關係里程碑: ${eventDescription}`;
+                UI.showToast(eventMsg, 'info');
             }
             
             // 保存到聊天歷史
-            if (currentSession && responseData.id) {
+            if (currentSession && normalizedData.id) {
+                currentSession.messages = currentSession.messages || [];
                 currentSession.messages.push({
-                    id: responseData.id,
-                    role: responseData.role || 'assistant',
-                    content: responseData.content,
-                    timestamp: responseData.created_at || moment().toISOString()
+                    id: normalizedData.id,
+                    role: normalizedData.role,
+                    content: normalizedData.content,
+                    timestamp: normalizedData.created_at
                 });
+                
+                // 更新本地存儲
+                Utils.storage.set('currentSession', currentSession);
             }
         }
         
-        // 生成本地回應
-        function generateLocalResponse(userMessage) {
-            const responses = {
-                'char_001': [
-                    '嗯，我明白你的意思。作為一個商業領袖，我認為...',
-                    '這確實是個有趣的觀點。讓我們來討論一下...',
-                    '你的想法很有道理。不過，從我的經驗來看...'
-                ],
-                'char_002': [
-                    '你說得對呢。作為醫生，我經常遇到類似的情況...',
-                    '這聽起來很重要。讓我們一起想想解決方案...',
-                    '我很理解你的感受。要不要跟我詳細說說？'
-                ],
-                'char_003': [
-                    '從學術的角度來看，這個問題很值得深入探討...',
-                    '根據我的研究，這種現象有著深層的原因...',
-                    '這讓我想到了一個古老的哲學問題...'
-                ]
-            };
-            
-            const characterResponses = responses[currentCharacter.id] || [
-                '這是一個很有趣的話題，讓我們繼續聊聊吧。',
-                '我很喜歡和你的對話，請告訴我更多吧。',
-                '你的想法總是讓我印象深刻。'
-            ];
-            
-            const randomResponse = characterResponses[Math.floor(Math.random() * characterResponses.length)];
-            
-            // 模擬延遲
-            setTimeout(() => {
-                addMessageToChat('ai', randomResponse, {
-                    scene_description: null,
-                    character_action: '他溫和地看著你，等待你的回應',
-                    nsfw_level: 1
-                });
-                
-                // 輕微增加好感度
-                emotionState.affection = Math.min(emotionState.affection + 1, 100);
-                updateEmotionDisplay();
-                updateNSFWDisplay(1, 'local');
-            }, 1000 + Math.random() * 2000);
-        }
         
         // 設置 AI 回應狀態
         function setAIResponding(responding) {
@@ -1078,26 +918,27 @@
         function getRelationshipText(relationship) {
             const relationshipMap = {
                 'stranger': '陌生人',
+                'acquaintance': '認識',
                 'friend': '朋友',
                 'close_friend': '好友',
-                'ambiguous': '曖昧',
+                'romantic': '浪漫',
                 'lover': '戀人'
             };
             return relationshipMap[relationship] || '陌生人';
         }
         
-        // 更新 NSFW 顯示
+        // 更新 NSFW 顯示（保留用於其他部分使用）
         function updateNSFWDisplay(level, engine) {
-            const levelElement = document.getElementById('currentNsfwLevel');
-            const descriptionElement = document.getElementById('nsfwDescription');
-            const engineElement = document.getElementById('currentEngine');
-            
-            const levelInfo = NSFWSystem.getLevelInfo(level);
-            
-            levelElement.textContent = `Level ${level}`;
-            levelElement.className = `bg-gray-600 text-white px-2 py-1 rounded text-xs font-medium`;
-            descriptionElement.textContent = levelInfo.description;
-            engineElement.textContent = engine === 'grok' ? 'Grok' : 'OpenAI';
+            // 只保留核心邏輯，確保不會出錯
+            if (level && engine) {
+                console.log(`NSFW Level: ${level}, Engine: ${engine}`);
+                
+                // 更新聊天狀態顯示
+                const statusElement = document.querySelector('.chat-status');
+                if (statusElement) {
+                    statusElement.textContent = `${engine.toUpperCase()} L${level}`;
+                }
+            }
         }
         
         // 更新對話狀態
@@ -1131,7 +972,7 @@
                     // 清空當前消息
                     document.getElementById('messagesList').innerHTML = `
                         <div class="flex items-start space-x-3">
-                            <img class="w-8 h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                            <img class="w-8 h-8 rounded-full flex-shrink-0" src="${getCharacterAvatar(currentCharacter)}" alt="AI">
                             <div class="bg-white border rounded p-3 max-w-[80%]">
                                 <p>正在創建新的對話會話...</p>
                             </div>
@@ -1143,7 +984,7 @@
                     await createNewChatSession();
                     UI.showToast('新會話創建成功', 'success');
                 } catch (error) {
-                    console.error('創建新會話失敗:', error);
+                    UI.handleError(error, '創建新會話');
                     UI.showToast('創建新會話失敗，重新載入頁面', 'error');
                     location.reload();
                 }
@@ -1180,7 +1021,7 @@
             if (confirm('確定要清空所有對話記錄嗎？此操作無法撤銷。')) {
                 document.getElementById('messagesList').innerHTML = `
                     <div class="flex items-start space-x-3">
-                        <img class="w-8 h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                        <img class="w-8 h-8 rounded-full flex-shrink-0" src="${getCharacterAvatar(currentCharacter)}" alt="AI">
                         <div class="bg-white border rounded p-3 max-w-[80%]">
                             <p>對話已清空，我們重新開始吧！</p>
                         </div>
@@ -1200,40 +1041,13 @@
             messageInput.focus();
         }
         
-        // 更新側邊欄歷史記錄
-        function updateChatHistorySidebar() {
-            const historyContainer = document.getElementById('chatHistory');
-            
-            if (messageHistory.length === 0) {
-                historyContainer.innerHTML = '<div class="text-sm text-center py-4">暫無歷史記錄</div>';
-                return;
-            }
-            
-            const recentMessages = messageHistory.slice(-10).reverse(); // 最近10條消息
-            
-            historyContainer.innerHTML = recentMessages.map((msg, index) => {
-                const time = Utils.formatShortTime(msg.timestamp);
-                const preview = msg.content.length > 20 ? msg.content.substring(0, 20) + '...' : msg.content;
-                const isUser = msg.sender === 'user';
-                
-                return `
-                    <div class="p-2 rounded hover:bg-white hover:bg-opacity-10 cursor-pointer text-sm border-l-2 ${isUser ? 'border-blue-400' : 'border-green-400'}">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="font-medium ${isUser ? 'text-blue-400' : 'text-green-400'}">${isUser ? '你' : currentCharacter.name}</span>
-                            <span class="text-xs opacity-75">${time}</span>
-                        </div>
-                        <div class="text-xs opacity-75">${preview}</div>
-                    </div>
-                `;
-            }).join('');
-        }
         
         // 顯示會話列表
         async function showSessionList() {
             UI.modal.show('sessionListModal');
             
             try {
-                const result = await ApiClient.get(`/api/v1/chat/sessions?character_id=${currentCharacter.id}`);
+                const result = await SpecializedApiClients.Chat.getSessions(currentCharacter.id);
                 const sessionsList = document.getElementById('sessionsList');
                 
                 if (result.success && result.data && result.data.sessions && result.data.sessions.length > 0) {
@@ -1266,7 +1080,7 @@
                     sessionsList.innerHTML = '<div class="text-center py-8 text-gray-500">沒有找到對話會話</div>';
                 }
             } catch (error) {
-                console.error('載入會話列表失敗:', error);
+                UI.handleError(error, '載入會話列表');
                 document.getElementById('sessionsList').innerHTML = '<div class="text-center py-8 text-red-500">載入失敗</div>';
             }
         }
@@ -1275,7 +1089,7 @@
         async function loadSession(sessionId) {
             if (confirm('確定要切換到這個會話嗎？當前會話的未保存內容可能會丟失。')) {
                 try {
-                    const result = await ApiClient.get(`/api/v1/chat/session/${sessionId}`);
+                    const result = await SpecializedApiClients.Chat.getSession(sessionId);
                     
                     if (result.success && result.data) {
                         currentSession = result.data;
@@ -1287,7 +1101,7 @@
                         // 清空當前消息
                         document.getElementById('messagesList').innerHTML = `
                             <div class="flex items-start space-x-3">
-                                <img class="w-8 h-8 rounded-full flex-shrink-0" src="${currentCharacter.avatar}" alt="AI">
+                                <img class="w-8 h-8 rounded-full flex-shrink-0" src="${getCharacterAvatar(currentCharacter)}" alt="AI">
                                 <div class="bg-white border rounded p-3 max-w-[80%]">
                                     <p>會話已切換，載入歷史記錄中...</p>
                                 </div>
@@ -1305,8 +1119,7 @@
                         throw new Error('載入會話失敗');
                     }
                 } catch (error) {
-                    console.error('載入會話失敗:', error);
-                    UI.showToast('載入會話失敗: ' + error.message, 'error');
+                    UI.handleError(error, '載入會話');
                 }
             }
         }
@@ -1317,7 +1130,7 @@
                 try {
                     UI.showLoading(buttonElement);
                     
-                    const result = await ApiClient.delete(`/api/v1/chat/session/${sessionId}`);
+                    const result = await SpecializedApiClients.Chat.deleteSession(sessionId);
                     
                     if (result.success) {
                         // 如果刪除的是當前會話，創建新會話
@@ -1333,8 +1146,7 @@
                         throw new Error(result.error?.message || '刪除失敗');
                     }
                 } catch (error) {
-                    console.error('刪除會話失敗:', error);
-                    UI.showToast('刪除會話失敗: ' + error.message, 'error');
+                    UI.handleError(error, '刪除會話');
                 } finally {
                     UI.showLoading(buttonElement, false);
                 }
@@ -1374,10 +1186,7 @@
                 UI.showLoading(buttonElement);
                 setAIResponding(true);
                 
-                const result = await ApiClient.post('/api/v1/chat/regenerate', {
-                    session_id: currentSession.id,
-                    message: lastUserMessage.content
-                });
+                const result = await SpecializedApiClients.Chat.regenerateResponse(lastUserMessage.id);
                 
                 if (result.success && result.data) {
                     // 移除最後一條AI回應(如果存在)
@@ -1404,8 +1213,7 @@
                     throw new Error(result.error?.message || '重新生成失敗');
                 }
             } catch (error) {
-                console.error('重新生成失敗:', error);
-                UI.showToast('重新生成失敗: ' + error.message, 'error');
+                UI.handleError(error, '重新生成消息');
             } finally {
                 UI.showLoading(buttonElement, false);
                 setAIResponding(false);
@@ -1415,8 +1223,8 @@
         // 載入情感狀態（映射 API 欄位到 UI 狀態）
         async function loadEmotionStatus() {
             try {
-                const statusResult = await ApiClient.get('/api/v1/emotion/status');
-                const affectionResult = await ApiClient.get('/api/v1/emotion/affection');
+                const statusResult = await SpecializedApiClients.Emotion.getStatus();
+                const affectionResult = await SpecializedApiClients.Emotion.getAffection();
 
                 // 映射心情（mood）
                 if (statusResult.success && statusResult.data) {
@@ -1436,7 +1244,7 @@
                     updateEmotionState({ affection: affectionResult.data.affection });
                 }
             } catch (error) {
-                console.error('載入情感狀態失敗:', error);
+                UI.handleError(error, '載入情感狀態', false);
                 // 使用預設值，不顯示錯誤
             }
         }
@@ -1603,8 +1411,6 @@
                 
                 // 同步數據到手機版側邊欄
                 syncMobileSidebar();
-                syncMobileNSFWDisplay();
-                syncMobileChatHistory();
             }
         }
         
@@ -1621,49 +1427,9 @@
         }
         
         // 同步手機版 NSFW 顯示
-        function syncMobileNSFWDisplay() {
-            const mobileLevel = document.getElementById('mobileCurrentNsfwLevel');
-            const mobileDescription = document.getElementById('mobileNsfwDescription');
-            const mobileEngine = document.getElementById('mobileCurrentEngine');
-            
-            const desktopLevel = document.getElementById('currentNsfwLevel');
-            const desktopDescription = document.getElementById('nsfwDescription');
-            const desktopEngine = document.getElementById('currentEngine');
-            
-            if (mobileLevel && desktopLevel) mobileLevel.textContent = desktopLevel.textContent;
-            if (mobileDescription && desktopDescription) mobileDescription.textContent = desktopDescription.textContent;
-            if (mobileEngine && desktopEngine) mobileEngine.textContent = desktopEngine.textContent;
-        }
         
-        // 同步手機版聊天歷史
-        function syncMobileChatHistory() {
-            const mobileHistory = document.getElementById('mobileChatHistory');
-            const desktopHistory = document.getElementById('chatHistory');
-            
-            if (mobileHistory && desktopHistory) {
-                mobileHistory.innerHTML = desktopHistory.innerHTML;
-            }
-        }
         
-        // 更新 NSFW 顯示函數，同步到手機版
-        const originalUpdateNSFWDisplay = updateNSFWDisplay;
-        updateNSFWDisplay = function(level, engine) {
-            // 調用原始函數
-            originalUpdateNSFWDisplay(level, engine);
-            
-            // 同步到手機版
-            syncMobileNSFWDisplay();
-        };
         
-        // 更新側邊欄歷史記錄函數，同步到手機版
-        const originalUpdateChatHistorySidebar = updateChatHistorySidebar;
-        updateChatHistorySidebar = function() {
-            // 調用原始函數
-            originalUpdateChatHistorySidebar();
-            
-            // 同步到手機版
-            syncMobileChatHistory();
-        };
         
         // 將函數暴露到全局範圍
         window.toggleMobileSidebar = toggleMobileSidebar;
@@ -1709,47 +1475,6 @@
             }
         }
         
-        // 增強歷史記錄顯示，支持動作敘述預覽
-        const originalUpdateChatHistorySidebar2 = updateChatHistorySidebar;
-        updateChatHistorySidebar = function() {
-            const historyContainer = document.getElementById('chatHistory');
-            
-            if (messageHistory.length === 0) {
-                historyContainer.innerHTML = '<div class="text-sm text-center py-4">暫無歷史記錄</div>';
-                return;
-            }
-            
-            const recentMessages = messageHistory.slice(-10).reverse(); // 最近10條消息
-            
-            historyContainer.innerHTML = recentMessages.map((msg, index) => {
-                const time = Utils.formatShortTime(msg.timestamp);
-                const { dialogue, action } = parseMessageContent(msg.content);
-                
-                // 為歷史記錄創建預覽文本
-                let preview = dialogue || msg.content;
-                if (preview.length > 15) preview = preview.substring(0, 15) + '...';
-                
-                const hasAction = (msg.metadata && msg.metadata.character_action);
-                const actionIndicator = hasAction ? '<i class="fas fa-theater-masks text-purple-400 text-xs ml-1" title="包含動作敘述"></i>' : '';
-                
-                const isUser = msg.sender === 'user';
-                
-                return `
-                    <div class="p-2 rounded hover:bg-white hover:bg-opacity-10 cursor-pointer text-sm border-l-2 ${isUser ? 'border-blue-400' : 'border-green-400'}">
-                        <div class="flex items-center justify-between mb-1">
-                            <span class="font-medium ${isUser ? 'text-blue-400' : 'text-green-400'} flex items-center">
-                                ${isUser ? '你' : currentCharacter.name}${actionIndicator}
-                            </span>
-                            <span class="text-xs opacity-75">${time}</span>
-                        </div>
-                        <div class="text-xs opacity-75">${preview}</div>
-                    </div>
-                `;
-            }).join('');
-            
-            // 同步到手機版
-            syncMobileChatHistory();
-        };
         
         // TTS 相關功能
         
@@ -1801,29 +1526,26 @@
                 // 準備 API 請求數據
                 const requestData = {
                     text: cleanContent,
-                    character_id: currentCharacter?.id || 'char_001',
-                    voice_id: getVoiceIdForCharacter(currentCharacter?.id)
+                    character_id: currentCharacter?.id || 'character_01',
+                    voice: getVoiceIdForCharacter(currentCharacter) || 'voice_001',
+                    speed: 1.0,
+                    emotion: 'neutral'
                 };
                 
-                // 嘗試使用 TTS 預覽 API
-                let result = await ApiClient.post('/api/v1/tts/preview', requestData);
-                
-                // 如果預覽 API 失敗，嘗試使用生成 API
-                if (!result.success) {
-                    result = await ApiClient.post('/api/v1/tts/generate', requestData);
-                }
+                // 使用 TTS 生成 API
+                const result = await SpecializedApiClients.TTS.generateSpeech(cleanContent, getVoiceIdForCharacter(currentCharacter) || 'voice_001', 1.0);
                 
                 if (result.success && result.data) {
                     let audioUrl;
                     
-                    // 處理不同的 API 回應格式
-                    if (result.data.audio_url) {
+                    // 處理TTS API回應格式
+                    if (result.data.result?.audio_url) {
+                        audioUrl = result.data.result.audio_url;
+                    } else if (result.data.audio_url) {
                         audioUrl = result.data.audio_url;
-                    } else if (result.data.url) {
-                        audioUrl = result.data.url;
-                    } else if (result.data.audio_data) {
+                    } else if (result.data.result?.audio_data) {
                         // 如果是 base64 數據，創建 blob URL
-                        const audioBlob = base64ToBlob(result.data.audio_data, 'audio/mpeg');
+                        const audioBlob = base64ToBlob(result.data.result.audio_data, 'audio/mpeg');
                         audioUrl = URL.createObjectURL(audioBlob);
                     } else {
                         throw new Error('無效的音頻數據格式');
@@ -1840,18 +1562,7 @@
                 }
                 
             } catch (error) {
-                console.error('TTS 播放失敗:', error);
-                
-                let errorMessage = '語音播放失敗';
-                if (error.message.includes('404')) {
-                    errorMessage = 'TTS 服務不可用';
-                } else if (error.message.includes('network')) {
-                    errorMessage = '網路連接失敗';
-                } else if (error.message) {
-                    errorMessage = error.message;
-                }
-                
-                UI.showToast(errorMessage, 'error');
+                UI.handleError(error, 'TTS 播放');
                 setTTSButtonState(button, 'idle');
             }
         }
@@ -1896,8 +1607,7 @@
                 currentAudio.play();
                 
             } catch (error) {
-                console.error('播放音頻失敗:', error);
-                UI.showToast('音頻播放失敗', 'error');
+                UI.handleError(error, '播放音頻');
                 setTTSButtonState(button, 'idle');
             }
         }
@@ -1947,14 +1657,9 @@
         }
         
         // 根據角色獲取語音 ID
-        function getVoiceIdForCharacter(characterId) {
-            const voiceMap = {
-                'char_001': 'male_mature',    // 陸寒淵 - 成熟男性
-                'char_002': 'male_gentle',    // 沈言墨 - 溫和男性
-                'char_003': 'male_scholarly'  // 默認學者類型
-            };
-            
-            return voiceMap[characterId] || 'male_mature';
+        function getVoiceIdForCharacter(character) {
+            // 使用角色 metadata 中的語音設定
+            return character?.metadata?.voice_id || character?.metadata?.voice_style || 'male_mature';
         }
         
         // Base64 轉 Blob 工具函數

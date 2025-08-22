@@ -18,6 +18,9 @@
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
 </head>
 <body class="min-h-full p-4 bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
@@ -176,9 +179,9 @@
                             class="w-full px-4 py-3 rounded bg-gray-100 border text-gray-900 focus:ring-2 focus:ring-blue-500"
                         >
                             <option value="">請選擇預設角色</option>
-                            <option value="char_001">陸寒淵 - 霸道總裁</option>
-                            <option value="char_002">沈言墨 - 溫柔醫生</option>
-                            <option value="char_003">林夜白 - 神秘學者</option>
+                            <option value="character_01">沈宸 - 霸道企業家</option>
+                            <option value="character_02">林知遠 - 溫柔心理師</option>
+                            <option value="character_03">周曜 - 陽光歌手</option>
                         </select>
                     </div>
                 </div>
@@ -221,35 +224,6 @@
         
         <!-- 右側 - 統計和狀態 -->
         <div class="space-y-6">
-            <!-- 用戶統計 -->
-            <div class="bg-white border rounded-lg p-6">
-                <h3 class="text-lg font-semibold mb-4">
-                    <i class="fas fa-chart-bar text-yellow-400 mr-2"></i>
-                    使用統計
-                </h3>
-                
-                <div class="space-y-4">
-                    <div class="text-center">
-                        <div class="text-3xl font-bold text-blue-400" id="totalChats">--</div>
-                        <div class="text-sm">總對話數</div>
-                    </div>
-                    
-                    <div class="text-center">
-                        <div class="text-3xl font-bold text-green-400" id="totalMessages">--</div>
-                        <div class="text-sm">總消息數</div>
-                    </div>
-                    
-                    <div class="text-center">
-                        <div class="text-3xl font-bold text-blue-600" id="activeCharacters">--</div>
-                        <div class="text-sm">互動角色數</div>
-                    </div>
-                    
-                    <div class="text-center">
-                        <div class="text-3xl font-bold text-red-400" id="lastActive">--</div>
-                        <div class="text-sm">最後活動</div>
-                    </div>
-                </div>
-            </div>
             
             <!-- 帳號狀態 -->
             <div class="bg-white border rounded-lg p-6">
@@ -291,17 +265,6 @@
                 </div>
             </div>
             
-            <!-- 最喜愛的角色 -->
-            <div class="bg-white border rounded-lg p-6">
-                <h3 class="text-lg font-semibold mb-4">
-                    <i class="fas fa-heart text-red-400 mr-2"></i>
-                    最喜愛角色
-                </h3>
-                
-                <div class="space-y-3" id="favoriteCharacters">
-                    <!-- 將動態生成 -->
-                </div>
-            </div>
         </div>
     </div>
     
@@ -379,17 +342,13 @@
             // 設置事件監聽器
             setupEventListeners();
             
-            // 載入統計數據
-            loadStatistics();
-            
-            // 載入最喜愛角色
-            loadFavoriteCharacters();
+            // 註：統計功能和最喜愛角色功能已移除，因為缺少相應的API支持
         });
         
         // 載入用戶資料
         async function loadUserProfile() {
             try {
-                const result = await ApiClient.get('/api/v1/user/profile');
+                const result = await SpecializedApiClients.User.getProfile();
                 
                 if (result.success && result.data) {
                     userProfile = result.data;
@@ -398,7 +357,7 @@
                     throw new Error(result.error?.message || '載入用戶資料失敗');
                 }
             } catch (error) {
-                console.error('載入用戶資料失敗:', error);
+                UI.handleError(error, '載入用戶資料');
                 
                 // 使用本地數據
                 userProfile = AppState.currentUser || Utils.storage.get('user') || {
@@ -473,37 +432,34 @@
         // 載入角色選項
         async function loadCharacterOptions() {
             try {
-                // 獲取角色列表
-                const charactersResult = await ApiClient.get('/api/v1/character/list');
-                const currentCharacterResult = await ApiClient.get('/api/v1/user/character');
-                
+                const result = await SpecializedApiClients.Character.getAll();
                 const select = document.getElementById('defaultCharacter');
                 
-                if (charactersResult.success && charactersResult.data) {
-                    // 清空現有選項(保留第一個空選項)
+                if (result.success && result.data.characters) {
+                    // 清空選項(保留空選項)
                     while (select.children.length > 1) {
                         select.removeChild(select.lastChild);
                     }
                     
                     // 添加角色選項
-                    charactersResult.data.forEach(character => {
+                    result.data.characters.forEach(character => {
                         const option = document.createElement('option');
                         option.value = character.id;
-                        option.textContent = `${character.name} - ${character.description}`;
+                        option.textContent = `${character.name} - ${character.metadata?.description || ''}`;
                         select.appendChild(option);
                     });
                     
-                    // 設置當前選中的角色
-                    if (currentCharacterResult.success && currentCharacterResult.data) {
-                        select.value = currentCharacterResult.data.character_id;
-                        AppState.selectedCharacter = charactersResult.data.find(c => c.id === currentCharacterResult.data.character_id);
+                    // 設置預設選中角色
+                    if (AppState.preferences?.default_character) {
+                        select.value = AppState.preferences.default_character;
                     }
                 } else {
                     console.warn('載入角色列表失敗，使用本地數據');
                     // 使用本地預設角色
                     const defaultCharacters = [
-                        { id: 'char_001', name: '陸寒淵', description: '霸道總裁' },
-                        { id: 'char_002', name: '沈言墨', description: '溫柔醫生' }
+                        { id: 'character_01', name: '沈宸', description: '霸道企業家' },
+                        { id: 'character_02', name: '林知遠', description: '溫柔心理師' },
+                        { id: 'character_03', name: '周曜', description: '陽光歌手' }
                     ];
                     
                     while (select.children.length > 1) {
@@ -518,7 +474,7 @@
                     });
                 }
             } catch (error) {
-                console.error('載入角色選項失敗:', error);
+                UI.handleError(error, '載入角色選項');
             }
         }
         
@@ -600,20 +556,12 @@
             
             try {
                 // 保存用戶資料
-                const profileResult = await ApiClient.put('/api/v1/user/profile', updatedProfile);
+                const profileResult = await SpecializedApiClients.User.updateProfile(updatedProfile);
                 
-                // 保存偏好設定
-                const preferencesResult = await ApiClient.put('/api/v1/user/preferences', updatedPreferences);
+                // 保存偏好設定（包含角色選擇）
+                const preferencesResult = await SpecializedApiClients.User.updatePreferences(updatedPreferences);
                 
-                // 保存角色選擇
-                let characterResult = { success: true };
-                if (updatedPreferences.default_character) {
-                    characterResult = await ApiClient.put('/api/v1/user/character', {
-                        character_id: updatedPreferences.default_character
-                    });
-                }
-                
-                if (profileResult.success && preferencesResult.success && characterResult.success) {
+                if (profileResult.success && preferencesResult.success) {
                     // 更新本地狀態
                     userProfile = { ...userProfile, ...updatedProfile };
                     AppState.currentUser = userProfile;
@@ -644,7 +592,7 @@
                     throw new Error('部分設定保存失敗');
                 }
             } catch (error) {
-                console.error('保存失敗:', error);
+                UI.handleError(error, '保存資料');
                 
                 // 至少保存本地數據
                 AppState.currentUser = { ...userProfile, ...updatedProfile };
@@ -659,104 +607,7 @@
             }
         }
         
-        // 載入統計數據
-        async function loadStatistics() {
-            try {
-                // 使用現有的會話列表 API 來獲取統計信息
-                const sessionsResult = await ApiClient.get('/api/v1/chat/sessions');
-                const charactersResult = await ApiClient.get('/api/v1/character/list');
-                
-                let totalChats = 0;
-                let totalMessages = 0;
-                let activeCharacters = 0;
-                let lastActive = '未知';
-                
-                if (sessionsResult.success && sessionsResult.data) {
-                    totalChats = sessionsResult.data.sessions?.length || 0;
-                    // 估算總消息數 (假設每個會話平均有10條消息)
-                    totalMessages = totalChats * 10;
-                    
-                    // 獲取最後活動時間
-                    const sessions = sessionsResult.data.sessions || [];
-                    if (sessions.length > 0) {
-                        const latestSession = sessions.reduce((latest, session) => {
-                            return new Date(session.updated_at || session.created_at) > new Date(latest.updated_at || latest.created_at) ? session : latest;
-                        });
-                        lastActive = Utils.formatDateTime(latestSession.updated_at || latestSession.created_at);
-                    }
-                }
-                
-                if (charactersResult.success && charactersResult.data) {
-                    activeCharacters = charactersResult.data.characters?.length || 0;
-                }
-                
-                document.getElementById('totalChats').textContent = totalChats.toString();
-                document.getElementById('totalMessages').textContent = totalMessages.toString();
-                document.getElementById('activeCharacters').textContent = activeCharacters.toString();
-                document.getElementById('lastActive').textContent = lastActive;
-                
-            } catch (error) {
-                console.warn('載入統計數據失敗:', error);
-                // 顯示默認值
-                document.getElementById('totalChats').textContent = '0';
-                document.getElementById('totalMessages').textContent = '0';
-                document.getElementById('activeCharacters').textContent = '0';
-                document.getElementById('lastActive').textContent = '未知';
-            }
-        }
         
-        // 載入最喜愛角色
-        async function loadFavoriteCharacters() {
-            const favoriteCharactersDiv = document.getElementById('favoriteCharacters');
-            
-            try {
-                // 使用現有的角色列表 API 和會話 API 來推斷最喜愛角色
-                const charactersResult = await ApiClient.get('/api/v1/character/list');
-                const sessionsResult = await ApiClient.get('/api/v1/chat/sessions');
-                
-                if (charactersResult.success && charactersResult.data) {
-                    const characters = charactersResult.data.characters || [];
-                    const sessions = sessionsResult.success ? (sessionsResult.data.sessions || []) : [];
-                    
-                    // 計算每個角色的互動次數
-                    const characterStats = {};
-                    sessions.forEach(session => {
-                        const charId = session.character_id;
-                        if (charId) {
-                            characterStats[charId] = (characterStats[charId] || 0) + 1;
-                        }
-                    });
-                    
-                    // 添加互動次數到角色數據中，並按互動次數排序
-                    const charactersWithStats = characters.map(char => ({
-                        ...char,
-                        chat_count: characterStats[char.id] || 0
-                    })).filter(char => char.chat_count > 0) // 只顯示有互動的角色
-                      .sort((a, b) => b.chat_count - a.chat_count) // 按互動次數降序排列
-                      .slice(0, 3); // 最多顯示3個最愛角色
-                    
-                    if (charactersWithStats.length > 0) {
-                        favoriteCharactersDiv.innerHTML = charactersWithStats.map(char => `
-                            <div class="flex items-center space-x-3 p-2 rounded-lg hover:bg-white hover:bg-opacity-5 transition-all cursor-pointer" onclick="Router.navigate('/character', {character_id: '${char.id}'})">
-                                <img src="${char.avatar_url || 'https://placehold.co/40x40/6366f1/ffffff?text=' + encodeURIComponent(char.name[0])}" alt="${char.name}" class="w-8 h-8 rounded-full">
-                                <div class="flex-1">
-                                    <div class="font-medium">${char.name}</div>
-                                    <div class="text-sm">${char.chat_count} 次對話</div>
-                                </div>
-                                <i class="fas fa-heart text-red-400"></i>
-                            </div>
-                        `).join('');
-                    } else {
-                        favoriteCharactersDiv.innerHTML = '<div class="text-gray-500 text-center py-4">尚無互動角色</div>';
-                    }
-                } else {
-                    throw new Error('載入角色列表失敗');
-                }
-            } catch (error) {
-                console.warn('載入最喜愛角色失敗:', error);
-                favoriteCharactersDiv.innerHTML = '<div class="text-gray-500 text-center py-4">載入失敗</div>';
-            }
-        }
         
         // 變更密碼
         function changePassword() {
@@ -797,9 +648,7 @@
         async function refreshTokens() {
             try {
                 if (AppState.refreshToken) {
-                    const result = await ApiClient.post('/api/v1/auth/refresh', {
-                        refresh_token: AppState.refreshToken
-                    });
+                    const result = await SpecializedApiClients.Auth.refresh(AppState.refreshToken);
                     
                     if (result.success) {
                         AppState.accessToken = result.data.access_token;
@@ -905,9 +754,7 @@
             try {
                 UI.showLoading(document.querySelector('#avatarModal button[onclick="updateAvatar()"]'));
                 
-                const result = await ApiClient.post('/api/v1/user/avatar', {
-                    avatar_url: avatarUrl
-                });
+                const result = await SpecializedApiClients.User.updateAvatar(avatarUrl);
                 
                 if (result.success) {
                     // 更新頭像顯示
@@ -928,7 +775,7 @@
                     throw new Error(result.error?.message || '頭像更新失敗');
                 }
             } catch (error) {
-                console.error('頭像更新失敗:', error);
+                UI.handleError(error, '頭像更新');
                 UI.showToast('頭像更新失敗: ' + error.message, 'error');
             } finally {
                 UI.showLoading(document.querySelector('#avatarModal button[onclick="updateAvatar()"]'), false);

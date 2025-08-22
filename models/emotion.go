@@ -5,25 +5,23 @@ import (
 	"github.com/uptrace/bun"
 )
 
-// EmotionState 情感狀態表
+// EmotionState 情感狀態領域模型
 type EmotionState struct {
-	bun.BaseModel `bun:"table:emotion_states,alias:es"`
-	
-	ID            string    `bun:"id,pk" json:"id"`
-	UserID        string    `bun:"user_id,notnull" json:"user_id"`
-	CharacterID   string    `bun:"character_id,notnull" json:"character_id"`
-	Affection     int       `bun:"affection,notnull,default:30" json:"affection"`
-	Mood          string    `bun:"mood,notnull,default:'neutral'" json:"mood"`
-	Relationship  string    `bun:"relationship,notnull,default:'stranger'" json:"relationship"`
-	IntimacyLevel string    `bun:"intimacy_level,notnull,default:'distant'" json:"intimacy_level"`
-	TotalInteractions int   `bun:"total_interactions,default:0" json:"total_interactions"`
-	LastInteraction   time.Time `bun:"last_interaction,default:now()" json:"last_interaction"`
-	CreatedAt     time.Time `bun:"created_at,nullzero,default:current_timestamp" json:"created_at"`
-	UpdatedAt     time.Time `bun:"updated_at,nullzero,default:current_timestamp" json:"updated_at"`
+	ID                string    `json:"id"`
+	UserID            string    `json:"user_id"`
+	CharacterID       string    `json:"character_id"`
+	Affection         int       `json:"affection"`
+	Mood              string    `json:"mood"`
+	Relationship      string    `json:"relationship"`
+	IntimacyLevel     string    `json:"intimacy_level"`
+	TotalInteractions int       `json:"total_interactions"`
+	LastInteraction   time.Time `json:"last_interaction"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
 	
 	// Relations
-	User      *User      `bun:"rel:belongs-to,join:user_id=id" json:"user,omitempty"`
-	Character *Character `bun:"rel:belongs-to,join:character_id=id" json:"character,omitempty"`
+	User      *User      `json:"user,omitempty"`
+	Character *Character `json:"character,omitempty"`
 }
 
 // EmotionHistory 情感變化歷史表

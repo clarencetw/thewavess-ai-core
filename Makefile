@@ -1,92 +1,223 @@
-.PHONY: help install run build test clean docs docs-serve migrate migrate-down migrate-status migrate-reset db-setup test-api run-bg stop-bg docker-build docker-run dev check
+.PHONY: help install run build test clean docs docs-serve migrate migrate-down migrate-status migrate-reset db-init db-setup fixtures fixtures-recreate create-migration test-api run-bg stop-bg docker-build docker-run dev check
 
 # 預設目標
-help: ## 顯示幫助訊息
-	@echo "可用指令："
-	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-15s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+help: ## 📋 顯示幫助訊息
+	@echo "🚀 Thewavess AI Core - 可用指令："
+	@echo ""
+	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
+	@echo ""
+	@echo "💡 常用指令組合："
+	@echo "  make dev           🔄 開發模式 (文檔+服務+日誌)"
+	@echo "  make db-setup      🏗️ 完整資料庫設置"
+	@echo "  make fixtures      🌱 載入 fixtures 數據"
+	@echo "  make check         🔍 檢查服務狀態"
 
-install: ## 安裝依賴套件
-	go mod tidy
-	go install github.com/swaggo/swag/cmd/swag@latest
+# ===============================
+# 📦 基礎開發指令
+# ===============================
 
-run: ## 以開發模式運行伺服器
-	go run main.go
+install: ## 📦 安裝依賴套件
+	@echo "📦 Installing dependencies..."
+	@go mod tidy
+	@go install github.com/swaggo/swag/cmd/swag@latest
+	@go install github.com/air-verse/air@latest
+	@echo "✅ Dependencies installed successfully"
 
-build: ## 編譯應用程式
+build: ## 🔨 編譯應用程式
+	@echo "🔨 Building application..."
 	@mkdir -p bin
-	go build -o bin/thewavess-ai-core main.go
+	@go build -o bin/thewavess-ai-core main.go
+	@echo "✅ Build completed: bin/thewavess-ai-core"
 
-test: ## 執行測試
-	go test -v ./...
+test: ## 🧪 執行測試
+	@echo "🧪 Running tests..."
+	@go test -v ./...
 
-clean: ## 清理編譯產物
-	rm -rf bin/
-	rm -rf docs/
+clean: ## 🧹 清理編譯產物
+	@echo "🧹 Cleaning build artifacts..."
+	@rm -rf bin/
+	@rm -rf docs/
+	@echo "✅ Cleanup completed"
 
-docs: ## 生成 Swagger 文檔
-	swag init --parseDependency --parseInternal
+# ===============================
+# 📚 文檔相關指令
+# ===============================
 
-docs-serve: docs ## 生成文檔並啟動 Swagger UI
-	@echo "Swagger documentation will be available at: http://localhost:8080/swagger/index.html"
-	@echo "Starting server..."
-	go run main.go
+docs: ## 📚 生成 Swagger 文檔
+	@echo "📚 Generating Swagger documentation..."
+	@swag init --parseDependency --parseInternal
+	@echo "✅ Documentation generated"
 
-# 資料庫指令 (Bun ORM + bun/migrate)
-migrate: ## 使用 Bun 執行資料庫遷移
-	@echo "Running Bun database migrations..."
-	go run cmd/migrate/main.go -cmd=up
+docs-serve: docs ## 🌐 生成文檔並啟動 Swagger UI
+	@echo "🌐 Starting server with Swagger UI..."
+	@echo "📖 Swagger documentation: http://localhost:8080/swagger/index.html"
+	@echo "🚀 Starting server with enhanced logging..."
+	@echo "📊 Logs will be displayed below and saved to server.log"
+	@go run main.go 2>&1 | tee server.log
 
-migrate-down: ## 使用 Bun 回滾上一次遷移
-	@echo "Rolling back last migration..."
-	go run cmd/migrate/main.go -cmd=down
+# ===============================
+# 🏗️ 資料庫管理指令
+# ===============================
 
-migrate-status: ## 使用 Bun 顯示遷移狀態
-	@echo "Checking Bun migration status..."
-	go run cmd/migrate/main.go -cmd=status
+db-init: ## 🏗️ 初始化遷移表
+	@echo "🏗️ Initializing migration tables..."
+	@go run cmd/bun/main.go db init
 
-migrate-reset: ## 使用 Bun 重置所有遷移
-	@echo "Resetting all migrations..."
-	go run cmd/migrate/main.go -cmd=reset
+migrate: ## ⬆️ 執行資料庫遷移
+	@echo "⬆️ Running database migrations..."
+	@go run cmd/bun/main.go db migrate
 
-db-setup: migrate ## 使用 Bun 遷移設置資料庫
-	@echo "✅ Bun database setup completed"
+migrate-down: ## ⬇️ 回滾上一次遷移
+	@echo "⬇️ Rolling back last migration..."
+	@go run cmd/bun/main.go db rollback
 
-docker-build: ## 構建 Docker 映像
-	docker build -t thewavess-ai-core .
+migrate-status: ## 📊 顯示遷移狀態
+	@echo "📊 Checking migration status..."
+	@go run cmd/bun/main.go db status
 
-docker-run: ## 運行 Docker 容器
-	docker run -p 8080:8080 thewavess-ai-core
+migrate-reset: ## 🔄 重置所有遷移
+	@echo "🔄 ⚠️  WARNING: This will reset ALL migrations!"
+	@echo "💭 Use with caution in production environments"
+	@go run cmd/bun/main.go db reset
 
-# 測試指令
-test-api: run-bg ## 測試 API 端點
-	@echo "Testing API endpoints..."
-	@sleep 3  # Wait for server to start
-	@./test_api.sh
-	@$(MAKE) stop-bg
+db-setup: db-init migrate ## 🏗️ 完整資料庫設置
+	@echo ""
+	@echo "🎉 Database setup completed successfully!"
+	@echo "💡 Next step: run 'make fixtures' to load test data"
 
-# 後台伺服器管理
-run-bg: ## 在後台啟動伺服器
-	@echo "Starting server in background..."
+create-migration: ## ➕ 創建新的 SQL 遷移文件 (使用: make create-migration NAME=migration_name)
+ifndef NAME
+	@echo "❌ Error: NAME parameter is required"
+	@echo "💡 Usage: make create-migration NAME=your_migration_name"
+	@exit 1
+endif
+	@echo "➕ Creating new migration: $(NAME)"
+ifdef TYPE
+	@go run cmd/bun/main.go create-migration --type=$(TYPE) $(NAME)
+else
+	@go run cmd/bun/main.go create-migration --type=go $(NAME)
+endif
+
+# ===============================
+# 🌱 種子數據管理
+# ===============================
+
+fixtures: ## 🌱 載入 fixtures 數據
+	@echo "🌱 Loading fixtures..."
+	@go run cmd/bun/main.go db fixtures
+
+fixtures-recreate: ## 🔄 重建表格並載入 fixtures
+	@echo "🔄 Recreating tables and loading fixtures..."
+	@go run cmd/bun/main.go db fixtures --recreate
+
+
+# ===============================
+# 🚀 服務器管理指令
+# ===============================
+
+run: ## 🚀 以開發模式運行伺服器
+	@echo "🚀 Starting development server..."
+	@echo "🌐 Web interface: http://localhost:8080"
+	@echo "📖 Swagger UI: http://localhost:8080/swagger/index.html"
+	@echo "💚 Health check: http://localhost:8080/health"
+	@echo "📊 Logs will be displayed below and saved to server.log"
+	@echo ""
+	@go run main.go 2>&1 | tee server.log
+
+run-bg: ## 🔙 在後台啟動伺服器
+	@echo "🔙 Starting server in background..."
 	@go run main.go > server.log 2>&1 & echo $$! > .server.pid
+	@echo "✅ Server started in background (PID: $$(cat .server.pid))"
+	@echo "📊 Logs: tail -f server.log"
 
-stop-bg: ## 停止後台伺服器
+stop-bg: ## ⏹️ 停止後台伺服器
 	@if [ -f .server.pid ]; then \
+		echo "⏹️ Stopping background server..."; \
 		kill `cat .server.pid` 2>/dev/null || true; \
 		rm .server.pid; \
-		echo "Server stopped"; \
+		echo "✅ Server stopped"; \
+	else \
+		echo "❌ No background server found"; \
 	fi
 
-dev: docs run ## 開發模式：生成文檔並運行伺服器
+dev: docs ## 🔄 開發模式：生成文檔並運行伺服器 (自動重啟)
+	@echo "🔄 Starting development mode with auto-reload..."
+	@echo "📚 Documentation generated"
+	@echo "🌐 Web interface: http://localhost:8080"
+	@echo "📖 Swagger UI: http://localhost:8080/swagger/index.html"
+	@echo "💚 Health check: http://localhost:8080/health"
+	@echo "🔄 Auto-reload enabled - files will be watched for changes"
+	@echo ""
+	@echo "🎯 Press Ctrl+C to stop the server"
+	@echo "================================================"
+	@air 2>&1 | tee server.log
 
-check: ## 檢查所有服務是否正在運行
-	@echo "=== Service Health Check ==="
-	@echo "Web UI: http://localhost:8080/"
-	@echo "Swagger: http://localhost:8080/swagger/index.html"
-	@echo "Health: http://localhost:8080/health"
+dev-manual: docs ## 🔄 開發模式：生成文檔並運行伺服器 (手動重啟)
+	@echo "🔄 Starting development mode (manual restart)..."
+	@echo "📚 Documentation generated"
+	@echo "🌐 Web interface: http://localhost:8080"
+	@echo "📖 Swagger UI: http://localhost:8080/swagger/index.html"
+	@echo "💚 Health check: http://localhost:8080/health"
+	@echo "📊 Enhanced logging enabled (console + server.log)"
+	@echo ""
+	@echo "🎯 Press Ctrl+C to stop the server"
+	@echo "================================================"
+	@go run main.go 2>&1 | tee server.log
+
+check: ## 🔍 檢查所有服務是否正在運行
+	@echo "🔍 === Service Health Check ==="
+	@echo "🌐 Web UI: http://localhost:8080/"
+	@echo "📖 Swagger: http://localhost:8080/swagger/index.html"
+	@echo "💚 Health: http://localhost:8080/health"
 	@echo ""
 	@if curl -s http://localhost:8080/health >/dev/null 2>&1; then \
 		echo "✅ API Server is running"; \
-		curl -s http://localhost:8080/health | jq '.' 2>/dev/null || echo "  (Health endpoint response not JSON)"; \
+		echo "📊 Health Status:"; \
+		curl -s http://localhost:8080/health | jq '.' 2>/dev/null || echo "  📄 (Raw response - JSON parsing not available)"; \
 	else \
 		echo "❌ API Server not running"; \
+		echo "💡 Start with: make run or make dev"; \
 	fi
+
+# ===============================
+# 🧪 測試相關指令
+# ===============================
+
+test-api: run-bg ## 🧪 測試 API 端點
+	@echo "🧪 Testing API endpoints..."
+	@echo "⏰ Waiting for server to start..."
+	@sleep 3
+	@if [ -f test_api.sh ]; then \
+		./test_api.sh; \
+	else \
+		echo "❌ test_api.sh not found"; \
+	fi
+	@$(MAKE) stop-bg
+
+# ===============================
+# 🐳 Docker 相關指令  
+# ===============================
+
+docker-build: ## 🐳 構建 Docker 映像
+	@echo "🐳 Building Docker image..."
+	@docker build -t thewavess-ai-core .
+	@echo "✅ Docker image built: thewavess-ai-core"
+
+docker-run: ## 🐳 運行 Docker 容器
+	@echo "🐳 Running Docker container..."
+	@echo "🌐 Container will be available at: http://localhost:8080"
+	@docker run -p 8080:8080 thewavess-ai-core
+
+# ===============================
+# 🎯 常用組合指令
+# ===============================
+
+fresh-start: clean install db-setup fixtures ## 🎯 全新開始：清理+安裝+資料庫設置+fixtures
+	@echo ""
+	@echo "🎉 Fresh start completed!"
+	@echo "💡 Ready to run: make dev"
+
+quick-setup: db-setup fixtures ## ⚡ 快速設置：資料庫+fixtures
+	@echo ""
+	@echo "⚡ Quick setup completed!"
+	@echo "💡 Ready to run: make dev"

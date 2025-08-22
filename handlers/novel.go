@@ -54,7 +54,7 @@ func StartNovel(c *gin.Context) {
 
 	// 靜態數據回應
 	novel := gin.H{
-		"novel_id":     utils.GenerateID(16),
+		"novel_id":     utils.GenerateNovelID(),
 		"user_id":      userID,
 		"character_id": req.CharacterID,
 		"genre":        req.Genre,
@@ -382,7 +382,7 @@ func SaveNovelProgress(c *gin.Context) {
 
 	// 靜態回應 - 模擬進度保存
 	saveData := gin.H{
-		"save_id":    utils.GenerateID(16),
+		"save_id":    utils.GenerateUUID(),
 		"novel_id":   req.NovelID,
 		"user_id":    userID,
 		"save_name":  req.SaveName,

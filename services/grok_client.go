@@ -128,8 +128,10 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	if request.MaxTokens == 0 {
 		request.MaxTokens = getGrokMaxTokens()
 	}
-	if request.Temperature == 0 {
-		request.Temperature = getGrokTemperature()
+	// 動態調整溫度：若未顯式設定，依據 prompt 中的 Level 推斷
+	if request.Temperature <= 0 {
+		lvl := inferNSFWLevelFromMessages(request.Messages)
+		request.Temperature = temperatureForLevel(lvl)
 	}
 
 	// 準備 HTTP 請求
@@ -261,15 +263,14 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	return &grokResponse, nil
 }
 
-// Note: CharacterConfig and related functions are now in prompt_shared.go
 
 // BuildNSFWPrompt 構建 NSFW 場景的提示詞（使用統一模板）
-func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription string, context *ConversationContext, nsfwLevel int) []GrokMessage {
+func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription string, conversationContext *ConversationContext, nsfwLevel int) []GrokMessage {
 	// 構建記憶提示詞（NSFW 場景使用縮短版本以節省 token）
 	memoryPrompt := ""
-	if context != nil && context.MemoryPrompt != "" {
+	if conversationContext != nil && conversationContext.MemoryPrompt != "" {
 		// 對 NSFW 場景，截短記憶內容
-		lines := strings.Split(context.MemoryPrompt, "\n")
+		lines := strings.Split(conversationContext.MemoryPrompt, "\n")
 		var shortMemory []string
 		for i, line := range lines {
 			if i >= 8 { // 限制最多 8 行記憶內容
@@ -283,14 +284,17 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription 
 	}
 
 	// 使用統一的prompt模板
-	systemPrompt := BuildUnifiedPromptTemplate(
-		characterID,
-		userMessage,
-		sceneDescription,
-		context,
-		nsfwLevel,
-		memoryPrompt,
-	)
+	characterService := GetCharacterService()
+	promptBuilder := NewPromptBuilder(characterService)
+	ctx := context.Background()
+	systemPrompt := promptBuilder.
+		WithCharacter(ctx, characterID).
+		WithContext(conversationContext).
+		WithNSFWLevel(nsfwLevel).
+		WithUserMessage(userMessage).
+		WithSceneDescription(sceneDescription).
+		WithMemory(memoryPrompt).
+		Build(ctx)
 
 	messages := []GrokMessage{
 		{
@@ -300,8 +304,8 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription 
 	}
 
 	// 添加對話歷史
-	if context != nil {
-		for i, msg := range context.RecentMessages {
+	if conversationContext != nil {
+		for i, msg := range conversationContext.RecentMessages {
 			if i >= 3 { // NSFW 場景保留較少歷史
 				break
 			}
@@ -333,7 +337,47 @@ func getGrokMaxTokens() int {
 
 // getGrokTemperature 獲取 Grok 溫度配置
 func getGrokTemperature() float64 {
-	return utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.9)
+	return utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.7)
+}
+
+// inferNSFWLevelFromMessages 從 system prompt 內判斷 Level 4/5
+func inferNSFWLevelFromMessages(msgs []GrokMessage) int {
+	for _, m := range msgs {
+		if m.Role != "system" {
+			continue
+		}
+		s := m.Content
+		if strings.Contains(s, "Level 5") {
+			return 5
+		}
+		if strings.Contains(s, "Level 4") {
+			return 4
+		}
+	}
+	return 3
+}
+
+// temperatureForLevel 根據 NSFW 等級動態調整溫度
+func temperatureForLevel(level int) float64 {
+	// 預設（可被環境變數覆蓋）
+	switch level {
+	case 5:
+		t := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE_L5", 0.6)
+		if t < 0.2 { t = 0.2 }
+		if t > 1.2 { t = 1.2 }
+		return t
+	case 4:
+		t := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE_L4", 0.7)
+		if t < 0.2 { t = 0.2 }
+		if t > 1.2 { t = 1.2 }
+		return t
+	case 3:
+		return 0.75
+	case 1, 2:
+		return 0.60
+	default:
+		return getGrokTemperature() // fallback: GROK_TEMPERATURE or 0.7
+	}
 }
 
 // generateMockResponse 生成模擬響應（用於 API key 未配置或測試場景）

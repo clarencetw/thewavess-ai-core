@@ -15,39 +15,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/moment.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.30.1/locale/zh-tw.min.js"></script>
     
-    <style>
-        /* 簡約按鈕樣式 */
-        .btn-simple {
-            @apply px-3 py-2 text-sm border border-gray-300 rounded hover:bg-gray-50 transition-colors;
-        }
-        .btn-primary {
-            @apply px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors;
-        }
-        .btn-danger {
-            @apply px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors;
-        }
-        
-        /* 簡約卡片樣式 */
-        .card-minimal {
-            @apply bg-white border border-gray-200 rounded-lg;
-        }
-        
-        /* 載入動畫 */
-        .loading {
-            @apply inline-block w-5 h-5 border-2 border-gray-300 border-t-blue-600 rounded-full animate-spin mr-2;
-        }
-        
-        /* 狀態指示器 */
-        .status-healthy {
-            @apply w-3 h-3 bg-green-500 rounded-full;
-        }
-        .status-warning {
-            @apply w-3 h-3 bg-yellow-500 rounded-full;
-        }
-        .status-error {
-            @apply w-3 h-3 bg-red-500 rounded-full;
-        }
-    </style>
+    <!-- 使用統一的樣式文件 -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
     
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
@@ -89,49 +58,51 @@
     <div class="flex-1 overflow-auto p-3 md:p-4">
         <div class="max-w-7xl mx-auto space-y-4 md:space-y-6">
             
-            <!-- 系統概覽 -->
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <!-- 總用戶數 -->
-                <div class="card-minimal p-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm text-gray-600">總用戶數</div>
-                            <div class="text-lg font-medium" id="totalUsers">-</div>
+            <!-- 系統快速狀態 -->
+            <div class="card-minimal p-4">
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                    <!-- 系統運行時間 -->
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-clock text-blue-500"></i>
                         </div>
-                        <i class="fas fa-users text-blue-500"></i>
+                        <div>
+                            <div class="text-xs text-gray-500">系統運行</div>
+                            <div class="text-sm font-medium" id="systemUptime">檢查中...</div>
+                        </div>
                     </div>
-                </div>
-                
-                <!-- 今日訪問 -->
-                <div class="card-minimal p-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm text-gray-600">今日訪問</div>
-                            <div class="text-lg font-medium" id="todayVisits">-</div>
+                    
+                    <!-- 服務狀態 -->
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0">
+                            <div class="status-healthy" id="serviceIndicator"></div>
                         </div>
-                        <i class="fas fa-chart-line text-green-500"></i>
+                        <div>
+                            <div class="text-xs text-gray-500">服務狀態</div>
+                            <div class="text-sm font-medium" id="serviceStatus">檢查中...</div>
+                        </div>
                     </div>
-                </div>
-                
-                <!-- API 請求數 -->
-                <div class="card-minimal p-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm text-gray-600">API 請求</div>
-                            <div class="text-lg font-medium" id="apiRequests">-</div>
+                    
+                    <!-- 資料庫連接 -->
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-database text-green-500"></i>
                         </div>
-                        <i class="fas fa-server text-purple-500"></i>
+                        <div>
+                            <div class="text-xs text-gray-500">資料庫</div>
+                            <div class="text-sm font-medium" id="dbStatus">檢查中...</div>
+                        </div>
                     </div>
-                </div>
-                
-                <!-- 系統內存 -->
-                <div class="card-minimal p-4">
-                    <div class="flex items-center justify-between">
-                        <div>
-                            <div class="text-sm text-gray-600">內存使用</div>
-                            <div class="text-lg font-medium" id="memoryUsage">-</div>
+                    
+                    <!-- 最後更新 -->
+                    <div class="flex items-center space-x-3">
+                        <div class="flex-shrink-0">
+                            <i class="fas fa-sync text-gray-500"></i>
                         </div>
-                        <i class="fas fa-memory text-orange-500"></i>
+                        <div>
+                            <div class="text-xs text-gray-500">最後更新</div>
+                            <div class="text-sm font-medium" id="lastUpdate">-</div>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -396,23 +367,9 @@
             await loadMonitorData();
         });
 
-        // 分頁切換
+        // 分頁切換 - 使用統一的標籤系統
         function switchTab(tabName, element) {
-            // 隱藏所有分頁內容
-            document.querySelectorAll('.tab-content').forEach(content => {
-                content.style.display = 'none';
-            });
-            
-            // 移除所有分頁按鈕的樣式
-            document.querySelectorAll('.tab-btn').forEach(tab => {
-                tab.className = 'tab-btn px-3 py-2 text-sm text-gray-600 hover:text-blue-600';
-            });
-            
-            // 顯示選中的分頁內容
-            document.getElementById(tabName).style.display = 'block';
-            
-            // 設置選中的分頁按鈕樣式
-            element.className = 'tab-btn px-3 py-2 text-sm text-blue-600 border-b-2 border-blue-600 font-medium';
+            CommonFunctions.TabSystem.switchTab(tabName, element, 'tab-content');
             
             // 根據分頁載入相應數據
             switch(tabName) {
@@ -431,7 +388,7 @@
         // 載入系統健康狀態
         async function loadSystemHealth() {
             try {
-                const result = await ApiClient.get('/api/v1/monitor/health');
+                const result = await SpecializedApiClients.Monitor.getHealth();
                 
                 if (result.success && result.data) {
                     const status = result.data.status;
@@ -449,7 +406,7 @@
                     throw new Error('無法獲取系統狀態');
                 }
             } catch (error) {
-                console.error('載入系統健康狀態失敗:', error);
+                UI.handleError(error, '載入系統健康狀態');
                 document.getElementById('systemHealth').textContent = '檢查失敗';
                 document.getElementById('healthIndicator').className = 'status-error';
             }
@@ -457,61 +414,21 @@
 
         // 載入系統統計
         async function loadSystemStats() {
-            try {
-                // 先嘗試載入管理統計 (需要認證)
-                const adminResult = await ApiClient.get('/api/v1/admin/stats');
-                
-                if (adminResult.success && adminResult.data) {
-                    const stats = adminResult.data;
-                    
-                    document.getElementById('totalUsers').textContent = stats.total_users || '0';
-                    document.getElementById('todayVisits').textContent = stats.today_visits || '0';
-                    document.getElementById('apiRequests').textContent = stats.api_requests_total || '0';
-                    
-                    // 格式化內存使用
-                    if (stats.memory_usage) {
-                        const memoryPercent = Math.round(stats.memory_usage * 100);
-                        document.getElementById('memoryUsage').textContent = `${memoryPercent}%`;
-                    }
-                } else {
-                    throw new Error('需要管理員認證');
-                }
-            } catch (error) {
-                console.warn('管理統計需要認證，使用監控數據:', error);
-                
-                // 如果管理統計失敗，使用監控數據作為替代
-                try {
-                    const monitorResult = await ApiClient.get('/api/v1/monitor/stats');
-                    if (monitorResult.success && monitorResult.data) {
-                        const data = monitorResult.data;
-                        
-                        document.getElementById('totalUsers').textContent = '需要登入';
-                        document.getElementById('todayVisits').textContent = '需要登入';
-                        document.getElementById('apiRequests').textContent = data.runtime?.goroutines || '0';
-                        document.getElementById('memoryUsage').textContent = data.runtime?.memory_usage || '0 MB';
-                    }
-                } catch (monitorError) {
-                    console.error('載入監控統計也失敗:', monitorError);
-                    // 顯示默認值
-                    document.getElementById('totalUsers').textContent = '-';
-                    document.getElementById('todayVisits').textContent = '-';
-                    document.getElementById('apiRequests').textContent = '-';
-                    document.getElementById('memoryUsage').textContent = '-';
-                }
-            }
+            // 這個函數留空，因為統計數據在 loadDetailedStats 中處理
+            // 避免嘗試設置不存在的元素
         }
 
         // 載入監控數據
         async function loadMonitorData() {
             try {
-                const result = await ApiClient.get('/api/v1/monitor/stats');
+                const result = await SpecializedApiClients.Monitor.getStats();
                 
                 if (result.success && result.data) {
                     displayServiceStatus(result.data);
                     displaySystemMetrics(result.data);
                 }
             } catch (error) {
-                console.error('載入監控數據失敗:', error);
+                UI.handleError(error, '載入監控數據');
             }
         }
 
@@ -594,7 +511,7 @@
         // 載入用戶列表
         async function loadUsers() {
             try {
-                const result = await ApiClient.get(`/api/v1/admin/users?page=${currentUsersPage}&limit=${usersPerPage}`);
+                const result = await SpecializedApiClients.Admin.getUsers(currentUsersPage, usersPerPage);
                 
                 if (result.success && result.data) {
                     allUsers = result.data.users || [];
@@ -605,11 +522,9 @@
                     throw new Error(result.message || '載入失敗');
                 }
             } catch (error) {
-                console.error('載入用戶列表失敗:', error);
+                UI.handleError(error, '載入用戶列表');
                 
                 if (error.message && error.message.includes('認證')) {
-                    UI.showToast('需要管理員登入才能查看用戶列表', 'warning');
-                    
                     // 顯示需要登入的提示
                     const tbody = document.getElementById('usersTableBody');
                     tbody.innerHTML = `
@@ -625,8 +540,6 @@
                     `;
                     
                     document.getElementById('usersCount').textContent = '需要管理員認證';
-                } else {
-                    UI.showToast('載入用戶列表失敗: ' + error.message, 'error');
                 }
             }
         }
@@ -755,7 +668,7 @@
             };
             
             try {
-                const result = await ApiClient.put(`/api/v1/admin/users/${currentEditingUserId}`, userData);
+                const result = await SpecializedApiClients.Admin.updateUser(currentEditingUserId, userData);
                 
                 if (result.success) {
                     UI.showToast('用戶信息已更新', 'success');
@@ -765,8 +678,7 @@
                     throw new Error(result.error?.message || '更新失敗');
                 }
             } catch (error) {
-                console.error('保存用戶修改失敗:', error);
-                UI.showToast('保存失敗: ' + error.message, 'error');
+                UI.handleError(error, '保存用戶修改');
             }
         }
 
@@ -788,8 +700,7 @@
                     throw new Error(result.error?.message || '重置失敗');
                 }
             } catch (error) {
-                console.error('重置密碼失敗:', error);
-                UI.showToast('重置失敗: ' + error.message, 'error');
+                UI.handleError(error, '重置密碼');
             }
         }
 
@@ -861,8 +772,8 @@
                 if (endTime) params.append('end_time', endTime);
                 if (keyword) params.append('keyword', keyword);
                 
-                const url = `/api/v1/admin/logs${params.toString() ? '?' + params.toString() : ''}`;
-                const result = await ApiClient.get(url);
+                let endpoint = `/api/v1/admin/logs${params.toString() ? '?' + params.toString() : ''}`;
+                const result = await SpecializedApiClients.Admin.getLogs();
                 
                 if (result.success && result.data) {
                     displayLogs(result.data.logs || []);
@@ -870,11 +781,9 @@
                     throw new Error(result.message || '載入失敗');
                 }
             } catch (error) {
-                console.error('載入日誌失敗:', error);
+                UI.handleError(error, '載入日誌');
                 
                 if (error.message && error.message.includes('認證')) {
-                    UI.showToast('需要管理員登入才能查看系統日誌', 'warning');
-                    
                     // 顯示需要登入的提示
                     const container = document.getElementById('logsList');
                     container.innerHTML = `
@@ -885,8 +794,6 @@
                         </div>
                     `;
                 } else {
-                    UI.showToast('載入日誌失敗: ' + error.message, 'error');
-                    
                     // 顯示模擬日誌作為示例
                     const mockLogs = [
                         { level: 'info', timestamp: new Date().toISOString(), message: '系統正常運行中', source: 'system' },
@@ -933,7 +840,7 @@
         // 載入詳細統計
         async function loadDetailedStats() {
             try {
-                const result = await ApiClient.get('/api/v1/admin/stats');
+                const result = await SpecializedApiClients.Admin.getStats();
                 
                 if (result.success && result.data) {
                     displayDetailedStats(result.data);
@@ -945,12 +852,12 @@
                 
                 // 使用監控數據作為替代
                 try {
-                    const monitorResult = await ApiClient.get('/api/v1/monitor/stats');
+                    const monitorResult = await SpecializedApiClients.Monitor.getStats();
                     if (monitorResult.success && monitorResult.data) {
                         displayDetailedStatsFromMonitor(monitorResult.data);
                     }
                 } catch (monitorError) {
-                    console.error('載入監控統計也失敗:', monitorError);
+                    UI.handleError(monitorError, '載入監控統計');
                     displayDefaultStats();
                 }
             }

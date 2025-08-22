@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 	"sync"
-	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/sirupsen/logrus"
@@ -118,7 +117,7 @@ func NewMemoryManager() *MemoryManager {
 	return &MemoryManager{
 		shortTermMemory: make(map[string]*ShortTermMemory),
 		longTermMemory:  make(map[string]*LongTermMemory),
-		db:              database.GetDB(),
+		db:              GetDB(),
 	}
 }
 
@@ -635,7 +634,7 @@ func (mm *MemoryManager) extractPreferences(memory *LongTermMemory, message stri
 			
 			if !exists {
 				preference := Preference{
-					ID:         utils.GenerateID(8),
+					ID:         utils.GenerateUUID(),
 					Category:   template.category,
 					Content:    content,
 					Importance: importance,
@@ -717,7 +716,7 @@ func (mm *MemoryManager) detectMilestones(memory *LongTermMemory, userMessage, a
 			
 			if !exists {
 				milestone := Milestone{
-					ID:          utils.GenerateID(8),
+					ID:          utils.GenerateUUID()[:8],
 					Type:        mType,
 					Description: fmt.Sprintf("達成里程碑：%s", keyword),
 					Date:        time.Now(),
@@ -1053,199 +1052,181 @@ func (mm *MemoryManager) loadLongTermMemoryFromDB(userID, characterID string) *L
 func (mm *MemoryManager) saveLongTermMemoryToDB(memory *LongTermMemory) error {
 	ctx := context.Background()
 	
-	// 開始事務
-	tx, err := mm.db.BeginTx(ctx, nil)
+	// 使用 RunInTx 處理事務
+	err := mm.db.RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// 1. 保存或更新主記錄
+		memoryModel := &models.LongTermMemoryModel{
+			ID:          utils.GenerateUUID(), // 生成唯一ID
+			UserID:      memory.UserID,
+			CharacterID: memory.CharacterID,
+			LastUpdated: memory.LastUpdated,
+			UpdatedAt:   time.Now(),
+		}
+		
+		// 嘗試插入或更新
+		_, err := tx.NewInsert().
+			Model(memoryModel).
+			On("CONFLICT (user_id, character_id) DO UPDATE").
+			Set("last_updated = EXCLUDED.last_updated").
+			Set("updated_at = EXCLUDED.updated_at").
+			Returning("id").
+			Exec(ctx)
+			
+		if err != nil {
+			return fmt.Errorf("保存記憶主記錄失敗: %w", err)
+		}
+		
+		// 獲取記憶ID
+		var memoryID string
+		err = tx.NewSelect().
+			Model((*models.LongTermMemoryModel)(nil)).
+			Column("id").
+			Where("user_id = ? AND character_id = ?", memory.UserID, memory.CharacterID).
+			Scan(ctx, &memoryID)
+			
+		if err != nil {
+			return fmt.Errorf("獲取記憶ID失敗: %w", err)
+		}
+		
+		// 2. 清理並重新插入相關數據（簡化方法）
+		tables := []string{
+			"memory_preferences", "memory_nicknames", "memory_milestones",
+			"memory_dislikes", "memory_personal_info",
+		}
+		
+		for _, table := range tables {
+			_, err = tx.NewDelete().
+				Table(table).
+				Where("memory_id = ?", memoryID).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("清理表 %s 失敗: %w", table, err)
+			}
+		}
+		
+		// 3. 插入偏好
+		if len(memory.Preferences) > 0 {
+			preferences := make([]models.MemoryPreference, 0, len(memory.Preferences))
+			for _, pref := range memory.Preferences {
+				preferences = append(preferences, models.MemoryPreference{
+					ID:         utils.GenerateUUID(),
+					MemoryID:   memoryID,
+					Content:    pref.Content,
+					Category:   pref.Category,
+					Importance: pref.Importance,
+					CreatedAt:  pref.CreatedAt,
+				})
+			}
+			
+			_, err = tx.NewInsert().
+				Model(&preferences).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("保存偏好失敗: %w", err)
+			}
+		}
+		
+		// 4. 插入稱呼
+		if len(memory.Nicknames) > 0 {
+			nicknames := make([]models.MemoryNickname, 0, len(memory.Nicknames))
+			for _, nick := range memory.Nicknames {
+				nicknames = append(nicknames, models.MemoryNickname{
+					ID:        utils.GenerateUUID(),
+					MemoryID:  memoryID,
+					Nickname:  nick.Name,
+					Frequency: nick.Frequency,
+					LastUsed:  nick.LastUsed,
+					CreatedAt: time.Now(),
+				})
+			}
+			
+			_, err = tx.NewInsert().
+				Model(&nicknames).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("保存稱呼失敗: %w", err)
+			}
+		}
+		
+		// 5. 插入里程碑
+		if len(memory.Milestones) > 0 {
+			milestones := make([]models.MemoryMilestone, 0, len(memory.Milestones))
+			for _, milestone := range memory.Milestones {
+				milestones = append(milestones, models.MemoryMilestone{
+					ID:          milestone.ID,
+					MemoryID:    memoryID,
+					Type:        milestone.Type,
+					Description: milestone.Description,
+					Affection:   milestone.Affection,
+					Date:        milestone.Date,
+					CreatedAt:   time.Now(),
+				})
+			}
+			
+			_, err = tx.NewInsert().
+				Model(&milestones).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("保存里程碑失敗: %w", err)
+			}
+		}
+		
+		// 6. 插入禁忌
+		if len(memory.Dislikes) > 0 {
+			dislikes := make([]models.MemoryDislike, 0, len(memory.Dislikes))
+			for _, dislike := range memory.Dislikes {
+				dislikes = append(dislikes, models.MemoryDislike{
+					ID:         utils.GenerateUUID(),
+					MemoryID:   memoryID,
+					Topic:      dislike.Topic,
+					Severity:   dislike.Severity,
+					Evidence:   dislike.Evidence,
+					RecordedAt: dislike.RecordedAt,
+					CreatedAt:  time.Now(),
+				})
+			}
+			
+			_, err = tx.NewInsert().
+				Model(&dislikes).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("保存禁忌失敗: %w", err)
+			}
+		}
+		
+		// 7. 插入個人信息
+		if len(memory.PersonalInfo) > 0 {
+			personalInfo := make([]models.MemoryPersonalInfo, 0, len(memory.PersonalInfo))
+			for infoType, content := range memory.PersonalInfo {
+				personalInfo = append(personalInfo, models.MemoryPersonalInfo{
+					ID:        utils.GenerateUUID(),
+					MemoryID:  memoryID,
+					InfoType:  infoType,
+					Content:   content,
+					CreatedAt: time.Now(),
+					UpdatedAt: time.Now(),
+				})
+			}
+			
+			_, err = tx.NewInsert().
+				Model(&personalInfo).
+				Exec(ctx)
+			if err != nil {
+				return fmt.Errorf("保存個人信息失敗: %w", err)
+			}
+		}
+		
+		utils.Logger.WithFields(logrus.Fields{
+			"user_id":      memory.UserID,
+			"character_id": memory.CharacterID,
+			"memory_id":    memoryID,
+		}).Info("長期記憶保存到資料庫成功")
+		
+		return nil
+	})
 	if err != nil {
-		return fmt.Errorf("開始事務失敗: %w", err)
+		return err
 	}
-	defer func() {
-		if r := recover(); r != nil {
-			tx.Rollback()
-			panic(r)
-		}
-	}()
-	
-	// 1. 保存或更新主記錄
-	memoryModel := &models.LongTermMemoryModel{
-		ID:          utils.GenerateID(16), // 生成唯一ID
-		UserID:      memory.UserID,
-		CharacterID: memory.CharacterID,
-		LastUpdated: memory.LastUpdated,
-		UpdatedAt:   time.Now(),
-	}
-	
-	// 嘗試插入或更新
-	_, err = tx.NewInsert().
-		Model(memoryModel).
-		On("CONFLICT (user_id, character_id) DO UPDATE").
-		Set("last_updated = EXCLUDED.last_updated").
-		Set("updated_at = EXCLUDED.updated_at").
-		Returning("id").
-		Exec(ctx)
-		
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("保存記憶主記錄失敗: %w", err)
-	}
-	
-	// 獲取記憶ID
-	var memoryID string
-	err = tx.NewSelect().
-		Model((*models.LongTermMemoryModel)(nil)).
-		Column("id").
-		Where("user_id = ? AND character_id = ?", memory.UserID, memory.CharacterID).
-		Scan(ctx, &memoryID)
-		
-	if err != nil {
-		tx.Rollback()
-		return fmt.Errorf("獲取記憶ID失敗: %w", err)
-	}
-	
-	// 2. 清理並重新插入相關數據（簡化方法）
-	tables := []string{
-		"memory_preferences", "memory_nicknames", "memory_milestones",
-		"memory_dislikes", "memory_personal_info",
-	}
-	
-	for _, table := range tables {
-		_, err = tx.NewDelete().
-			Table(table).
-			Where("memory_id = ?", memoryID).
-			Exec(ctx)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("清理表 %s 失敗: %w", table, err)
-		}
-	}
-	
-	// 3. 插入偏好
-	if len(memory.Preferences) > 0 {
-		preferences := make([]models.MemoryPreference, 0, len(memory.Preferences))
-		for _, pref := range memory.Preferences {
-			preferences = append(preferences, models.MemoryPreference{
-				ID:         utils.GenerateID(16),
-				MemoryID:   memoryID,
-				Content:    pref.Content,
-				Category:   pref.Category,
-				Importance: pref.Importance,
-				CreatedAt:  pref.CreatedAt,
-			})
-		}
-		
-		_, err = tx.NewInsert().
-			Model(&preferences).
-			Exec(ctx)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("保存偏好失敗: %w", err)
-		}
-	}
-	
-	// 4. 插入稱呼
-	if len(memory.Nicknames) > 0 {
-		nicknames := make([]models.MemoryNickname, 0, len(memory.Nicknames))
-		for _, nick := range memory.Nicknames {
-			nicknames = append(nicknames, models.MemoryNickname{
-				ID:        utils.GenerateID(16),
-				MemoryID:  memoryID,
-				Nickname:  nick.Name,
-				Frequency: nick.Frequency,
-				LastUsed:  nick.LastUsed,
-				CreatedAt: time.Now(),
-			})
-		}
-		
-		_, err = tx.NewInsert().
-			Model(&nicknames).
-			Exec(ctx)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("保存稱呼失敗: %w", err)
-		}
-	}
-	
-	// 5. 插入里程碑
-	if len(memory.Milestones) > 0 {
-		milestones := make([]models.MemoryMilestone, 0, len(memory.Milestones))
-		for _, milestone := range memory.Milestones {
-			milestones = append(milestones, models.MemoryMilestone{
-				ID:          milestone.ID,
-				MemoryID:    memoryID,
-				Type:        milestone.Type,
-				Description: milestone.Description,
-				Affection:   milestone.Affection,
-				Date:        milestone.Date,
-				CreatedAt:   time.Now(),
-			})
-		}
-		
-		_, err = tx.NewInsert().
-			Model(&milestones).
-			Exec(ctx)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("保存里程碑失敗: %w", err)
-		}
-	}
-	
-	// 6. 插入禁忌
-	if len(memory.Dislikes) > 0 {
-		dislikes := make([]models.MemoryDislike, 0, len(memory.Dislikes))
-		for _, dislike := range memory.Dislikes {
-			dislikes = append(dislikes, models.MemoryDislike{
-				ID:         utils.GenerateID(16),
-				MemoryID:   memoryID,
-				Topic:      dislike.Topic,
-				Severity:   dislike.Severity,
-				Evidence:   dislike.Evidence,
-				RecordedAt: dislike.RecordedAt,
-				CreatedAt:  time.Now(),
-			})
-		}
-		
-		_, err = tx.NewInsert().
-			Model(&dislikes).
-			Exec(ctx)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("保存禁忌失敗: %w", err)
-		}
-	}
-	
-	// 7. 插入個人信息
-	if len(memory.PersonalInfo) > 0 {
-		personalInfo := make([]models.MemoryPersonalInfo, 0, len(memory.PersonalInfo))
-		for infoType, content := range memory.PersonalInfo {
-			personalInfo = append(personalInfo, models.MemoryPersonalInfo{
-				ID:        utils.GenerateID(16),
-				MemoryID:  memoryID,
-				InfoType:  infoType,
-				Content:   content,
-				CreatedAt: time.Now(),
-				UpdatedAt: time.Now(),
-			})
-		}
-		
-		_, err = tx.NewInsert().
-			Model(&personalInfo).
-			Exec(ctx)
-		if err != nil {
-			tx.Rollback()
-			return fmt.Errorf("保存個人信息失敗: %w", err)
-		}
-	}
-	
-	// 提交事務
-	if err = tx.Commit(); err != nil {
-		tx.Rollback()
-		return fmt.Errorf("提交事務失敗: %w", err)
-	}
-	
-	utils.Logger.WithFields(logrus.Fields{
-		"user_id":      memory.UserID,
-		"character_id": memory.CharacterID,
-		"memory_id":    memoryID,
-	}).Info("長期記憶保存到資料庫成功")
 	
 	return nil
 }
@@ -1287,7 +1268,7 @@ func (mm *MemoryManager) extractSmartMemory(memory *LongTermMemory, userMessage,
 			
 			if !exists {
 				preference := Preference{
-					ID:         utils.GenerateID(8),
+					ID:         utils.GenerateUUID(),
 					Category:   "emotional_moment",
 					Content:    content,
 					Importance: 3, // 中等重要度
@@ -1329,7 +1310,7 @@ func (mm *MemoryManager) extractSmartMemory(memory *LongTermMemory, userMessage,
 			
 			if !exists {
 				milestone := Milestone{
-					ID:          utils.GenerateID(8),
+					ID:          utils.GenerateUUID()[:8],
 					Type:        mType,
 					Description: fmt.Sprintf("特殊對話：%s", pattern),
 					Date:        time.Now(),
@@ -1348,7 +1329,7 @@ func (mm *MemoryManager) extractSmartMemory(memory *LongTermMemory, userMessage,
 	// 基於好感度變化檢測重要時刻
 	if emotion.Affection >= 80 && len(memory.Milestones) == 0 {
 		milestone := Milestone{
-			ID:          utils.GenerateID(8),
+			ID:          utils.GenerateUUID()[:8],
 			Type:        "high_affection",
 			Description: "達成高好感度",
 			Date:        time.Now(),

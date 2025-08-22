@@ -5,7 +5,6 @@ import (
 	"runtime"
 
 	"github.com/gin-gonic/gin"
-	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
@@ -53,8 +52,8 @@ func GetStatus(c *gin.Context) {
 
 	// 檢查數據庫狀態
 	dbStatus := "disconnected"
-	if database.DB != nil {
-		if err := database.DB.Ping(); err == nil {
+	if GetDB() != nil {
+		if err := GetDB().Ping(); err == nil {
 			dbStatus = "connected"
 		} else {
 			dbStatus = "error"

@@ -7,9 +7,13 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"golang.org/x/crypto/bcrypt"
-	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/utils"
+)
+
+var (
+	userMapper = models.NewUserMapper()
 )
 
 // RegisterUser godoc
@@ -27,21 +31,14 @@ func RegisterUser(c *gin.Context) {
 	ctx := context.Background()
 
 	var req models.RegisterRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "輸入參數錯誤: " + err.Error(),
-			},
-		})
+	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
 
 	// 檢查用戶是否已存在
-	var existingUser models.User
-	exists, err := database.DB.NewSelect().
-		Model(&existingUser).
+	var existingUserDB db.UserDB
+	exists, err := GetDB().NewSelect().
+		Model(&existingUserDB).
 		Where("email = ? OR username = ?", req.Email, req.Username).
 		Exists(ctx)
 
@@ -83,18 +80,23 @@ func RegisterUser(c *gin.Context) {
 	}
 
 	// 創建新用戶
+	defaultBirthDate := time.Date(1990, 1, 1, 0, 0, 0, 0, time.UTC)
 	user := &models.User{
-		ID:        utils.GenerateID(16),
+		ID:        utils.GenerateUserID(),
 		Username:  req.Username,
 		Email:     req.Email,
 		Password:  string(hashedPassword),
 		Status:    "active",
+		BirthDate: &defaultBirthDate,
+		IsVerified: false,
+		IsAdult:    false,
 		CreatedAt: time.Now(),
 		UpdatedAt: time.Now(),
 	}
 
-	// 插入數據庫
-	_, err = database.DB.NewInsert().Model(user).Exec(ctx)
+	// 轉換為DB模型並插入數據庫
+	userDB := userMapper.ToDB(user)
+	_, err = GetDB().NewInsert().Model(userDB).Exec(ctx)
 	if err != nil {
 		utils.Logger.WithError(err).Error("Failed to create user")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -129,21 +131,14 @@ func LoginUser(c *gin.Context) {
 	ctx := context.Background()
 
 	var req models.LoginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "輸入參數錯誤: " + err.Error(),
-			},
-		})
+	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
 
 	// 查找用戶
-	var user models.User
-	err := database.DB.NewSelect().
-		Model(&user).
+	var userDB db.UserDB
+	err := GetDB().NewSelect().
+		Model(&userDB).
 		Where("username = ? AND status = ?", req.Username, "active").
 		Scan(ctx)
 
@@ -158,6 +153,9 @@ func LoginUser(c *gin.Context) {
 		})
 		return
 	}
+
+	// 轉換為領域模型
+	user := userMapper.FromDB(&userDB)
 
 	// 驗證密碼
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
@@ -206,8 +204,9 @@ func LoginUser(c *gin.Context) {
 	user.LastLoginAt = &now
 	user.UpdatedAt = now
 
-	_, err = database.DB.NewUpdate().
-		Model(&user).
+	updatedUserDB := userMapper.ToDB(user)
+	_, err = GetDB().NewUpdate().
+		Model(updatedUserDB).
 		Column("last_login_at", "updated_at").
 		Where("id = ?", user.ID).
 		Exec(ctx)
@@ -259,9 +258,9 @@ func GetUserProfile(c *gin.Context) {
 		return
 	}
 
-	var user models.User
-	err := database.DB.NewSelect().
-		Model(&user).
+	var userDB db.UserDB
+	err := GetDB().NewSelect().
+		Model(&userDB).
 		Where("id = ? AND status = ?", userID, "active").
 		Scan(ctx)
 
@@ -276,6 +275,9 @@ func GetUserProfile(c *gin.Context) {
 		})
 		return
 	}
+
+	// 轉換為領域模型
+	user := userMapper.FromDB(&userDB)
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
@@ -313,14 +315,7 @@ func UpdateUserProfile(c *gin.Context) {
 	}
 
 	var req models.UpdateProfileRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "輸入參數錯誤: " + err.Error(),
-			},
-		})
+	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -330,7 +325,7 @@ func UpdateUserProfile(c *gin.Context) {
 	}
 
 	// 只更新提供的字段
-	updateQuery := database.DB.NewUpdate().Model(&updateData)
+	updateQuery := GetDB().NewUpdate().Model(&updateData)
 
 	if req.DisplayName != nil {
 		updateData.DisplayName = req.DisplayName
@@ -341,7 +336,7 @@ func UpdateUserProfile(c *gin.Context) {
 		updateQuery = updateQuery.Column("bio")
 	}
 	if req.AvatarURL != nil {
-		updateData.AvatarURL = *req.AvatarURL
+		updateData.AvatarURL = req.AvatarURL
 		updateQuery = updateQuery.Column("avatar_url")
 	}
 
@@ -375,9 +370,9 @@ func UpdateUserProfile(c *gin.Context) {
 	}
 
 	// 獲取更新後的用戶信息
-	var user models.User
-	err = database.DB.NewSelect().
-		Model(&user).
+	var userDB db.UserDB
+	err = GetDB().NewSelect().
+		Model(&userDB).
 		Where("id = ?", userID).
 		Scan(ctx)
 
@@ -393,10 +388,74 @@ func UpdateUserProfile(c *gin.Context) {
 		return
 	}
 
+	// 轉換為領域模型
+	user := userMapper.FromDB(&userDB)
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "用戶資料更新成功",
 		Data:    user.ToResponse(),
+	})
+}
+
+// GetUserPreferences godoc
+// @Summary      獲取用戶偏好設置
+// @Description  獲取用戶偏好設置
+// @Tags         User
+// @Accept       json
+// @Produce      json
+// @Security     BearerAuth
+// @Success      200 {object} models.APIResponse{data=map[string]interface{}} "獲取成功"
+// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
+// @Failure      404 {object} models.APIResponse{error=models.APIError} "用戶不存在"
+// @Router       /user/preferences [get]
+func GetUserPreferences(c *gin.Context) {
+	ctx := context.Background()
+
+	// 從中間件獲取用戶ID
+	userID, exists := c.Get("user_id")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UNAUTHORIZED",
+				Message: "未授權訪問",
+			},
+		})
+		return
+	}
+
+	var userDB db.UserDB
+	err := GetDB().NewSelect().
+		Model(&userDB).
+		Where("id = ? AND status = ?", userID, "active").
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("User not found")
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_NOT_FOUND",
+				Message: "用戶不存在",
+			},
+		})
+		return
+	}
+
+	// 轉換為領域模型
+	user := userMapper.FromDB(&userDB)
+
+	// 返回偏好設置，如果為空則返回空對象
+	preferences := user.Preferences
+	if preferences == nil {
+		preferences = make(map[string]interface{})
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "獲取偏好設置成功",
+		Data:    preferences,
 	})
 }
 
@@ -429,21 +488,14 @@ func UpdateUserPreferences(c *gin.Context) {
 	}
 
 	var req models.UpdatePreferencesRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "輸入參數錯誤: " + err.Error(),
-			},
-		})
+	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
 
 	// 獲取當前用戶
-	var user models.User
-	err := database.DB.NewSelect().
-		Model(&user).
+	var userDB db.UserDB
+	err := GetDB().NewSelect().
+		Model(&userDB).
 		Where("id = ? AND status = ?", userID, "active").
 		Scan(ctx)
 
@@ -459,6 +511,9 @@ func UpdateUserPreferences(c *gin.Context) {
 		return
 	}
 
+	// 轉換為領域模型
+	user := userMapper.FromDB(&userDB)
+
 	// 更新偏好設置
 	if user.Preferences == nil {
 		user.Preferences = make(map[string]interface{})
@@ -471,9 +526,10 @@ func UpdateUserPreferences(c *gin.Context) {
 
 	user.UpdatedAt = time.Now()
 
-	// 執行更新
-	_, err = database.DB.NewUpdate().
-		Model(&user).
+	// 轉換回DB模型並執行更新
+	updatedUserDB := userMapper.ToDB(user)
+	_, err = GetDB().NewUpdate().
+		Model(updatedUserDB).
 		Column("preferences", "updated_at").
 		Where("id = ?", userID).
 		Exec(ctx)
@@ -552,14 +608,7 @@ func RefreshToken(c *gin.Context) {
 	ctx := context.Background()
 
 	var req models.RefreshTokenRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "輸入參數錯誤: " + err.Error(),
-			},
-		})
+	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -578,9 +627,9 @@ func RefreshToken(c *gin.Context) {
 	}
 
 	// 查找用戶
-	var user models.User
-	err = database.DB.NewSelect().
-		Model(&user).
+	var userDB db.UserDB
+	err = GetDB().NewSelect().
+		Model(&userDB).
 		Where("id = ? AND status = ?", userID, "active").
 		Scan(ctx)
 
@@ -595,6 +644,9 @@ func RefreshToken(c *gin.Context) {
 		})
 		return
 	}
+
+	// 轉換為領域模型
+	user := userMapper.FromDB(&userDB)
 
 	// 生成新的 Access Token
 	newAccessToken, err := utils.GenerateAccessToken(user.ID, user.Username, user.Email)
@@ -668,18 +720,32 @@ func UploadAvatar(c *gin.Context) {
 		AvatarURL string `json:"avatar_url" binding:"required,url"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
+	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
+		return
+	}
+
+	ctx := context.Background()
+
+	// 更新用戶頭像URL到資料庫
+	_, err := GetDB().NewUpdate().
+		Model((*db.UserDB)(nil)).
+		Set("avatar_url = ?", req.AvatarURL).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", userID).
+		Exec(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("Failed to update avatar URL")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "請提供有效的頭像URL: " + err.Error(),
+				Code:    "DATABASE_ERROR",
+				Message: "更新頭像失敗",
 			},
 		})
 		return
 	}
 
-	// 靜態回應 - 模擬頭像設置
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "頭像設置成功",
@@ -724,14 +790,7 @@ func DeleteAccount(c *gin.Context) {
 		Confirmation string `json:"confirmation" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "請提供密碼確認: " + err.Error(),
-			},
-		})
+	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -790,14 +849,7 @@ func VerifyAge(c *gin.Context) {
 		Consent   bool `json:"consent" binding:"required"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "INVALID_INPUT",
-				Message: "請提供完整的驗證信息: " + err.Error(),
-			},
-		})
+	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -827,7 +879,29 @@ func VerifyAge(c *gin.Context) {
 		return
 	}
 
-	// 靜態回應 - 模擬年齡驗證
+	ctx := context.Background()
+
+	// 更新用戶年齡驗證狀態到資料庫
+	_, err := GetDB().NewUpdate().
+		Model((*db.UserDB)(nil)).
+		Set("is_adult = ?", true).
+		Set("is_verified = ?", true).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", userID).
+		Exec(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("Failed to update age verification")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "年齡驗證更新失敗",
+			},
+		})
+		return
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "年齡驗證成功",
@@ -836,7 +910,7 @@ func VerifyAge(c *gin.Context) {
 			"verified_at":     time.Now(),
 			"age_verified":    true,
 			"adult_content":   true,
-			"verification_id": utils.GenerateID(16),
+			"verification_id": utils.GenerateUUID(),
 		},
 	})
 }

@@ -68,3 +68,57 @@ func AuthMiddleware() gin.HandlerFunc {
 		c.Next()
 	}
 }
+
+// AdminMiddleware 管理員權限中間件
+func AdminMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 首先需要通過基本認證
+		userID, exists := c.Get("userID")
+		if !exists {
+			c.JSON(http.StatusUnauthorized, models.APIResponse{
+				Success: false,
+				Message: "未授權",
+				Error: &models.APIError{
+					Code:    "UNAUTHORIZED",
+					Message: "用戶未通過認證",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		// 檢查管理員權限 (目前簡化實現，實際應查詢用戶角色)
+		userIDStr := userID.(string)
+		
+		// TODO: 實際項目中應該查詢用戶的角色/權限
+		// 這裡暫時使用簡化邏輯：特定用戶ID或用戶名為admin的用戶
+		username, usernameExists := c.Get("username")
+		if usernameExists && username.(string) == "admin" {
+			c.Next()
+			return
+		}
+		
+		// 或者基於用戶ID的管理員列表（生產環境應該從數據庫查詢）
+		adminUsers := map[string]bool{
+			"admin": true,
+			// 可以添加其他管理員用戶ID
+		}
+		
+		if adminUsers[userIDStr] {
+			c.Next()
+			return
+		}
+
+		// 非管理員用戶
+		c.JSON(http.StatusForbidden, models.APIResponse{
+			Success: false,
+			Message: "需要管理員權限",
+			Error: &models.APIError{
+				Code:    "INSUFFICIENT_PRIVILEGES",
+				Message: "此操作需要管理員權限",
+			},
+		})
+		c.Abort()
+	}
+}
+

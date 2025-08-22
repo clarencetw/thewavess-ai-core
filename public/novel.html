@@ -18,6 +18,9 @@
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
 </head>
 <body class="min-h-full p-4 bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
@@ -213,7 +216,7 @@
                     </div>
                     <div class="flex justify-between">
                         <span>最愛角色</span>
-                        <span id="favoriteCharacter">陸寒淵</span>
+                        <span id="favoriteCharacter">沈宸</span>
                     </div>
                 </div>
             </div>
@@ -242,7 +245,7 @@
         // 載入小說列表
         async function loadNovelLibrary() {
             try {
-                const result = await ApiClient.get('/api/v1/novel/list');
+                const result = await SpecializedApiClients.Novel.getList();
                 
                 let novels = [];
                 if (result.success && result.data) {
@@ -255,7 +258,7 @@
                 displayNovelLibrary(novels);
                 
             } catch (error) {
-                console.error('載入小說列表失敗:', error);
+                UI.handleError(error, '載入小說列表');
                 displayNovelLibrary(generateMockNovels());
                 UI.showToast('使用模擬數據', 'warning');
             }
@@ -289,9 +292,7 @@
             try {
                 UI.showGlobalLoading(true);
                 
-                const result = await ApiClient.post('/api/v1/novel/start', {
-                    novel_id: novelId
-                });
+                const result = await SpecializedApiClients.Novel.start(novelId);
                 
                 if (result.success && result.data) {
                     currentNovel = result.data.novel;
@@ -306,7 +307,7 @@
                 }
                 
             } catch (error) {
-                console.error('開始小說失敗:', error);
+                UI.handleError(error, '開始小說');
                 
                 // 使用模擬數據
                 const mockData = generateMockNovelStart(novelId);
@@ -393,7 +394,7 @@
             try {
                 UI.showGlobalLoading(true);
                 
-                const result = await ApiClient.post('/api/v1/novel/choice', {
+                const result = await SpecializedApiClients.Novel.makeChoice({
                     novel_id: currentProgress.novel_id,
                     progress_id: currentProgress.id,
                     choice_index: choiceIndex,
@@ -411,7 +412,7 @@
                 }
                 
             } catch (error) {
-                console.error('做出選擇失敗:', error);
+                UI.handleError(error, '做出選擇');
                 
                 // 模擬選擇結果
                 simulateChoiceResult(choiceText);
@@ -483,12 +484,12 @@
         // 載入當前進度
         async function loadCurrentProgress() {
             try {
-                const result = await ApiClient.get('/api/v1/novel/progress/list');
+                const result = await SpecializedApiClients.Novel.getProgressList();
                 
                 if (result.success && result.data && result.data.saves && result.data.saves.length > 0) {
                     // 載入最近的進度
                     const latestSave = result.data.saves[0];
-                    const progressResult = await ApiClient.get(`/api/v1/novel/progress/${latestSave.novel_id}`);
+                    const progressResult = await SpecializedApiClients.Novel.getProgress(latestSave.novel_id);
                     
                     if (progressResult.success && progressResult.data) {
                         currentNovel = progressResult.data.novel;
@@ -510,7 +511,7 @@
             }
             
             try {
-                const result = await ApiClient.post('/api/v1/novel/progress/save', {
+                const result = await SpecializedApiClients.Novel.saveProgress({
                     novel_id: currentProgress.novel_id,
                     progress_data: currentProgress,
                     save_name: `自動保存 - ${Utils.formatFriendlyDateTime(new Date())}`
@@ -523,7 +524,7 @@
                 }
                 
             } catch (error) {
-                console.error('保存進度失敗:', error);
+                UI.handleError(error, '保存進度');
                 UI.showToast('模擬保存完成', 'info');
             }
         }
@@ -572,7 +573,7 @@
                 {
                     id: 'novel_001',
                     title: '霸道總裁的溫柔陷阱',
-                    description: '與陸寒淵的浪漫邂逅，每個選擇都會影響你們的關係發展。',
+                    description: '與沈宸的浪漫邂逅，每個選擇都會影響你們的關係發展。',
                     genre: '現代言情',
                     estimated_time: '45分鐘'
                 },

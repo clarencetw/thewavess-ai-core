@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"strings"
 
@@ -93,18 +94,20 @@ func main() {
 
 	// Initialize database (non-fatal for development/testing)
 	dbInitialized := false
-	if err := database.InitDB(); err != nil {
-		utils.Logger.WithError(err).Warn("Failed to initialize database, running in database-free mode")
+	app := database.InitDB()
+	if app == nil {
+		utils.Logger.Warn("Failed to initialize database, running in database-free mode")
 	} else {
 		dbInitialized = true
-		defer database.CloseDB()
+		defer app.Close()
 		
-		// Initialize migrations if database is available
-		if err := database.InitMigrations(); err != nil {
-			utils.Logger.WithError(err).Warn("Failed to initialize migrations")
-		} else {
-			utils.Logger.Info("Database and migrations initialized successfully")
+		// Run startup hooks
+		ctx := context.Background()
+		if err := app.RunStartHooks(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Startup hooks failed")
 		}
+		
+		utils.Logger.Info("Database and hooks initialized successfully")
 	}
 
 	// Initialize Gin router
@@ -174,13 +177,15 @@ func healthCheck(c *gin.Context) {
 	}
 
 	// Check database health
-	if database.DB == nil {
+	app := database.GetApp()
+	if app == nil {
 		response["database"] = "unavailable"
 		response["database_message"] = "running in database-free mode"
 		response["note"] = "some endpoints may not work without database"
 	} else {
 		// Try to ping database
-		if err := database.DB.Ping(); err != nil {
+		db := app.DB()
+		if err := db.Ping(); err != nil {
 			response["database"] = "unhealthy"
 			response["database_error"] = err.Error()
 		} else {

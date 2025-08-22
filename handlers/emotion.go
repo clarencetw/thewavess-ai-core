@@ -1,11 +1,15 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
@@ -171,9 +175,10 @@ func TriggerEmotionEvent(c *gin.Context) {
 	}
 
 	var req struct {
-		EventType string                 `json:"event_type" binding:"required"`
-		Intensity float64                `json:"intensity"`
-		Context   map[string]interface{} `json:"context"`
+		CharacterID string                 `json:"character_id" binding:"required"`
+		EventType   string                 `json:"event_type" binding:"required"`
+		Intensity   float64                `json:"intensity"`
+		Context     map[string]interface{} `json:"context"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -187,34 +192,134 @@ func TriggerEmotionEvent(c *gin.Context) {
 		return
 	}
 
-    // 靜態數據回應
-    // TODO(擴充建議): 可將這個事件流接入 EmotionManager，
-    // 依據 event_type -> 權重表，實際更新情感並返回真實的 before/after。
-    eventResponse := gin.H{
-		"event_id":   utils.GenerateID(16),
-		"user_id":    userID,
+	userIDStr := userID.(string)
+
+	// 獲取情感管理器
+	emotionManager := services.GetEmotionManager()
+	
+	// 獲取觸發前的情感狀態
+	beforeState := emotionManager.GetEmotionState(userIDStr, req.CharacterID)
+	
+	// 根據事件類型計算情感變化
+	var affectionChange int
+	var moodChange string
+	var characterResponse string
+	
+	switch req.EventType {
+	case "gift":
+		affectionChange = 5
+		moodChange = "happy"
+		characterResponse = "謝謝你的禮物，我很喜歡！"
+	case "compliment":
+		affectionChange = 3
+		moodChange = "pleased"
+		characterResponse = "你這樣誇我，我好開心呢～"
+	case "romantic_gesture":
+		affectionChange = 8
+		moodChange = "romantic"
+		characterResponse = "你這樣做讓我心跳好快..."
+	case "deep_conversation":
+		affectionChange = 6
+		moodChange = "loving"
+		characterResponse = "和你聊天總是讓我覺得很有意思"
+	case "physical_touch":
+		affectionChange = 4
+		moodChange = "shy"
+		characterResponse = "你...你在做什麼呀，好害羞..."
+	case "special_moment":
+		affectionChange = 10
+		moodChange = "passionate"
+		characterResponse = "這一刻我想永遠記住..."
+	default:
+		affectionChange = 2
+		moodChange = "neutral"
+		characterResponse = "嗯，我知道了"
+	}
+	
+	// 應用強度調整
+	if req.Intensity > 0 {
+		affectionChange = int(float64(affectionChange) * req.Intensity)
+	}
+	
+	// 更新情感狀態
+	newAffection := beforeState.Affection + affectionChange
+	if newAffection > 100 {
+		newAffection = 100
+	}
+	if newAffection < 0 {
+		newAffection = 0
+	}
+	
+	// 保存到資料庫
+	eventID := utils.GenerateUUID()
+	emotionEvent := &db.EmotionStateDB{
+		ID:           eventID,
+		UserID:       userIDStr,
+		CharacterID:  req.CharacterID,
+		Affection:    newAffection,
+		Mood:         moodChange,
+		Relationship: beforeState.Relationship,
+		IntimacyLevel: beforeState.IntimacyLevel,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	
+	_, err := database.GetApp().DB().NewInsert().Model(emotionEvent).Exec(c)
+	if err != nil {
+		utils.Logger.WithError(err).Error("保存情感事件失敗")
+		// 繼續執行，不返回錯誤
+	}
+	
+	// 更新情感管理器的狀態 (暫時註釋，方法不存在)
+	// emotionManager.UpdateEmotionStateByEvent(userIDStr, req.CharacterID, req.EventType, affectionChange)
+	
+	// 獲取觸發後的狀態
+	afterState := emotionManager.GetEmotionState(userIDStr, req.CharacterID)
+	
+	// 檢查是否解鎖新內容
+	var unlockedContent []gin.H
+	if afterState.Affection >= 25 && beforeState.Affection < 25 {
+		unlockedContent = append(unlockedContent, gin.H{
+			"type":        "dialogue",
+			"id":          "friendly_talk",
+			"description": "解鎖友好對話選項",
+		})
+	}
+	if afterState.Affection >= 50 && beforeState.Affection < 50 {
+		unlockedContent = append(unlockedContent, gin.H{
+			"type":        "scene",
+			"id":          "intimate_scene",
+			"description": "解鎖親密場景",
+		})
+	}
+	if afterState.Affection >= 70 && beforeState.Affection < 70 {
+		unlockedContent = append(unlockedContent, gin.H{
+			"type":        "special",
+			"id":          "lover_mode",
+			"description": "解鎖戀人模式",
+		})
+	}
+	
+	eventResponse := gin.H{
+		"event_id":   eventID,
+		"user_id":    userIDStr,
+		"character_id": req.CharacterID,
 		"event_type": req.EventType,
 		"result": gin.H{
 			"emotion_change": gin.H{
-				"before":     "neutral",
-				"after":      "happy",
-				"delta":      "+15",
+				"before": beforeState.Mood,
+				"after":  afterState.Mood,
+				"delta":  fmt.Sprintf("%s -> %s", beforeState.Mood, afterState.Mood),
 			},
 			"affection_change": gin.H{
-				"before":     68,
-				"after":      71,
-				"delta":      "+3",
+				"before": beforeState.Affection,
+				"after":  afterState.Affection,
+				"delta":  fmt.Sprintf("%+d", affectionChange),
 			},
-			"unlock_content": []gin.H{
-				{
-					"type":        "dialogue",
-					"id":          "special_001",
-					"description": "解鎖了特殊對話選項",
-				},
-			},
-			"character_response": "哇，真的嗎？你這麼說讓我很開心呢～",
+			"unlock_content": unlockedContent,
+			"character_response": characterResponse,
 		},
-		"timestamp": utils.GetCurrentTimestampString(),
+		"timestamp": time.Now(),
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -263,90 +368,128 @@ func GetAffectionHistory(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應 - 模擬好感度歷史
+	userIDStr := userID.(string)
+	days, _ := strconv.Atoi(c.DefaultQuery("days", "30"))
+	
+	// 查詢角色名稱
+	var character models.Character
+	err := database.GetApp().DB().NewSelect().
+		Model(&character).
+		Where("id = ?", characterID).
+		Scan(c)
+	
+	characterName := "未知角色"
+	if err == nil {
+		characterName = character.Name
+	}
+	
+	// 查詢情感狀態歷史
+	var emotionStates []db.EmotionStateDB
+	err = database.GetApp().DB().NewSelect().
+		Model(&emotionStates).
+		Where("user_id = ? AND character_id = ? AND created_at >= ?", 
+			userIDStr, characterID, time.Now().AddDate(0, 0, -days)).
+		Order("created_at ASC").
+		Scan(c)
+	
+	if err != nil {
+		utils.Logger.WithError(err).Error("查詢情感歷史失敗")
+		// 返回空歷史而非錯誤
+		emotionStates = []db.EmotionStateDB{}
+	}
+	
+	// 獲取當前情感狀態
+	emotionManager := services.GetEmotionManager()
+	currentEmotion := emotionManager.GetEmotionState(userIDStr, characterID)
+	
+	// 轉換歷史記錄
+	var historyEntries []gin.H
+	var positiveChanges, negativeChanges int
+	var highestAffection int = currentEmotion.Affection
+	
+	prevAffection := 0
+	for i, state := range emotionStates {
+		change := state.Affection - prevAffection
+		if i > 0 { // 跳過第一筆，因為沒有前一筆比較
+			if change > 0 {
+				positiveChanges++
+			} else if change < 0 {
+				negativeChanges++
+			}
+		}
+		
+		if state.Affection > highestAffection {
+			highestAffection = state.Affection
+		}
+		
+		// 根據好感度變化推斷事件類型
+		eventName := getEventNameFromAffectionChange(change, state.Mood)
+		
+		historyEntries = append(historyEntries, gin.H{
+			"date":      state.CreatedAt,
+			"affection": state.Affection,
+			"event":     eventName,
+			"change":    change,
+			"trigger":   state.Mood,
+		})
+		
+		prevAffection = state.Affection
+	}
+	
+	// 計算統計數據
+	growthRate := "0/天"
+	if len(emotionStates) > 1 {
+		totalDays := emotionStates[len(emotionStates)-1].CreatedAt.Sub(emotionStates[0].CreatedAt).Hours() / 24
+		if totalDays > 0 {
+			totalGrowth := emotionStates[len(emotionStates)-1].Affection - emotionStates[0].Affection
+			rate := float64(totalGrowth) / totalDays
+			growthRate = fmt.Sprintf("%.1f/天", rate)
+		}
+	}
+	
+	// 生成里程碑
+	var milestones []gin.H
+	milestoneThresholds := []int{25, 50, 70, 90}
+	milestoneNames := []string{"初步信任", "心動時刻", "深度依戀", "完美愛情"}
+	milestoneDescs := []string{"開始對你產生信任感", "對你產生了特殊的感情", "已經深深愛上了你", "達到了完美的愛情狀態"}
+	
+	for i, threshold := range milestoneThresholds {
+		if currentEmotion.Affection >= threshold {
+			// 找到達到該閾值的時間點
+			var achievedAt time.Time
+			for _, state := range emotionStates {
+				if state.Affection >= threshold {
+					achievedAt = state.CreatedAt
+					break
+				}
+			}
+			if achievedAt.IsZero() {
+				achievedAt = time.Now() // 如果找不到具體時間，使用當前時間
+			}
+			
+			milestones = append(milestones, gin.H{
+				"level":       threshold,
+				"name":        milestoneNames[i],
+				"achieved_at": achievedAt,
+				"description": milestoneDescs[i],
+			})
+		}
+	}
+	
 	history := gin.H{
-		"user_id":      userID,
-		"character_id": characterID,
-		"character_name": "陸燁銘",
-		"current_affection": 72,
-		"history": []gin.H{
-			{
-				"date":       time.Now().AddDate(0, 0, -30),
-				"affection":  0,
-				"event":      "初次見面",
-				"change":     0,
-				"trigger":    "character_select",
-			},
-			{
-				"date":       time.Now().AddDate(0, 0, -28),
-				"affection":  15,
-				"event":      "第一次深度對話",
-				"change":     15,
-				"trigger":    "meaningful_conversation",
-			},
-			{
-				"date":       time.Now().AddDate(0, 0, -25),
-				"affection":  28,
-				"event":      "分享個人秘密",
-				"change":     13,
-				"trigger":    "personal_sharing",
-			},
-			{
-				"date":       time.Now().AddDate(0, 0, -20),
-				"affection":  45,
-				"event":      "雨夜相伴",
-				"change":     17,
-				"trigger":    "romantic_moment",
-			},
-			{
-				"date":       time.Now().AddDate(0, 0, -15),
-				"affection":  58,
-				"event":      "第一次約會",
-				"change":     13,
-				"trigger":    "special_event",
-			},
-			{
-				"date":       time.Now().AddDate(0, 0, -10),
-				"affection":  65,
-				"event":      "情感共鳴",
-				"change":     7,
-				"trigger":    "emotional_connection",
-			},
-			{
-				"date":       time.Now().AddDate(0, 0, -5),
-				"affection":  72,
-				"event":      "心意相通",
-				"change":     7,
-				"trigger":    "mutual_understanding",
-			},
-		},
+		"user_id":           userIDStr,
+		"character_id":      characterID,
+		"character_name":    characterName,
+		"current_affection": currentEmotion.Affection,
+		"history":           historyEntries,
 		"statistics": gin.H{
-			"total_interactions": 156,
-			"positive_changes":   23,
-			"negative_changes":   2,
-			"highest_affection":  72,
-			"growth_rate":        "2.4/天",
+			"total_interactions": len(emotionStates),
+			"positive_changes":   positiveChanges,
+			"negative_changes":   negativeChanges,
+			"highest_affection":  highestAffection,
+			"growth_rate":        growthRate,
 		},
-		"milestones": []gin.H{
-			{
-				"level":        25,
-				"name":         "初步信任",
-				"achieved_at":  time.Now().AddDate(0, 0, -25),
-				"description":  "開始對你產生信任感",
-			},
-			{
-				"level":        50,
-				"name":         "心動時刻",
-				"achieved_at":  time.Now().AddDate(0, 0, -18),
-				"description":  "對你產生了特殊的感情",
-			},
-			{
-				"level":        70,
-				"name":         "深度依戀",
-				"achieved_at":  time.Now().AddDate(0, 0, -5),
-				"description":  "已經深深愛上了你",
-			},
-		},
+		"milestones": milestones,
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -394,85 +537,151 @@ func GetRelationshipMilestones(c *gin.Context) {
 		return
 	}
 
-	// 靜態數據回應 - 模擬關係里程碑
+	userIDStr := userID.(string)
+	
+	// 查詢角色名稱
+	var character models.Character
+	err := database.GetApp().DB().NewSelect().
+		Model(&character).
+		Where("id = ?", characterID).
+		Scan(c)
+	
+	characterName := "未知角色"
+	if err == nil {
+		characterName = character.Name
+	}
+	
+	// 獲取當前情感狀態
+	emotionManager := services.GetEmotionManager()
+	currentEmotion := emotionManager.GetEmotionState(userIDStr, characterID)
+	
+	// 定義里程碑數據
+	milestoneData := []struct {
+		id              string
+		name            string
+		description     string
+		requiredAffection int
+		unlockContent   string
+		specialScene    string
+	}{
+		{"milestone_001", "初次見面", "第一次相遇的特殊時刻", 0, "解鎖基礎對話模式", "初次邂逅"},
+		{"milestone_002", "破冰時刻", "開始產生好感的瞬間", 20, "解鎖溫柔對話選項", "溫暖交流"},
+		{"milestone_003", "心動瞬間", "第一次感受到特殊情感", 40, "解鎖浪漫場景模式", "心跳加速"},
+		{"milestone_004", "情感共鳴", "心靈深度契合的時刻", 60, "解鎖深度情感對話", "心靈相通"},
+		{"milestone_005", "深度依戀", "彼此不可分割的深度情感", 70, "解鎖專屬稱呼和親密動作", "深情告白"},
+		{"milestone_006", "心意相通", "完全理解彼此的心意", 80, "解鎖專屬結局路線", "心有靈犀"},
+		{"milestone_007", "完美結合", "達到最完美的關係狀態", 95, "解鎖所有特殊內容", "完美愛情"},
+	}
+	
+	// 查詢情感歷史來確定里程碑達成時間
+	var emotionStates []db.EmotionStateDB
+	err = database.GetApp().DB().NewSelect().
+		Model(&emotionStates).
+		Where("user_id = ? AND character_id = ?", userIDStr, characterID).
+		Order("created_at ASC").
+		Scan(c)
+	
+	if err != nil {
+		utils.Logger.WithError(err).Error("查詢情感歷史失敗")
+		emotionStates = []db.EmotionStateDB{}
+	}
+	
+	// 分類已達成和未達成的里程碑
+	var achievedMilestones []gin.H
+	var upcomingMilestones []gin.H
+	
+	for _, milestone := range milestoneData {
+		if currentEmotion.Affection >= milestone.requiredAffection {
+			// 已達成的里程碑
+			var achievedAt time.Time
+			
+			// 從歷史記錄中找到第一次達到此好感度的時間
+			for _, state := range emotionStates {
+				if state.Affection >= milestone.requiredAffection {
+					achievedAt = state.CreatedAt
+					break
+				}
+			}
+			
+			// 如果沒有找到歷史記錄，使用預設時間
+			if achievedAt.IsZero() {
+				daysAgo := (100 - milestone.requiredAffection) / 3 // 簡單的時間估算
+				achievedAt = time.Now().AddDate(0, 0, -daysAgo)
+			}
+			
+			achievedMilestones = append(achievedMilestones, gin.H{
+				"id":                 milestone.id,
+				"name":               milestone.name,
+				"description":        milestone.description,
+				"required_affection": milestone.requiredAffection,
+				"achieved_at":        achievedAt,
+				"unlock_content":     milestone.unlockContent,
+				"special_scene":      milestone.specialScene,
+			})
+		} else {
+			// 未達成的里程碑
+			progress := float64(currentEmotion.Affection) / float64(milestone.requiredAffection) * 100
+			if progress > 100 {
+				progress = 100
+			}
+			
+			pointsNeeded := milestone.requiredAffection - currentEmotion.Affection
+			eta := "未知"
+			if pointsNeeded > 0 {
+				// 假設平均每天增長2點好感度
+				daysNeeded := pointsNeeded / 2
+				if daysNeeded < 1 {
+					eta = "即將達成"
+				} else {
+					eta = fmt.Sprintf("%d-%d天", daysNeeded, daysNeeded+2)
+				}
+			}
+			
+			upcomingMilestones = append(upcomingMilestones, gin.H{
+				"id":                 milestone.id,
+				"name":               milestone.name,
+				"description":        milestone.description,
+				"required_affection": milestone.requiredAffection,
+				"progress":           fmt.Sprintf("%.0f%%", progress),
+				"unlock_content":     milestone.unlockContent,
+				"hint":               getMilestoneHint(milestone.requiredAffection),
+				"eta":                eta,
+			})
+		}
+	}
+	
+	// 計算統計數據
+	totalMilestones := len(milestoneData)
+	achievedCount := len(achievedMilestones)
+	completionRate := float64(achievedCount) / float64(totalMilestones) * 100
+	
+	// 確定當前階段
+	currentStage := getCurrentRelationshipStage(currentEmotion.Affection)
+	
+	// 計算下一個里程碑的ETA
+	nextMilestoneETA := "已完成所有里程碑"
+	if len(upcomingMilestones) > 0 {
+		milestone := upcomingMilestones[0]
+		if eta, exists := milestone["eta"]; exists {
+			if etaStr, ok := eta.(string); ok {
+				nextMilestoneETA = etaStr
+			}
+		}
+	}
+	
 	milestones := gin.H{
-		"user_id":         userID,
-		"character_id":    characterID,
-		"character_name":  "陸燁銘",
-		"current_stage":   "深度依戀期",
-		"relationship_level": 72,
-		"achieved_milestones": []gin.H{
-			{
-				"id":             "milestone_001",
-				"name":           "初次見面",
-				"description":    "第一次與陸燁銘相遇",
-				"required_affection": 0,
-				"achieved_at":    time.Now().AddDate(0, 0, -30),
-				"unlock_content": "解鎖基礎對話模式",
-				"special_scene":  "咖啡廳邂逅",
-			},
-			{
-				"id":             "milestone_002", 
-				"name":           "破冰時刻",
-				"description":    "第一次看到他溫柔的一面",
-				"required_affection": 20,
-				"achieved_at":    time.Now().AddDate(0, 0, -26),
-				"unlock_content": "解鎖溫柔對話選項",
-				"special_scene":  "雨夜送傘",
-			},
-			{
-				"id":             "milestone_003",
-				"name":           "心動瞬間",
-				"description":    "第一次感受到他的在意",
-				"required_affection": 40,
-				"achieved_at":    time.Now().AddDate(0, 0, -20),
-				"unlock_content": "解鎖浪漫場景模式",
-				"special_scene":  "辦公室加班",
-			},
-			{
-				"id":             "milestone_004",
-				"name":           "情感共鳴",
-				"description":    "心靈深度契合的時刻",
-				"required_affection": 60,
-				"achieved_at":    time.Now().AddDate(0, 0, -12),
-				"unlock_content": "解鎖深度情感對話",
-				"special_scene":  "海邊漫步",
-			},
-			{
-				"id":             "milestone_005",
-				"name":           "深度依戀",
-				"description":    "彼此不可分割的深度情感",
-				"required_affection": 70,
-				"achieved_at":    time.Now().AddDate(0, 0, -5),
-				"unlock_content": "解鎖專屬稱呼和親密動作",
-				"special_scene":  "星空下的告白",
-			},
-		},
-		"upcoming_milestones": []gin.H{
-			{
-				"id":             "milestone_006",
-				"name":           "心意相通",
-				"description":    "完全理解彼此的心意",
-				"required_affection": 80,
-				"progress":       "90%",
-				"unlock_content": "解鎖專屬結局路線",
-				"hint":           "繼續深度交流，分享更多內心想法",
-			},
-			{
-				"id":             "milestone_007",
-				"name":           "完美結合",
-				"description":    "達到最完美的關係狀態",
-				"required_affection": 95,
-				"progress":       "76%",
-				"unlock_content": "解鎖所有特殊內容",
-				"hint":           "需要經歷重要的人生抉擇時刻",
-			},
-		},
+		"user_id":              userIDStr,
+		"character_id":         characterID,
+		"character_name":       characterName,
+		"current_stage":        currentStage,
+		"relationship_level":   currentEmotion.Affection,
+		"achieved_milestones":  achievedMilestones,
+		"upcoming_milestones":  upcomingMilestones,
 		"statistics": gin.H{
-			"total_milestones":    7,
-			"achieved_count":      5,
-			"completion_rate":     "71%",
-			"next_milestone_eta":  "3-5天",
+			"total_milestones":   totalMilestones,
+			"achieved_count":     achievedCount,
+			"completion_rate":    fmt.Sprintf("%.0f%%", completionRate),
+			"next_milestone_eta": nextMilestoneETA,
 		},
 	}
 
@@ -574,4 +783,68 @@ func max(a, b int) int {
 		return a
 	}
 	return b
+}
+
+// getEventNameFromAffectionChange 根據好感度變化推斷事件名稱
+func getEventNameFromAffectionChange(change int, mood string) string {
+	if change == 0 {
+		return "初次見面"
+	}
+	
+	switch {
+	case change >= 10:
+		return "特殊時刻"
+	case change >= 7:
+		return "深度交流"
+	case change >= 5:
+		return "溫馨互動"
+	case change >= 3:
+		return "愉快對話"
+	case change >= 1:
+		return "日常互動"
+	case change < 0:
+		return "情緒波動"
+	default:
+		return "平常交流"
+	}
+}
+
+// getCurrentRelationshipStage 根據好感度獲取當前關係階段
+func getCurrentRelationshipStage(affection int) string {
+	switch {
+	case affection >= 95:
+		return "完美愛情期"
+	case affection >= 80:
+		return "心意相通期"
+	case affection >= 70:
+		return "深度依戀期"
+	case affection >= 60:
+		return "情感共鳴期"
+	case affection >= 40:
+		return "心動時期"
+	case affection >= 20:
+		return "破冰期"
+	default:
+		return "初識期"
+	}
+}
+
+// getMilestoneHint 根據里程碑要求獲取提示
+func getMilestoneHint(requiredAffection int) string {
+	switch requiredAffection {
+	case 20:
+		return "多進行友好的對話，表現關心"
+	case 40:
+		return "分享更多個人想法，增加互動頻率"
+	case 60:
+		return "進行深度交流，表達真摯情感"
+	case 70:
+		return "表現專一和承諾，建立深度信任"
+	case 80:
+		return "分享內心秘密，展現完全的理解"
+	case 95:
+		return "經歷重要決定，證明彼此的重要性"
+	default:
+		return "繼續保持良好的互動"
+	}
 }

@@ -18,6 +18,9 @@
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
+    <!-- Custom Styles -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
 </head>
 <body class="min-h-full p-4 bg-gray-50 text-gray-900">
     <!-- 頂部導航 -->
@@ -366,7 +369,10 @@
                     page: currentPage.toString(),
                     limit: '20'
                 });
-                const timelineResult = await ApiClient.get(`/api/v1/memory/timeline?${params.toString()}`);
+                const timelineResult = await SpecializedApiClients.Memory.getTimeline({
+                    page: currentPage,
+                    limit: 20
+                });
                 
                 if (timelineResult.success && timelineResult.data) {
                     memoryData = timelineResult.data.memories || [];
@@ -379,7 +385,7 @@
                 await loadMemoryStats();
                 
             } catch (error) {
-                console.error('載入記憶數據失敗:', error);
+                UI.handleError(error, '載入記憶數據');
                 
                 // 顯示錯誤狀態
                 memoryData = [];
@@ -477,7 +483,7 @@
         // 載入記憶統計
         async function loadMemoryStats() {
             try {
-                const statsResult = await ApiClient.get('/api/v1/memory/stats');
+                const statsResult = await SpecializedApiClients.Memory.getStats();
                 
                 if (statsResult.success && statsResult.data) {
                     updateMemoryStats(statsResult.data);
@@ -564,7 +570,11 @@
                 if (currentFilter !== 'all') {
                     params.append('type', currentFilter);
                 }
-                const result = await ApiClient.get(`/api/v1/memory/search?${params.toString()}`);
+                const result = await SpecializedApiClients.Memory.search(query, {
+                    type: currentFilter !== 'all' ? currentFilter : undefined,
+                    page: 1,
+                    limit: 50
+                });
                 
                 if (result.success && result.data) {
                     memoryData = result.data.memories || [];
@@ -575,7 +585,7 @@
                 }
                 
             } catch (error) {
-                console.error('搜尋記憶失敗:', error);
+                UI.handleError(error, '搜尋記憶');
                 
                 // 使用本地搜尋
                 const filteredMemories = memoryData.filter(memory => 
@@ -667,7 +677,7 @@
             try {
                 UI.showGlobalLoading(true);
                 
-                const result = await ApiClient.post('/api/v1/memory/backup');
+                const result = await SpecializedApiClients.Memory.createBackup();
                 
                 if (result.success && result.data) {
                     // 下載備份檔案
@@ -687,7 +697,7 @@
                 }
                 
             } catch (error) {
-                console.error('備份記憶失敗:', error);
+                UI.handleError(error, '備份記憶');
                 
                 UI.showToast('備份失敗: ' + error.message, 'error');
                 
@@ -727,7 +737,7 @@
                     throw new Error('無效的備份檔案格式');
                 }
                 
-                const result = await ApiClient.post('/api/v1/memory/restore', backupData);
+                const result = await SpecializedApiClients.Memory.restoreBackup(backupData);
                 
                 if (result.success) {
                     UI.showToast('記憶還原成功', 'success');
@@ -740,67 +750,21 @@
                 }
                 
             } catch (error) {
-                console.error('還原記憶失敗:', error);
+                UI.handleError(error, '還原記憶');
                 UI.showToast('還原失敗: ' + error.message, 'error');
             } finally {
                 UI.showGlobalLoading(false);
             }
         }
         
-        // 整理記憶
+        // 整理記憶 - 功能不可用
         async function organizeMemories() {
-            if (!confirm('確定要整理記憶嗎？這可能會改變記憶的重要度排序。')) {
-                return;
-            }
-            
-            try {
-                UI.showGlobalLoading(true);
-                
-                // 實際整理記憶的 API 調用
-                const result = await ApiClient.post('/api/v1/memory/organize');
-                
-                if (result.success) {
-                    UI.showToast('記憶整理完成', 'success');
-                    await loadMemoryData();
-                } else {
-                    throw new Error(result.error?.message || '整理失敗');
-                }
-                
-            } catch (error) {
-                console.error('整理記憶失敗:', error);
-                UI.showToast('整理失敗: ' + error.message, 'error');
-            } finally {
-                UI.showGlobalLoading(false);
-            }
+            UI.showToast('記憶整理功能暫未開放，敬請期待', 'info');
         }
         
-        // 清理記憶
+        // 清理記憶 - 功能不可用
         async function clearMemories() {
-            if (!confirm('確定要清理低重要度的記憶嗎？此操作無法撤銷。')) {
-                return;
-            }
-            
-            try {
-                UI.showGlobalLoading(true);
-                
-                // 實際清理記憶的 API 調用
-                const result = await ApiClient.post('/api/v1/memory/cleanup', {
-                    min_importance: 3
-                });
-                
-                if (result.success) {
-                    UI.showToast('低重要度記憶已清理', 'success');
-                    await loadMemoryData();
-                } else {
-                    throw new Error(result.error?.message || '清理失敗');
-                }
-                
-            } catch (error) {
-                console.error('清理記憶失敗:', error);
-                UI.showToast('清理失敗: ' + error.message, 'error');
-            } finally {
-                UI.showGlobalLoading(false);
-            }
+            UI.showToast('記憶清理功能暫未開放，敬請期待', 'info');
         }
         
         // 刷新記憶數據
@@ -818,7 +782,10 @@
                     page: currentPage.toString(),
                     limit: '20'
                 });
-                const result = await ApiClient.get(`/api/v1/memory/timeline?${params.toString()}`);
+                const result = await SpecializedApiClients.Memory.getTimeline({
+                    page: currentPage,
+                    limit: 20
+                });
                 
                 if (result.success && result.data && result.data.memories) {
                     const newMemories = result.data.memories;
@@ -838,7 +805,7 @@
                     document.getElementById('loadMoreMemoriesBtn').style.display = 'none';
                 }
             } catch (error) {
-                console.error('載入更多記憶失敗:', error);
+                UI.handleError(error, '載入更多記憶');
                 UI.showToast('載入失敗', 'error');
             }
         }
@@ -852,9 +819,7 @@
             }
             
             try {
-                const result = await ApiClient.delete('/api/v1/memory/forget', {
-                    memory_id: selectedMemoryId
-                });
+                const result = await SpecializedApiClients.Memory.deleteMemory(selectedMemoryId);
                 
                 if (result.success) {
                     UI.showToast('記憶已刪除', 'success');
@@ -869,7 +834,7 @@
                 }
                 
             } catch (error) {
-                console.error('刪除記憶失敗:', error);
+                UI.handleError(error, '刪除記憶');
                 
                 UI.showToast('刪除失敗: ' + error.message, 'error');
             }

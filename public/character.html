@@ -18,78 +18,14 @@
     <!-- Flowbite -->
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     
-    <!-- 簡約化自定義樣式 -->
+    <!-- Centralized Styles -->
+    <link rel="stylesheet" href="/public/assets/styles.css">
+    
+    <!-- Page-specific styles -->
     <style>
-        /* 基礎設定 */
         body {
             overflow-x: hidden;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-        }
-        
-        /* 簡化的按鈕樣式 */
-        .btn-simple {
-            background: #ffffff;
-            border: 1px solid #e5e7eb;
-            color: #374151;
-            padding: 8px 16px;
-            border-radius: 6px;
-            transition: all 0.15s ease;
-        }
-        
-        .btn-simple:hover {
-            background: #f9fafb;
-            border-color: #d1d5db;
-        }
-        
-        .btn-primary {
-            background: #6366f1;
-            border: 1px solid #6366f1;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 6px;
-            transition: all 0.15s ease;
-        }
-        
-        .btn-primary:hover {
-            background: #5856eb;
-        }
-        
-        /* 去除過度的陰影和圓角 */
-        .card-minimal {
-            background: white;
-            border: 1px solid #e5e7eb;
-            border-radius: 8px;
-        }
-        
-        /* 角色卡片優化 */
-        .character-card {
-            transition: all 0.2s ease;
-            cursor: pointer;
-        }
-        
-        .character-card:hover {
-            border-color: #d1d5db;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        }
-        
-        /* 統一的間距 */
-        .space-minimal > * + * {
-            margin-top: 1rem;
-        }
-        
-        /* 文本截斷 */
-        .line-clamp-1 {
-            display: -webkit-box;
-            -webkit-line-clamp: 1;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        
-        .line-clamp-2 {
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
         }
     </style>
     
@@ -232,8 +168,8 @@
         </div>
         
             <!-- 角色詳情模態框 -->
-            <div id="characterModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-                <div class="card-minimal p-4 md:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div id="characterModal" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4" onclick="closeModalOnBackdrop(event)">
+                <div class="bg-white border border-gray-200 rounded-lg shadow-lg p-4 md:p-6 max-w-2xl w-full max-h-[90vh] overflow-y-auto" onclick="event.stopPropagation()">
                     <div class="flex flex-col md:flex-row items-start space-y-4 md:space-y-0 md:space-x-6 mb-6">
                         <img 
                             id="modalAvatar"
@@ -328,6 +264,9 @@
             // 載入用戶信息
             loadUserInfo();
             
+            // 載入用戶偏好
+            await loadUserPreferences();
+            
             // 載入當前角色
             await loadCurrentCharacter();
             
@@ -351,17 +290,30 @@
             }
         }
         
-        // 載入當前角色
-        async function loadCurrentCharacter() {
+        // 載入用戶偏好
+        async function loadUserPreferences() {
             try {
-                const result = await ApiClient.get('/api/v1/user/character');
-                if (result.success && result.data && result.data.character_id) {
-                    AppState.selectedCharacter = result.data;
-                    console.log('載入當前角色:', result.data);
+                const result = await SpecializedApiClients.User.getPreferences();
+                if (result.success && result.data) {
+                    AppState.preferences = result.data;
+                    console.log('載入用戶偏好成功:', result.data);
+                } else {
+                    AppState.preferences = {};
+                    console.log('用戶偏好為空，使用默認設置');
                 }
             } catch (error) {
-                console.warn('載入當前角色失敗:', error);
-                // 這不是致命錯誤，可以繼續載入角色列表
+                UI.handleError(error, '載入用戶偏好', false);
+                AppState.preferences = {};
+            }
+        }
+        
+        // 載入當前角色
+        async function loadCurrentCharacter() {
+            // 直接從 AppState 或用戶偏好獲取
+            selectedCharacter = AppState.selectedCharacter;
+            if (!selectedCharacter && AppState.preferences?.default_character) {
+                // 標記要自動選擇，等角色列表載入後處理
+                console.log('將自動選擇默認角色:', AppState.preferences.default_character);
             }
         }
         
@@ -371,36 +323,55 @@
             displayLoadingState();
             
             try {
-                const result = await ApiClient.get('/api/v1/character/list');
+                const result = await SpecializedApiClients.Character.getList();
                 
                 if (result.success && result.data && result.data.characters) {
                     characters = result.data.characters;
                     
-                    // 添加額外的角色屬性和格式轉換
-                    characters = characters.map(char => ({
-                        ...char,
-                        // 格式轉換
-                        avatar: char.avatar_url,
-                        title: getCharacterTitle(char.type),
-                        nsfw_level: getCharacterNsfwLevel(char.type),
-                        personality: char.personality.traits || [],
-                        // 額外屬性
-                        chatStyle: getChatStyle(char.id),
-                        contentInfo: getContentInfo(getCharacterNsfwLevel(char.type))
-                    }));
+                    // 處理角色數據
+                    characters = characters.map(char => {
+                        const characterType = char.type || 'unknown';
+                        const nsfwLevel = char.metadata?.nsfw_max_level || 1;
+                        
+                        return {
+                            ...char,
+                            // 直接使用 API 字段，無兼容性映射
+                            description: char.description || `${char.name}，一位專業的AI角色。`,
+                            tags: char.tags || [],
+                            popularity: char.popularity || Math.floor(Math.random() * 100),
+                            personality: char.metadata?.personality?.traits || ['友善', '耐心'],
+                            title: char.metadata?.title || getCharacterTitle(characterType),
+                            nsfw_level: nsfwLevel,
+                            chatStyle: char.metadata?.talking_style || getChatStyle(char.id),
+                            avatar_url: char.metadata?.avatar_url,
+                            contentInfo: getContentInfo(nsfwLevel)
+                        };
+                    });
                     
                     filteredCharacters = [...characters];
                     renderCharacters();
+                    
+                    // 處理默認角色選擇
+                    await handleDefaultCharacterSelection();
                 } else {
                     throw new Error(result.error?.message || '無法載入角色數據');
                 }
                 
             } catch (error) {
-                console.error('載入角色失敗:', error);
+                UI.handleError(error, '載入角色');
                 UI.showToast(`載入角色失敗: ${error.message}`, 'error');
                 
                 // 顯示錯誤狀態
                 displayErrorState();
+            }
+        }
+        
+        // 處理默認角色選擇
+        async function handleDefaultCharacterSelection() {
+            if (selectedCharacter) {
+                await markSelectedCharacter(selectedCharacter.id);
+            } else if (AppState.preferences?.default_character) {
+                await markSelectedCharacter(AppState.preferences.default_character);
             }
         }
         
@@ -458,6 +429,7 @@
             return nsfwLevels[type] || 'safe';
         }
         
+        
         // 獲取對話風格描述
         function getChatStyle(characterId) {
             const styles = {
@@ -477,7 +449,7 @@
             };
             return info[nsfwLevel] || '根據對話情境動態調整內容級別。';
         }
-        
+                
         // 渲染角色卡片
         function renderCharacters() {
             const grid = document.getElementById('characterGrid');
@@ -507,7 +479,7 @@
                 <div class="text-center mb-4">
                     <div class="relative inline-block">
                         <img 
-                            src="${character.avatar_url || character.avatar || getDefaultAvatar(character.id)}" 
+                            src="${character.avatar_url}" 
                             alt="${character.name}"
                             class="w-16 h-16 md:w-20 md:h-20 rounded-full mx-auto border-2 border-gray-200 transition-all object-cover"
                         >
@@ -548,15 +520,6 @@
             return card;
         }
         
-        // 獲取默認頭像
-        function getDefaultAvatar(characterId) {
-            const avatars = {
-                'char_001': 'https://placehold.co/300x300/2563eb/ffffff?text=陸燁銘',  // 與數據庫一致的占位圖
-                'char_002': 'https://placehold.co/300x300/10b981/ffffff?text=沈言墨',  // 與數據庫一致的占位圖
-                'char_003': 'https://placehold.co/300x300/8b5cf6/ffffff?text=角色'    // 默認角色
-            };
-            return avatars[characterId] || 'https://placehold.co/300x300/6b7280/ffffff?text=角色';
-        }
         
         // 根據角色類型獲取標題顏色
         function getTitleColorByType(type) {
@@ -572,7 +535,7 @@
         
         // 顯示角色詳情模態框
         function showCharacterModal(character) {
-            document.getElementById('modalAvatar').src = character.avatar_url || character.avatar || getDefaultAvatar(character.id);
+            document.getElementById('modalAvatar').src = character.avatar_url;
             document.getElementById('modalName').textContent = character.name;
             document.getElementById('modalTitle').textContent = character.title;
             document.getElementById('modalDescription').textContent = character.description;
@@ -598,7 +561,7 @@
             
             // 設置性格特徵
             const personalityDiv = document.getElementById('modalPersonality');
-            const traits = character.personality || (character.personality && character.personality.traits) || [];
+            const traits = character.personality || [];
             personalityDiv.innerHTML = traits.map(trait => 
                 `<span class="bg-blue-700 text-blue-200 px-3 py-1 rounded-full text-sm">${trait}</span>`
             ).join('');
@@ -613,6 +576,13 @@
         async function selectCharacterFromModal() {
             if (window.currentModalCharacter) {
                 await selectCharacter(window.currentModalCharacter.id);
+                UI.modal.hide('characterModal');
+            }
+        }
+        
+        // 點擊背景關閉模態框
+        function closeModalOnBackdrop(event) {
+            if (event.target === event.currentTarget) {
                 UI.modal.hide('characterModal');
             }
         }
@@ -633,37 +603,35 @@
             }
             
             try {
-                // 保存到服務器
-                const result = await ApiClient.put('/api/v1/user/character', {
-                    character_id: characterId
+                // 更新本地狀態
+                AppState.selectedCharacter = selectedCharacter;
+                
+                // 保存到用戶偏好
+                await SpecializedApiClients.User.updatePreferences({
+                    preferences: {
+                        default_character: characterId
+                    }
+                });
+                AppState.preferences = AppState.preferences || {};
+                AppState.preferences.default_character = characterId;
+                
+                // 檢查現有會話
+                await checkExistingSessions(characterId);
+                
+                // 更新顯示
+                updateSelectedCharacterDisplay();
+                
+                // 滾動到角色面板
+                document.getElementById('selectedCharacterPanel')?.scrollIntoView({ 
+                    behavior: 'smooth', 
+                    block: 'nearest' 
                 });
                 
-                if (result.success) {
-                    AppState.selectedCharacter = selectedCharacter;
-                    Utils.storage.set('selectedCharacter', selectedCharacter);
-                    
-                    // 檢查現有會話
-                    await checkExistingSessions(characterId);
-                    
-                    // 更新選中狀態顯示
-                    updateSelectedCharacterDisplay();
-                    
-                    // 滾動到選中角色面板
-                    const panel = document.getElementById('selectedCharacterPanel');
-                    if (panel) {
-                        panel.scrollIntoView({ 
-                            behavior: 'smooth',
-                            block: 'nearest'
-                        });
-                    }
-                    
-                    UI.showToast(`已選擇 ${selectedCharacter.name}`, 'success');
-                } else {
-                    throw new Error(result.error?.message || '保存角色選擇失敗');
-                }
+                UI.showToast(`已選擇 ${selectedCharacter.name}，點擊"開始對話"進入聊天`, 'success');
+                
             } catch (error) {
-                console.error('選擇角色失敗:', error);
-                UI.showToast(`選擇角色失敗: ${error.message}`, 'error');
+                UI.handleError(error, '選擇角色');
+                UI.showToast('選擇角色失敗', 'error');
             }
         }
         
@@ -674,7 +642,7 @@
             const panel = document.getElementById('selectedCharacterPanel');
             panel.classList.remove('hidden');
             
-            document.getElementById('selectedAvatar').src = selectedCharacter.avatar_url || selectedCharacter.avatar || getDefaultAvatar(selectedCharacter.id);
+            document.getElementById('selectedAvatar').src = selectedCharacter.avatar_url;
             document.getElementById('selectedName').textContent = selectedCharacter.name;
             document.getElementById('selectedDescription').textContent = selectedCharacter.description;
             
@@ -697,7 +665,7 @@
             
             // 設置性格特徵
             const personalityDiv = document.getElementById('selectedPersonality');
-            const traits = selectedCharacter.personality || (selectedCharacter.personality && selectedCharacter.personality.traits) || [];
+            const traits = selectedCharacter.personality || [];
             personalityDiv.innerHTML = traits.map(trait => 
                 `<span class="bg-blue-700 text-blue-200 px-2 py-1 rounded text-xs">${trait}</span>`
             ).join('');
@@ -749,7 +717,7 @@
         // 檢查現有會話
         async function checkExistingSessions(characterId) {
             try {
-                const result = await ApiClient.get(`/api/v1/chat/sessions?character_id=${characterId}`);
+                const result = await SpecializedApiClients.Chat.getSessions(characterId);
                 if (result.success && result.data && result.data.sessions && result.data.sessions.length > 0) {
                     existingSessions = result.data.sessions;
                     console.log(`找到 ${result.data.sessions.length} 個現有會話`);
@@ -759,14 +727,14 @@
                     return false;
                 }
             } catch (error) {
-                console.error('檢查現有會話失敗:', error);
+                UI.handleError(error, '檢查現有會話', false);
                 existingSessions = [];
                 return false;
             }
         }
         
         // 開始聊天
-        function startChatting() {
+        async function startChatting() {
             if (!selectedCharacter) {
                 UI.showToast('請先選擇一個角色', 'warning');
                 return;
@@ -779,10 +747,37 @@
             }
             
             try {
+                // 檢查是否有既有會話
+                const hasExistingSessions = await checkExistingSessions(selectedCharacter.id);
+                
+                let sessionId;
+                if (hasExistingSessions && existingSessions.length > 0) {
+                    // 使用最新的會話
+                    sessionId = existingSessions[0].id;
+                    console.log('使用既有會話:', sessionId);
+                } else {
+                    // 創建新會話
+                    console.log('創建新會話，角色ID:', selectedCharacter.id);
+                    const sessionResult = await SpecializedApiClients.Chat.createSession(selectedCharacter.id, `與 ${selectedCharacter.name} 的對話`);
+                    
+                    if (sessionResult.success && sessionResult.data) {
+                        sessionId = sessionResult.data.id;
+                        console.log('新會話創建成功:', sessionId);
+                    } else {
+                        throw new Error('創建會話失敗：' + (sessionResult.error?.message || '未知錯誤'));
+                    }
+                }
+                
+                // 保存會話ID到本地存儲，供chat.html使用
+                Utils.storage.set('currentSessionId', sessionId);
+                Utils.storage.set('selectedCharacter', selectedCharacter);
+                
+                // 跳轉到聊天頁面
                 Router.navigate('/chat');
+                
             } catch (error) {
-                console.error('導航失敗:', error);
-                UI.showToast('跳轉聊天頁面失敗', 'error');
+                UI.handleError(error, '開始聊天');
+                UI.showToast(`開始聊天失敗: ${error.message}`, 'error');
             }
         }
         

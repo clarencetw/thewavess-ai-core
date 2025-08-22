@@ -22,8 +22,6 @@ func SetupRoutes(router *gin.RouterGroup) {
 		monitor.GET("/metrics", handlers.GetMetrics)
 	}
 	
-	// 測試路由（無需認證） - 用於開發測試
-	router.POST("/test/message", handlers.TestMessage)
 
 	// 認證路由（無需認證）
 	auth := router.Group("/auth")
@@ -48,28 +46,37 @@ func SetupRoutes(router *gin.RouterGroup) {
 	{
 		user.GET("/profile", handlers.GetUserProfile)
 		user.PUT("/profile", handlers.UpdateUserProfile)
+		user.GET("/preferences", handlers.GetUserPreferences)
 		user.PUT("/preferences", handlers.UpdateUserPreferences)
 		user.POST("/avatar", handlers.UploadAvatar)
 		user.DELETE("/account", handlers.DeleteAccount)
 		user.POST("/verify", handlers.VerifyAge)
-		user.GET("/character", handlers.GetCurrentCharacter)
-		user.PUT("/character", handlers.SelectCharacter)
+		// 用戶角色選擇已移除，改為直接使用角色ID
 	}
 
-	// 角色管理路由
-	character := authenticated.Group("/character")
-	{
-		character.POST("", handlers.CreateCharacter)
-		character.PUT("/:id", handlers.UpdateCharacter)
-		character.DELETE("/:id", handlers.DeleteCharacter)
-	}
-
-	// 公開的角色端點
+	// 公開的角色端點（無需認證）
 	publicCharacter := router.Group("/character")
 	{
 		publicCharacter.GET("/list", handlers.GetCharacterList)
+		publicCharacter.GET("/search", handlers.SearchCharacters)
 		publicCharacter.GET("/:id", handlers.GetCharacterByID)
 		publicCharacter.GET("/:id/stats", handlers.GetCharacterStats)
+		publicCharacter.GET("/nsfw-guideline/:level", handlers.GetNSFWGuideline)
+	}
+
+	// 需要認證的角色端點
+	character := authenticated.Group("/character")
+	{
+		// 基礎角色管理（需要管理員權限）
+		character.POST("", middleware.AdminMiddleware(), handlers.CreateCharacter)
+		character.PUT("/:id", middleware.AdminMiddleware(), handlers.UpdateCharacter)
+		character.DELETE("/:id", middleware.AdminMiddleware(), handlers.DeleteCharacter)
+		
+		// 角色配置管理（一般用戶可查看，管理員可修改）
+		character.GET("/:id/profile", handlers.GetCharacterProfile)
+		character.GET("/:id/speech-styles", handlers.GetCharacterSpeechStyles)
+		character.GET("/:id/speech-styles/best", handlers.GetBestSpeechStyle)
+		character.GET("/:id/scenes", handlers.GetCharacterScenes)
 	}
 
 	// 對話管理路由
@@ -141,9 +148,6 @@ func SetupRoutes(router *gin.RouterGroup) {
 	tts := authenticated.Group("/tts")
 	{
 		tts.POST("/generate", handlers.GenerateTTS)
-		tts.POST("/batch", handlers.BatchGenerateTTS)
-		tts.POST("/preview", handlers.PreviewTTS)
-		tts.GET("/history", handlers.GetTTSHistory)
 	}
 
 	// TTS 公開路由（語音列表）
@@ -163,6 +167,7 @@ func SetupRoutes(router *gin.RouterGroup) {
 		admin.PUT("/users/:id", handlers.UpdateAdminUser)
 		admin.PUT("/users/:id/password", handlers.UpdateAdminUserPassword)
 	}
+
 
 	// TODO: 添加其他模組路由
 	// - 通知系統路由

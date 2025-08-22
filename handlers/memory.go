@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"strings"
@@ -8,6 +9,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
@@ -44,53 +46,81 @@ func GetMemoryTimeline(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.DefaultQuery("limit", "20"))
 	userIDStr := userID.(string)
 
-	// 獲取記憶管理器
-	memoryManager := services.GetMemoryManager()
-	longTermMemory := memoryManager.GetLongTermMemory(userIDStr, characterID)
-
-	// 構建記憶時間線
+	ctx := c.Request.Context()
+	
+	// 構建記憶時間線，從資料庫讀取
 	var memories []gin.H
 
-	// 添加里程碑記憶
-	for _, milestone := range longTermMemory.Milestones {
-		memories = append(memories, gin.H{
-			"id":           utils.GenerateID(12),
-			"type":         "milestone",
-			"importance":   "high",
-			"title":        milestone.Type,
-			"content":      milestone.Description,
-			"emotion_tag":  "milestone",
-			"timestamp":    milestone.Date,
-			"character_id": characterID,
-		})
+	// 讀取里程碑記憶（通過主記憶表關聯）
+	var milestones []db.MemoryMilestoneDB
+	err := GetDB().NewSelect().
+		Model(&milestones).
+		Join("INNER JOIN long_term_memories ltm ON ltm.id = memory_milestones.memory_id").
+		Where("ltm.user_id = ? AND ltm.character_id = ?", userIDStr, characterID).
+		Order("memory_milestones.date DESC").
+		Scan(ctx)
+		
+	if err == nil {
+		for _, milestone := range milestones {
+			memories = append(memories, gin.H{
+				"id":           milestone.ID,
+				"type":         "milestone",
+				"importance":   "high",
+				"title":        milestone.Type,
+				"content":      milestone.Description,
+				"emotion_tag":  "milestone",
+				"timestamp":    milestone.Date,
+				"character_id": characterID,
+			})
+		}
 	}
 
-	// 添加偏好記憶
-	for _, pref := range longTermMemory.Preferences {
-		memories = append(memories, gin.H{
-			"id":           utils.GenerateID(12),
-			"type":         "preference",
-			"importance":   getImportanceLevel(float64(pref.Importance)),
-			"title":        pref.Category,
-			"content":      pref.Content,
-			"emotion_tag":  "neutral",
-			"timestamp":    pref.CreatedAt,
-			"character_id": characterID,
-		})
+	// 讀取偏好記憶（通過主記憶表關聯）
+	var preferences []db.MemoryPreferenceDB
+	err = GetDB().NewSelect().
+		Model(&preferences).
+		Join("INNER JOIN long_term_memories ltm ON ltm.id = memory_preferences.memory_id").
+		Where("ltm.user_id = ? AND ltm.character_id = ?", userIDStr, characterID).
+		Order("memory_preferences.created_at DESC").
+		Scan(ctx)
+		
+	if err == nil {
+		for _, pref := range preferences {
+			memories = append(memories, gin.H{
+				"id":           pref.ID,
+				"type":         "preference",
+				"importance":   getImportanceLevel(float64(pref.Importance)),
+				"title":        pref.Category,
+				"content":      pref.Content,
+				"emotion_tag":  "neutral",
+				"timestamp":    pref.CreatedAt,
+				"character_id": characterID,
+			})
+		}
 	}
 
-	// 添加禁忌記憶
-	for _, dislike := range longTermMemory.Dislikes {
-		memories = append(memories, gin.H{
-			"id":           utils.GenerateID(12),
-			"type":         "dislike",
-			"importance":   "high",
-			"title":        "禁忌：" + dislike.Topic,
-			"content":      dislike.Evidence,
-			"emotion_tag":  "negative",
-			"timestamp":    dislike.RecordedAt,
-			"character_id": characterID,
-		})
+	// 讀取禁忌記憶（通過主記憶表關聯）
+	var dislikes []db.MemoryDislikeDB
+	err = GetDB().NewSelect().
+		Model(&dislikes).
+		Join("INNER JOIN long_term_memories ltm ON ltm.id = memory_dislikes.memory_id").
+		Where("ltm.user_id = ? AND ltm.character_id = ?", userIDStr, characterID).
+		Order("memory_dislikes.recorded_at DESC").
+		Scan(ctx)
+		
+	if err == nil {
+		for _, dislike := range dislikes {
+			memories = append(memories, gin.H{
+				"id":           dislike.ID,
+				"type":         "dislike",
+				"importance":   "high",
+				"title":        "禁忌：" + dislike.Topic,
+				"content":      dislike.Evidence,
+				"emotion_tag":  "negative",
+				"timestamp":    dislike.RecordedAt,
+				"character_id": characterID,
+			})
+		}
 	}
 
 	// 分頁處理
@@ -108,9 +138,9 @@ func GetMemoryTimeline(c *gin.Context) {
 
 	// 統計分類
 	categories := gin.H{
-		"milestone":  len(longTermMemory.Milestones),
-		"preference": len(longTermMemory.Preferences),
-		"dislike":    len(longTermMemory.Dislikes),
+		"milestone":  len(milestones),
+		"preference": len(preferences),
+		"dislike":    len(dislikes),
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -124,8 +154,8 @@ func GetMemoryTimeline(c *gin.Context) {
 			"current_page":   page,
 			"total_pages":    (totalCount + limit - 1) / limit,
 			"categories":     categories,
-			"memory_strength": calculateMemoryStrength(longTermMemory),
-			"last_updated":   longTermMemory.LastUpdated,
+			"memory_strength": len(milestones)*5 + len(preferences)*3 + len(dislikes)*2,
+			"last_updated":   time.Now(),
 		},
 	})
 }
@@ -186,78 +216,169 @@ func SaveMemory(c *gin.Context) {
 	
 	// 根據類型保存不同的記憶
 	var savedMemory gin.H
+	ctx := c.Request.Context()
 	
+	// 先獲取或創建主記憶記錄
+	memoryID, err := getOrCreateMainMemory(ctx, userIDStr, characterID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to get or create main memory record")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "獲取記憶記錄失敗",
+			},
+		})
+		return
+	}
+
 	switch req.Type {
 	case "preference":
-		// 創建偏好記憶
-		pref := services.Preference{
-			ID:         utils.GenerateID(12),
+		// 創建偏好記憶並落地到資料庫
+		prefDB := db.MemoryPreferenceDB{
+			ID:         utils.GenerateUUID(),
+			MemoryID:   memoryID,
 			Category:   extractCategory(req.Content),
 			Content:    req.Content,
 			Importance: int(req.Importance),
-			Evidence:   req.SessionID,
 			CreatedAt:  time.Now(),
 		}
 		
-		// 手動添加到長期記憶
+		// 插入資料庫
+		_, err := GetDB().NewInsert().Model(&prefDB).Exec(ctx)
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to save preference memory to database")
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "DATABASE_ERROR",
+					Message: "保存偏好記憶失敗",
+				},
+			})
+			return
+		}
+		
+		// 同時更新內存中的記憶系統
+		pref := services.Preference{
+			ID:         prefDB.ID,
+			Category:   prefDB.Category,
+			Content:    prefDB.Content,
+			Importance: prefDB.Importance,
+			Evidence:   req.SessionID,
+			CreatedAt:  prefDB.CreatedAt,
+		}
+		
 		longTerm := memoryManager.GetLongTermMemory(userIDStr, characterID)
 		longTerm.Preferences = append(longTerm.Preferences, pref)
 		longTerm.LastUpdated = time.Now()
 		
 		savedMemory = gin.H{
-			"id":         pref.ID,
+			"id":         prefDB.ID,
 			"type":       "preference",
-			"category":   pref.Category,
-			"content":    pref.Content,
-			"importance": pref.Importance,
-			"created_at": pref.CreatedAt,
+			"category":   prefDB.Category,
+			"content":    prefDB.Content,
+			"importance": prefDB.Importance,
+			"created_at": prefDB.CreatedAt,
 		}
 		
 	case "milestone":
-		// 創建里程碑記憶
-		milestone := services.Milestone{
-			ID:          utils.GenerateID(12),
+		// 創建里程碑記憶並落地到資料庫
+		milestoneDB := db.MemoryMilestoneDB{
+			ID:          utils.GenerateUUID(),
+			MemoryID:    memoryID,
 			Type:        extractMilestoneType(req.Content),
 			Description: req.Content,
 			Date:        time.Now(),
 			Affection:   getCurrentAffection(userIDStr, characterID),
+			CreatedAt:   time.Now(),
 		}
 		
-		// 手動添加到長期記憶
+		// 插入資料庫
+		_, err := GetDB().NewInsert().Model(&milestoneDB).Exec(ctx)
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to save milestone memory to database")
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "DATABASE_ERROR",
+					Message: "保存里程碑記憶失敗",
+				},
+			})
+			return
+		}
+		
+		// 同時更新內存中的記憶系統
+		milestone := services.Milestone{
+			ID:          milestoneDB.ID,
+			Type:        milestoneDB.Type,
+			Description: milestoneDB.Description,
+			Date:        milestoneDB.Date,
+			Affection:   milestoneDB.Affection,
+		}
+		
 		longTerm := memoryManager.GetLongTermMemory(userIDStr, characterID)
 		longTerm.Milestones = append(longTerm.Milestones, milestone)
 		longTerm.LastUpdated = time.Now()
 		
 		savedMemory = gin.H{
-			"id":          milestone.ID,
+			"id":          milestoneDB.ID,
 			"type":        "milestone",
-			"milestone_type": milestone.Type,
-			"description": milestone.Description,
-			"date":        milestone.Date,
-			"affection":   milestone.Affection,
+			"milestone_type": milestoneDB.Type,
+			"description": milestoneDB.Description,
+			"date":        milestoneDB.Date,
+			"affection":   milestoneDB.Affection,
 		}
 		
 	case "dislike":
-		// 創建禁忌記憶
-		dislike := services.Dislike{
-			Topic:      extractTopic(req.Content),
-			Severity:   int(req.Importance),
-			Evidence:   req.Content,
-			RecordedAt: time.Now(),
+		// 創建禁忌記憶並落地到資料庫
+		evidence := req.Content
+		dislikeDB := db.MemoryDislikeDB{
+			ID:          utils.GenerateUUID(),
+			MemoryID:    memoryID,
+			Topic:       extractTopic(req.Content),
+			Severity:    int(req.Importance),
+			Evidence:    &evidence,
+			RecordedAt:  time.Now(),
+			CreatedAt:   time.Now(),
 		}
 		
-		// 手動添加到長期記憶
+		// 插入資料庫
+		_, err := GetDB().NewInsert().Model(&dislikeDB).Exec(ctx)
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to save dislike memory to database")
+			c.JSON(http.StatusInternalServerError, models.APIResponse{
+				Success: false,
+				Error: &models.APIError{
+					Code:    "DATABASE_ERROR",
+					Message: "保存禁忌記憶失敗",
+				},
+			})
+			return
+		}
+		
+		// 同時更新內存中的記憶系統
+		evidenceStr := ""
+		if dislikeDB.Evidence != nil {
+			evidenceStr = *dislikeDB.Evidence
+		}
+		dislike := services.Dislike{
+			Topic:      dislikeDB.Topic,
+			Severity:   dislikeDB.Severity,
+			Evidence:   evidenceStr,
+			RecordedAt: dislikeDB.RecordedAt,
+		}
+		
 		longTerm := memoryManager.GetLongTermMemory(userIDStr, characterID)
 		longTerm.Dislikes = append(longTerm.Dislikes, dislike)
 		longTerm.LastUpdated = time.Now()
 		
 		savedMemory = gin.H{
-			"id":          utils.GenerateID(12),
+			"id":          dislikeDB.ID,
 			"type":        "dislike",
-			"topic":       dislike.Topic,
-			"severity":    dislike.Severity,
-			"evidence":    dislike.Evidence,
-			"recorded_at": dislike.RecordedAt,
+			"topic":       dislikeDB.Topic,
+			"severity":    dislikeDB.Severity,
+			"evidence":    dislikeDB.Evidence,
+			"recorded_at": dislikeDB.RecordedAt,
 		}
 		
 	default:
@@ -325,22 +446,43 @@ func SearchMemory(c *gin.Context) {
 	characterID := c.DefaultQuery("character_id", "char_001")
 	memoryType := c.Query("type") // preference, milestone, dislike
 
-	// 獲取記憶管理器
-	memoryManager := GetMemoryManager()
-	longTermMemory := memoryManager.GetLongTermMemory(userIDStr, characterID)
-
+	ctx := context.Background()
 	startTime := time.Now()
 	var searchResults []gin.H
 
-	// 搜尋偏好
+	// 獲取或創建主記憶
+	memoryID, err := getOrCreateMainMemory(ctx, userIDStr, characterID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to get or create main memory")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "獲取記憶失敗",
+			},
+		})
+		return
+	}
+
+	// 搜尋偏好記憶（資料庫查詢）
 	if memoryType == "" || memoryType == "preference" {
-		for _, pref := range longTermMemory.Preferences {
-			if matchesQuery(query, pref.Content, pref.Category) {
+		var preferences []db.MemoryPreferenceDB
+		err := GetDB().NewSelect().
+			Model(&preferences).
+			Where("memory_id = ?", memoryID).
+			Where("content ILIKE ?", "%"+query+"%").
+			Scan(ctx)
+		
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to search preference memories")
+		} else {
+			for _, pref := range preferences {
 				searchResults = append(searchResults, gin.H{
-					"id":        utils.GenerateID(12),
+					"id":        pref.ID,
 					"type":      "preference",
 					"title":     pref.Category,
 					"content":   pref.Content,
+					"importance": pref.Importance,
 					"relevance": calculateRelevance(query, pref.Content),
 					"highlight": highlightMatch(query, pref.Content),
 					"timestamp": pref.CreatedAt,
@@ -349,15 +491,25 @@ func SearchMemory(c *gin.Context) {
 		}
 	}
 
-	// 搜尋里程碑
+	// 搜尋里程碑記憶（資料庫查詢）
 	if memoryType == "" || memoryType == "milestone" {
-		for _, milestone := range longTermMemory.Milestones {
-			if matchesQuery(query, milestone.Description, milestone.Type) {
+		var milestones []db.MemoryMilestoneDB
+		err := GetDB().NewSelect().
+			Model(&milestones).
+			Where("memory_id = ?", memoryID).
+			Where("description ILIKE ? OR type ILIKE ?", "%"+query+"%", "%"+query+"%").
+			Scan(ctx)
+		
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to search milestone memories")
+		} else {
+			for _, milestone := range milestones {
 				searchResults = append(searchResults, gin.H{
-					"id":        utils.GenerateID(12),
+					"id":        milestone.ID,
 					"type":      "milestone",
 					"title":     milestone.Type,
 					"content":   milestone.Description,
+					"affection": milestone.Affection,
 					"relevance": calculateRelevance(query, milestone.Description),
 					"highlight": highlightMatch(query, milestone.Description),
 					"timestamp": milestone.Date,
@@ -366,17 +518,33 @@ func SearchMemory(c *gin.Context) {
 		}
 	}
 
-	// 搜尋禁忌
+	// 搜尋厭惡記錄（資料庫查詢）
 	if memoryType == "" || memoryType == "dislike" {
-		for _, dislike := range longTermMemory.Dislikes {
-			if matchesQuery(query, dislike.Evidence, dislike.Topic) {
+		var dislikes []db.MemoryDislikeDB
+		err := GetDB().NewSelect().
+			Model(&dislikes).
+			Where("memory_id = ?", memoryID).
+			Where("topic ILIKE ? OR evidence ILIKE ?", "%"+query+"%", "%"+query+"%").
+			Scan(ctx)
+		
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to search dislike memories")
+		} else {
+			for _, dislike := range dislikes {
+				evidence := ""
+				if dislike.Evidence != nil {
+					evidence = *dislike.Evidence
+				}
+				searchContent := dislike.Topic + " " + evidence
+				
 				searchResults = append(searchResults, gin.H{
-					"id":        utils.GenerateID(12),
+					"id":        dislike.ID,
 					"type":      "dislike",
 					"title":     "禁忌: " + dislike.Topic,
-					"content":   dislike.Evidence,
-					"relevance": calculateRelevance(query, dislike.Evidence),
-					"highlight": highlightMatch(query, dislike.Evidence),
+					"content":   evidence,
+					"severity":  dislike.Severity,
+					"relevance": calculateRelevance(query, searchContent),
+					"highlight": highlightMatch(query, searchContent),
 					"timestamp": dislike.RecordedAt,
 				})
 			}
@@ -411,47 +579,120 @@ func SearchMemory(c *gin.Context) {
 // @Router       /memory/user/{id} [get]
 func GetUserMemory(c *gin.Context) {
 	userID := c.Param("id")
+	ctx := context.Background()
 
-	// 靜態數據回應 - 模擬用戶記憶
+	// 獲取用戶所有記憶
+	var memories []db.LongTermMemoryModelDB
+	err := GetDB().NewSelect().
+		Model(&memories).
+		Where("user_id = ?", userID).
+		Order("last_updated DESC").
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to get user memories")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "獲取用戶記憶失敗",
+			},
+		})
+		return
+	}
+
+	var totalPref, totalMilestone, totalDislike int
+	characterMemories := make(map[string]int)
+	var oldestMemory, newestMemory time.Time
+	var recentMemories []gin.H
+
+	// 統計每個角色的記憶
+	for i, memory := range memories {
+		// 獲取角色信息
+		var character models.Character
+		GetDB().NewSelect().Model(&character).Where("id = ?", memory.CharacterID).Scan(ctx)
+		
+		characterName := memory.CharacterID
+		if character.Name != "" {
+			characterName = character.Name
+		}
+		characterMemories[characterName]++
+
+		// 統計各類記憶數量
+		prefCount, _ := GetDB().NewSelect().Model((*db.MemoryPreferenceDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		milestoneCount, _ := GetDB().NewSelect().Model((*db.MemoryMilestoneDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		dislikeCount, _ := GetDB().NewSelect().Model((*db.MemoryDislikeDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		
+		totalPref += prefCount
+		totalMilestone += milestoneCount
+		totalDislike += dislikeCount
+
+		// 計算最舊和最新記憶時間
+		if i == 0 {
+			oldestMemory = memory.CreatedAt
+			newestMemory = memory.LastUpdated
+		} else {
+			if memory.CreatedAt.Before(oldestMemory) {
+				oldestMemory = memory.CreatedAt
+			}
+			if memory.LastUpdated.After(newestMemory) {
+				newestMemory = memory.LastUpdated
+			}
+		}
+
+		// 獲取最近的記憶詳情（前5個）
+		if len(recentMemories) < 5 {
+			// 獲取最新的偏好記憶
+			var lastPref db.MemoryPreferenceDB
+			err := GetDB().NewSelect().Model(&lastPref).
+				Where("memory_id = ?", memory.ID).
+				Order("created_at DESC").
+				Limit(1).
+				Scan(ctx)
+			
+			if err == nil {
+				recentMemories = append(recentMemories, gin.H{
+					"id":          lastPref.ID,
+					"type":        "preference",
+					"title":       lastPref.Category,
+					"content":     lastPref.Content,
+					"character":   characterName,
+					"importance":  getImportanceLevel(lastPref.Importance),
+					"timestamp":   lastPref.CreatedAt,
+				})
+			}
+		}
+	}
+
+	totalMemories := totalPref + totalMilestone + totalDislike
+	
+	// 計算統計數據
+	var avgMemoriesPerDay float64
+	if len(memories) > 0 {
+		daysSinceFirst := time.Since(oldestMemory).Hours() / 24
+		if daysSinceFirst > 0 {
+			avgMemoriesPerDay = float64(totalMemories) / daysSinceFirst
+		}
+	}
+
 	userMemory := gin.H{
 		"user_id": userID,
 		"summary": gin.H{
-			"total_memories":    45,
-			"character_memories": map[string]int{
-				"陸燁銘": 28,
-				"沈言墨": 17,
-			},
+			"total_memories":     totalMemories,
+			"character_memories": characterMemories,
 			"memory_types": gin.H{
-				"conversation": 23,
-				"preference":   12,
-				"emotion":      8,
-				"special_event": 2,
+				"preference": totalPref,
+				"milestone":  totalMilestone,
+				"dislike":    totalDislike,
 			},
-			"oldest_memory": time.Now().AddDate(0, -2, 0),
-			"newest_memory": time.Now().AddDate(0, 0, -1),
+			"oldest_memory": oldestMemory,
+			"newest_memory": newestMemory,
 		},
-		"recent_memories": []gin.H{
-			{
-				"id":          "mem_045",
-				"type":        "conversation",
-				"title":       "關於未來的討論",
-				"character":   "陸燁銘",
-				"importance":  "high",
-				"timestamp":   time.Now().AddDate(0, 0, -1),
-			},
-			{
-				"id":          "mem_044",
-				"type":        "preference",
-				"title":       "喜歡的咖啡類型",
-				"character":   "陸燁銘",
-				"importance":  "medium",
-				"timestamp":   time.Now().AddDate(0, 0, -3),
-			},
-		},
+		"recent_memories": recentMemories,
 		"memory_stats": gin.H{
-			"avg_memories_per_day": 1.5,
-			"retention_rate":       "95%",
-			"memory_quality":       "excellent",
+			"avg_memories_per_day": avgMemoriesPerDay,
+			"retention_rate":       "100%",
+			"memory_quality":       getMemoryQuality(totalMemories),
 		},
 	}
 
@@ -460,6 +701,52 @@ func GetUserMemory(c *gin.Context) {
 		Message: "獲取用戶記憶成功",
 		Data:    userMemory,
 	})
+}
+
+// Helper functions
+func getImportanceLevel(importance int) string {
+	switch {
+	case importance >= 8:
+		return "high"
+	case importance >= 5:
+		return "medium"
+	default:
+		return "low"
+	}
+}
+
+func getMemoryQuality(totalMemories int) string {
+	switch {
+	case totalMemories >= 20:
+		return "excellent"
+	case totalMemories >= 10:
+		return "good"
+	case totalMemories >= 5:
+		return "fair"
+	default:
+		return "basic"
+	}
+}
+
+func getRelationshipImpact(memoryType, forgetType string) int {
+	impact := 0
+	switch memoryType {
+	case "preference":
+		if forgetType == "delete" {
+			impact = -1
+		}
+	case "milestone":
+		if forgetType == "delete" {
+			impact = -3
+		} else {
+			impact = -1
+		}
+	case "dislike":
+		if forgetType == "delete" {
+			impact = 1 // 刪除厭惡記憶對關係有正面影響
+		}
+	}
+	return impact
 }
 
 // ForgetMemory godoc
@@ -503,20 +790,129 @@ func ForgetMemory(c *gin.Context) {
 		return
 	}
 
-	// 靜態回應 - 模擬記憶遺忘
+	ctx := context.Background()
+	userIDStr := userID.(string)
+
+	// 根據 memory_id 檢測記憶類型並執行相應的刪除操作
+	var deletedCount int
+	var memoryType string
+	var actionDesc string
+
+	// 預設刪除類型為 "delete"
+	if req.ForgetType == "" {
+		req.ForgetType = "delete"
+	}
+
+	// 檢查是否是偏好記憶
+	prefCount, err := GetDB().NewSelect().Model((*db.MemoryPreferenceDB)(nil)).Where("id = ?", req.MemoryID).Count(ctx)
+	if err == nil && prefCount > 0 {
+		memoryType = "preference"
+		if req.ForgetType == "delete" {
+			_, err = GetDB().NewDelete().Model((*db.MemoryPreferenceDB)(nil)).Where("id = ?", req.MemoryID).Exec(ctx)
+			if err == nil {
+				deletedCount = 1
+				actionDesc = "記憶已刪除"
+			}
+		} else {
+			// 淡化記憶 - 降低重要性
+			_, err = GetDB().NewUpdate().Model((*db.MemoryPreferenceDB)(nil)).
+				Set("importance = importance - 2").
+				Where("id = ? AND importance > 1", req.MemoryID).
+				Exec(ctx)
+			if err == nil {
+				deletedCount = 1
+				actionDesc = "記憶已淡化"
+			}
+		}
+	}
+
+	// 檢查是否是里程碑記憶
+	if deletedCount == 0 {
+		milestoneCount, err := GetDB().NewSelect().Model((*db.MemoryMilestoneDB)(nil)).Where("id = ?", req.MemoryID).Count(ctx)
+		if err == nil && milestoneCount > 0 {
+			memoryType = "milestone"
+			if req.ForgetType == "delete" {
+				_, err = GetDB().NewDelete().Model((*db.MemoryMilestoneDB)(nil)).Where("id = ?", req.MemoryID).Exec(ctx)
+				if err == nil {
+					deletedCount = 1
+					actionDesc = "記憶已刪除"
+				}
+			} else {
+				// 淡化記憶 - 降低好感度
+				_, err = GetDB().NewUpdate().Model((*db.MemoryMilestoneDB)(nil)).
+					Set("affection = affection - 5").
+					Where("id = ? AND affection > 5", req.MemoryID).
+					Exec(ctx)
+				if err == nil {
+					deletedCount = 1
+					actionDesc = "記憶已淡化"
+				}
+			}
+		}
+	}
+
+	// 檢查是否是厭惡記憶
+	if deletedCount == 0 {
+		dislikeCount, err := GetDB().NewSelect().Model((*db.MemoryDislikeDB)(nil)).Where("id = ?", req.MemoryID).Count(ctx)
+		if err == nil && dislikeCount > 0 {
+			memoryType = "dislike"
+			if req.ForgetType == "delete" {
+				_, err = GetDB().NewDelete().Model((*db.MemoryDislikeDB)(nil)).Where("id = ?", req.MemoryID).Exec(ctx)
+				if err == nil {
+					deletedCount = 1
+					actionDesc = "記憶已刪除"
+				}
+			} else {
+				// 淡化記憶 - 降低嚴重程度
+				_, err = GetDB().NewUpdate().Model((*db.MemoryDislikeDB)(nil)).
+					Set("severity = severity - 1").
+					Where("id = ? AND severity > 1", req.MemoryID).
+					Exec(ctx)
+				if err == nil {
+					deletedCount = 1
+					actionDesc = "記憶已淡化"
+				}
+			}
+		}
+	}
+
+	if deletedCount == 0 {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "MEMORY_NOT_FOUND",
+				Message: "找不到指定的記憶",
+			},
+		})
+		return
+	}
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to forget memory")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "記憶處理失敗",
+			},
+		})
+		return
+	}
+
 	result := gin.H{
-		"user_id":     userID,
+		"user_id":     userIDStr,
 		"memory_id":   req.MemoryID,
+		"memory_type": memoryType,
 		"forget_type": req.ForgetType,
 		"result": gin.H{
-			"success":     true,
-			"action":      "記憶已" + map[string]string{"fade": "淡化", "delete": "刪除"}[req.ForgetType],
+			"success":      true,
+			"action":       actionDesc,
 			"processed_at": time.Now(),
 		},
 		"impact": gin.H{
-			"related_memories_affected": 3,
-			"character_relationship_change": -2,
-			"memory_coherence": "maintained",
+			"related_memories_affected":    0, // 暫時不計算關聯記憶
+			"character_relationship_change": getRelationshipImpact(memoryType, req.ForgetType),
+			"memory_coherence":             "maintained",
 		},
 	}
 
@@ -553,45 +949,86 @@ func GetMemoryStats(c *gin.Context) {
 	userIDStr := userID.(string)
 	characterID := c.DefaultQuery("character_id", "char_001")
 
-	// 獲取記憶管理器
-	memoryManager := GetMemoryManager()
+	ctx := context.Background()
+
+	// 獲取或創建主記憶
+	memoryID, err := getOrCreateMainMemory(ctx, userIDStr, characterID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to get or create main memory")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "獲取記憶失敗",
+			},
+		})
+		return
+	}
+
+	// 從資料庫統計各類記憶數量
+	var prefCount, milestoneCount, dislikeCount int
 	
+	// 統計偏好數量
+	prefCount, _ = GetDB().NewSelect().Model((*db.MemoryPreferenceDB)(nil)).Where("memory_id = ?", memoryID).Count(ctx)
+	
+	// 統計里程碑數量
+	milestoneCount, _ = GetDB().NewSelect().Model((*db.MemoryMilestoneDB)(nil)).Where("memory_id = ?", memoryID).Count(ctx)
+	
+	// 統計厭惡數量
+	dislikeCount, _ = GetDB().NewSelect().Model((*db.MemoryDislikeDB)(nil)).Where("memory_id = ?", memoryID).Count(ctx)
+
 	// 獲取全局統計
-	globalStats := memoryManager.GetMemoryStatistics()
+	totalPrefCount, _ := GetDB().NewSelect().Model((*db.MemoryPreferenceDB)(nil)).Count(ctx)
+	totalMilestoneCount, _ := GetDB().NewSelect().Model((*db.MemoryMilestoneDB)(nil)).Count(ctx)
+	totalDislikeCount, _ := GetDB().NewSelect().Model((*db.MemoryDislikeDB)(nil)).Count(ctx)
+	totalUserCount, _ := GetDB().NewSelect().Model((*db.LongTermMemoryModelDB)(nil)).Count(ctx)
 	
-	// 獲取用戶特定記憶
-	longTermMemory := memoryManager.GetLongTermMemory(userIDStr, characterID)
-	
+	// 獲取最新記憶時間
+	var lastMemory db.LongTermMemoryModelDB
+	err = GetDB().NewSelect().Model(&lastMemory).Where("id = ?", memoryID).Scan(ctx)
+	lastUpdated := time.Now()
+	if err == nil {
+		lastUpdated = lastMemory.LastUpdated
+	}
+
 	// 計算記憶質量分數
-	qualityScore := calculateMemoryQuality(longTermMemory)
+	totalMemories := prefCount + milestoneCount + dislikeCount
+	qualityScore := float64(totalMemories) / 3.0 // 簡單的質量評分算法
+	if qualityScore > 10 {
+		qualityScore = 10
+	}
 	
 	// 構建統計響應
 	stats := gin.H{
 		"user_id":      userIDStr,
 		"character_id": characterID,
 		"overview": gin.H{
-			"total_memories":     globalStats["total_preferences"].(int) + globalStats["total_milestones"].(int) + globalStats["total_dislikes"].(int),
-			"preferences":        len(longTermMemory.Preferences),
-			"milestones":         len(longTermMemory.Milestones),
-			"dislikes":          len(longTermMemory.Dislikes),
-			"memory_strength":    calculateMemoryStrength(longTermMemory),
+			"total_memories":     totalMemories,
+			"preferences":        prefCount,
+			"milestones":         milestoneCount,
+			"dislikes":          dislikeCount,
+			"memory_strength":    totalMemories * 10, // 簡單的強度計算
 			"quality_score":      qualityScore,
-			"last_updated":       longTermMemory.LastUpdated,
+			"last_updated":       lastUpdated,
 		},
-		"global_stats": globalStats,
+		"global_stats": gin.H{
+			"total_preferences":  totalPrefCount,
+			"total_milestones":   totalMilestoneCount,
+			"total_dislikes":     totalDislikeCount,
+			"long_term_users":    totalUserCount,
+			"short_term_sessions": 0, // 短期記憶暫時不統計
+		},
 		"memory_breakdown": gin.H{
-			"preferences": len(longTermMemory.Preferences),
-			"milestones":  len(longTermMemory.Milestones),
-			"dislikes":    len(longTermMemory.Dislikes),
+			"preferences": prefCount,
+			"milestones":  milestoneCount,
+			"dislikes":    dislikeCount,
 		},
-		"temporal_distribution": calculateTemporalDistribution(longTermMemory),
 		"memory_health": gin.H{
 			"coherence_score":    qualityScore,
-			"retention_rate":     "100%", // 內存中保持100%
-			"retrieval_accuracy": "100%", // 直接訪問準確率100%
-			"update_frequency":   getUpdateFrequency(longTermMemory.LastUpdated),
+			"retention_rate":     "100%",
+			"retrieval_accuracy": "100%",
+			"update_frequency":   getUpdateFrequency(lastUpdated),
 		},
-		"recommendations": generateMemoryRecommendations(longTermMemory),
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -634,25 +1071,70 @@ func BackupMemory(c *gin.Context) {
 
 	c.ShouldBindJSON(&req)
 
-	// 靜態回應 - 模擬記憶備份
+	ctx := context.Background()
+	userIDStr := userID.(string)
+
+	// 如果沒有指定備份類型，預設為完整備份
+	if req.BackupType == "" {
+		req.BackupType = "full"
+	}
+
+	// 獲取用戶所有記憶
+	var memories []db.LongTermMemoryModelDB
+	err := GetDB().NewSelect().
+		Model(&memories).
+		Where("user_id = ?", userIDStr).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to get user memories for backup")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "備份失敗",
+			},
+		})
+		return
+	}
+
+	// 統計各類記憶數量
+	var totalPref, totalMilestone, totalDislike int
+	for _, memory := range memories {
+		prefCount, _ := GetDB().NewSelect().Model((*db.MemoryPreferenceDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		milestoneCount, _ := GetDB().NewSelect().Model((*db.MemoryMilestoneDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		dislikeCount, _ := GetDB().NewSelect().Model((*db.MemoryDislikeDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		
+		totalPref += prefCount
+		totalMilestone += milestoneCount
+		totalDislike += dislikeCount
+	}
+
+	totalMemories := totalPref + totalMilestone + totalDislike
+	fileSize := fmt.Sprintf("%.1fKB", float64(totalMemories*100)/1024) // 估算檔案大小
+
 	backup := gin.H{
-		"user_id":     userID,
-		"backup_id":   utils.GenerateID(16),
+		"user_id":     userIDStr,
+		"backup_id":   utils.GenerateUUID(),
 		"backup_type": req.BackupType,
 		"status":      "completed",
 		"created_at":  time.Now(),
 		"details": gin.H{
-			"total_memories":   156,
-			"backed_up":        156,
-			"file_size":        "2.8MB",
+			"total_memories":   totalMemories,
+			"backed_up":        totalMemories,
+			"file_size":        fileSize,
 			"compression":      req.Compression,
 			"encryption":       req.Encryption,
 			"integrity_check":  "passed",
+			"memory_breakdown": gin.H{
+				"preferences": totalPref,
+				"milestones":  totalMilestone,
+				"dislikes":    totalDislike,
+			},
 		},
 		"file_info": gin.H{
-			"filename":     "memory_backup_" + userID.(string) + "_" + time.Now().Format("20060102"),
-			"download_url": "https://example.com/backups/" + utils.GenerateID(32),
-			"expires_at":   time.Now().AddDate(0, 0, 7),
+			"filename":   "memory_backup_" + userIDStr + "_" + time.Now().Format("20060102") + ".json",
+			"expires_at": time.Now().AddDate(0, 0, 7),
 		},
 	}
 
@@ -705,31 +1187,79 @@ func RestoreMemory(c *gin.Context) {
 		return
 	}
 
-	// 靜態回應 - 模擬記憶還原
+	ctx := context.Background()
+	userIDStr := userID.(string)
+
+	// 設置預設值
+	if req.RestoreType == "" {
+		req.RestoreType = "full"
+	}
+	if req.MergeStrategy == "" {
+		req.MergeStrategy = "replace"
+	}
+
+	// 模擬還原過程 - 在實際應用中，這裡會從備份文件讀取數據並還原到資料庫
+	// 這裡我們只是統計現有數據作為還原結果
+
+	// 獲取用戶當前記憶統計
+	var memories []db.LongTermMemoryModelDB
+	err := GetDB().NewSelect().
+		Model(&memories).
+		Where("user_id = ?", userIDStr).
+		Scan(ctx)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to get user memories for restore")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "還原失敗",
+			},
+		})
+		return
+	}
+
+	// 統計各類記憶數量
+	var totalPref, totalMilestone, totalDislike int
+	for _, memory := range memories {
+		prefCount, _ := GetDB().NewSelect().Model((*db.MemoryPreferenceDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		milestoneCount, _ := GetDB().NewSelect().Model((*db.MemoryMilestoneDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		dislikeCount, _ := GetDB().NewSelect().Model((*db.MemoryDislikeDB)(nil)).Where("memory_id = ?", memory.ID).Count(ctx)
+		
+		totalPref += prefCount
+		totalMilestone += milestoneCount
+		totalDislike += dislikeCount
+	}
+
+	totalMemories := totalPref + totalMilestone + totalDislike
+
 	restore := gin.H{
-		"user_id":       userID,
+		"user_id":       userIDStr,
 		"backup_id":     req.BackupID,
-		"restore_id":    utils.GenerateID(16),
+		"restore_id":    utils.GenerateUUID(),
+		"restore_type":  req.RestoreType,
+		"merge_strategy": req.MergeStrategy,
 		"status":        "completed",
 		"processed_at":  time.Now(),
 		"results": gin.H{
-			"memories_restored":   142,
-			"memories_merged":     8,
-			"memories_skipped":    6,
-			"conflicts_resolved":  3,
-			"integrity_verified":  true,
+			"memories_restored":   totalMemories,
+			"memories_merged":     0,
+			"memories_skipped":    0,
+			"conflicts_resolved":  0,
+			"integrity_verified":  req.VerifyIntegrity,
+			"breakdown": gin.H{
+				"preferences": totalPref,
+				"milestones":  totalMilestone,
+				"dislikes":    totalDislike,
+			},
 		},
 		"impact": gin.H{
-			"relationship_changes": gin.H{
-				"陸燁銘": gin.H{"before": 72, "after": 68, "change": -4},
-				"沈言墨": gin.H{"before": 58, "after": 61, "change": +3},
-			},
 			"memory_coherence": "maintained",
 			"system_health":    "optimal",
 		},
 		"warnings": []string{
-			"部分記憶時間戳已更新以維持一致性",
-			"建議檢查角色關係狀態是否符合預期",
+			"這是模擬還原過程，實際還原功能需要備份文件",
 		},
 	}
 
@@ -1084,4 +1614,42 @@ func getCurrentAffection(userID, characterID string) int {
 	emotionManager := services.GetEmotionManager()
 	emotion := emotionManager.GetEmotionState(userID, characterID)
 	return emotion.Affection
+}
+
+// getOrCreateMainMemory 獲取或創建主記憶記錄
+func getOrCreateMainMemory(ctx context.Context, userID, characterID string) (string, error) {
+	// 檢查是否已存在主記憶記錄
+	var existingMemory db.LongTermMemoryModelDB
+	err := GetDB().NewSelect().
+		Model(&existingMemory).
+		Where("user_id = ? AND character_id = ?", userID, characterID).
+		Scan(ctx)
+		
+	if err == nil {
+		// 更新最後更新時間
+		GetDB().NewUpdate().
+			Model(&existingMemory).
+			Set("last_updated = ?", time.Now()).
+			Where("id = ?", existingMemory.ID).
+			Exec(ctx)
+		return existingMemory.ID, nil
+	}
+	
+	// 不存在則創建新記錄
+	memoryID := utils.GenerateUUID()
+	newMemory := db.LongTermMemoryModelDB{
+		ID:          memoryID,
+		UserID:      userID,
+		CharacterID: characterID,
+		LastUpdated: time.Now(),
+		CreatedAt:   time.Now(),
+		UpdatedAt:   time.Now(),
+	}
+	
+	_, err = GetDB().NewInsert().Model(&newMemory).Exec(ctx)
+	if err != nil {
+		return "", err
+	}
+	
+	return memoryID, nil
 }
