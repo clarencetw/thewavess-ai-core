@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"strconv"
 	"strings"
@@ -89,7 +90,7 @@ func GetMemoryTimeline(c *gin.Context) {
 			memories = append(memories, gin.H{
 				"id":           pref.ID,
 				"type":         "preference",
-				"importance":   getImportanceLevel(float64(pref.Importance)),
+				"importance":   getImportanceLevel(pref.Importance),
 				"title":        pref.Category,
 				"content":      pref.Content,
 				"emotion_tag":  "neutral",
@@ -1272,17 +1273,6 @@ func RestoreMemory(c *gin.Context) {
 
 // 輔助函數
 
-// getImportanceLevel 將數值重要度轉換為字符串等級
-func getImportanceLevel(importance float64) string {
-	switch {
-	case importance >= 0.8:
-		return "high"
-	case importance >= 0.5:
-		return "medium"
-	default:
-		return "low"
-	}
-}
 
 // calculateMemoryStrength 計算記憶強度
 func calculateMemoryStrength(memory *services.LongTermMemory) int {

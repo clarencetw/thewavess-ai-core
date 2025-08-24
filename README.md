@@ -115,7 +115,9 @@ make db-setup         # 初始化遷移表 + 遷移
 make migrate          # 執行遷移
 make migrate-status   # 查看狀態
 make migrate-down     # 回滾一次
-make seed             # 填充種子資料
+make fixtures         # 載入 fixtures 資料
+make fresh-start      # 完整重建（清理+安裝+資料庫+fixtures）
+make quick-setup      # 快速設置（資料庫+fixtures）
 ```
 
 Docker：
@@ -137,15 +139,31 @@ make docker-run
 
 ## 文件與指南
 
+### 核心文檔
 - 入門指南：[GETTING_STARTED.md](./GETTING_STARTED.md)
 - 系統架構：[ARCHITECTURE.md](./ARCHITECTURE.md)
 - 開發流程：[DEVELOPMENT.md](./DEVELOPMENT.md)
 - 環境設定：[CONFIGURATION.md](./CONFIGURATION.md)
 - API 與進度：[API_PROGRESS.md](./API_PROGRESS.md)（權威來源）
-- 完整 API 參考：[API.md](./API.md) + [Swagger UI](http://localhost:8080/swagger/index.html)
-- NSFW 政策：[NSFW_GUIDE.md](./NSFW_GUIDE.md)
+- 完整 API 參考：[Swagger UI](http://localhost:8080/swagger/index.html)
 - 規格與設計：[SPEC.md](./SPEC.md)
+
+### 系統指南
+- 角色系統：[CHARACTER_GUIDE.md](./CHARACTER_GUIDE.md)
+- 情感系統：[EMOTION_GUIDE.md](./EMOTION_GUIDE.md)
+- 記憶系統：[MEMORY_GUIDE.md](./MEMORY_GUIDE.md)
+- 好感度系統：[AFFECTION_GUIDE.md](./AFFECTION_GUIDE.md)
+- NSFW 政策：[NSFW_GUIDE.md](./NSFW_GUIDE.md)
+
+### 操作指南
+- CLI 遷移指南：[CLI_MIGRATION_GUIDE.md](./CLI_MIGRATION_GUIDE.md)
 - 部署指引：[DEPLOYMENT.md](./DEPLOYMENT.md)
+- 監控指南：[MONITORING_GUIDE.md](./MONITORING_GUIDE.md)
+
+### 開發工具
+- AI 代理配置：[AGENTS.md](./AGENTS.md)
+- Claude 使用指南：[CLAUDE.md](./CLAUDE.md)
+- 聊天流程圖：[docs/CHAT_MESSAGE_FLOW.md](./docs/CHAT_MESSAGE_FLOW.md)
 
 —
 

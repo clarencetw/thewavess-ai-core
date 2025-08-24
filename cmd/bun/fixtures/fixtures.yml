@@ -4,7 +4,7 @@
       id: "test_user_01"
       username: "testuser"
       email: "test@example.com"
-      password_hash: "$2a$10$n9Qzw8MA3zJ/EgnSLB6U5eVeIHJiw5OL4XBO5fIQUzHCDA5stEIba"
+      password_hash: "$2a$10$SESrn8xE7LwGl0rsT.BSHOB0gOcbRjUrRJHbegCjNOuLriqa3kRky"
       display_name: "測試用戶"
       bio: "系統預設測試用戶"
       status: "active"
