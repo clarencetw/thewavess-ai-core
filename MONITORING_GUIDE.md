@@ -2,6 +2,14 @@
 
 本文件說明系統的監控機制、健康檢查策略、性能指標追蹤與故障排除方法，專注於提供實用的運維指導。
 
+## 📊 監控系統現狀
+- **監控端點**: 9 個監控相關端點（包含管理系統API）
+- **API總數**: 47 個端點（100% 已實現）
+- **指標類型**: Prometheus 格式指標
+- **健康檢查**: 多層級檢查機制
+- **容器支援**: Kubernetes 就緒與存活探針
+- **監控範圍**: 系統、資料庫、AI 服務、運行時指標
+
 ## 目標
 
 - 提供簡單有效的系統健康狀態檢查
@@ -17,11 +25,14 @@
 - **服務依賴檢查**：資料庫、AI API、外部服務狀態
 - **容器健康探針**：Kubernetes/Docker 環境支援
 
-### 端點分類
-- **簡單檢查**：`/health` - 快速健康確認
-- **詳細監控**：`/monitor/*` - 專業監控工具
-- **容器探針**：`/monitor/ready`, `/monitor/live`
-- **指標收集**：`/monitor/metrics` - Prometheus 格式
+### 監控端點架構
+- **基礎健康檢查**: `/health` - 系統整體健康狀態
+- **專業監控端點**: `/api/v1/monitor/*` - 詳細監控信息
+  - `/api/v1/monitor/health` - 系統健康檢查
+  - `/api/v1/monitor/ready` - Kubernetes 就緒檢查
+  - `/api/v1/monitor/live` - Kubernetes 存活檢查
+  - `/api/v1/monitor/stats` - 詳細系統狀態
+  - `/api/v1/monitor/metrics` - Prometheus 指標
 
 ## 實作策略
 
@@ -39,17 +50,33 @@
 - **unhealthy**: 核心服務故障
 
 ### 關鍵指標追蹤
+
+#### Prometheus 指標
+```
+# 系統運行時間
+thewavess_uptime_seconds
+
+# 記憶體使用量（字節）
+thewavess_memory_usage_bytes
+
+# Goroutine 數量
+thewavess_goroutines_total
+
+# GC 執行次數
+thewavess_gc_total
+```
+
+#### 監控目標
 ```
 系統指標:
-- 記憶體使用量 (目標: <100MB)
-- Goroutine 數量 (目標: <50)
-- GC 頻率 (目標: 適中)
-- 運行時間 (uptime)
+- 記憶體使用量 (正常: <50MB, 警告: 50-100MB, 危險: >100MB)
+- Goroutine 數量 (正常: <20, 警告: 20-50, 危險: >50)
+- 資料庫延遲 (正常: <2ms, 警告: 2-10ms, 危險: >10ms)
 
-服務指標:
-- 資料庫延遲 (目標: <5ms)
-- API 配置狀態
-- 錯誤率 (目標: <1%)
+服務狀態:
+- 資料庫連接: healthy/unhealthy/disconnected
+- AI 服務: configured/not_configured
+- 整體狀態: healthy/degraded/unhealthy
 ```
 
 ## 使用指南
@@ -59,14 +86,20 @@
 # 快速健康檢查
 curl http://localhost:8080/health
 
-# 詳細系統狀態
+# 詳細系統狀態（包含硬體信息、記憶體使用、GC 統計）
 curl http://localhost:8080/api/v1/monitor/stats | jq .
 
-# 查看資源使用
-curl http://localhost:8080/api/v1/monitor/metrics | grep memory
+# Prometheus 監控指標
+curl http://localhost:8080/api/v1/monitor/metrics
+
+# Kubernetes 就緒檢查
+curl http://localhost:8080/api/v1/monitor/ready
+
+# Kubernetes 存活檢查
+curl http://localhost:8080/api/v1/monitor/live
 ```
 
-### Docker 環境
+### Docker 健康檢查配置
 ```yaml
 # docker-compose.yml 健康檢查配置
 healthcheck:
@@ -74,6 +107,27 @@ healthcheck:
   interval: 30s
   timeout: 10s
   retries: 3
+  start_period: 40s
+```
+
+### Kubernetes 探針配置
+```yaml
+# deployment.yaml 探針配置
+livenessProbe:
+  httpGet:
+    path: /api/v1/monitor/live
+    port: 8080
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /api/v1/monitor/ready
+    port: 8080
+  initialDelaySeconds: 5
+  periodSeconds: 10
+  timeoutSeconds: 5
 ```
 
 ### 容器部署檢查
@@ -142,28 +196,6 @@ docker logs api_container | grep "健康檢查"
 docker logs api_container | grep "ERROR"
 ```
 
-## 開發指導
-
-### 新增監控指標
-1. 在 `handlers/monitor.go` 添加新指標
-2. 更新 Prometheus 格式輸出
-3. 調整健康檢查邏輯
-4. 更新文檔說明
-
-### 自定義健康檢查
-```go
-// 添加新的服務檢查
-func checkCustomService() string {
-    // 實作檢查邏輯
-    return "healthy" // or "unhealthy"
-}
-```
-
-### 性能優化
-- 監控端點應保持輕量級
-- 避免昂貴的計算操作
-- 使用緩存減少重複檢查
-- 異步處理非關鍵指標
 
 ## 生產環境建議
 

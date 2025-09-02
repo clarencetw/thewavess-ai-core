@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/utils"
+	"github.com/gin-gonic/gin"
 )
 
 // AuthMiddleware JWT 認證中間件
@@ -72,53 +72,98 @@ func AuthMiddleware() gin.HandlerFunc {
 // AdminMiddleware 管理員權限中間件
 func AdminMiddleware() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 首先需要通過基本認證
-		userID, exists := c.Get("userID")
-		if !exists {
+		// 獲取 Authorization header
+		authHeader := c.GetHeader("Authorization")
+		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, models.APIResponse{
 				Success: false,
-				Message: "未授權",
+				Message: "需要管理員認證",
 				Error: &models.APIError{
-					Code:    "UNAUTHORIZED",
-					Message: "用戶未通過認證",
+					Code:    "MISSING_ADMIN_AUTH_HEADER",
+					Message: "缺少 Authorization header",
 				},
 			})
 			c.Abort()
 			return
 		}
 
-		// 檢查管理員權限 (目前簡化實現，實際應查詢用戶角色)
-		userIDStr := userID.(string)
-		
-		// TODO: 實際項目中應該查詢用戶的角色/權限
-		// 這裡暫時使用簡化邏輯：特定用戶ID或用戶名為admin的用戶
-		username, usernameExists := c.Get("username")
-		if usernameExists && username.(string) == "admin" {
-			c.Next()
-			return
-		}
-		
-		// 或者基於用戶ID的管理員列表（生產環境應該從數據庫查詢）
-		adminUsers := map[string]bool{
-			"admin": true,
-			// 可以添加其他管理員用戶ID
-		}
-		
-		if adminUsers[userIDStr] {
-			c.Next()
+		// 檢查 Bearer token 格式
+		tokenParts := strings.SplitN(authHeader, " ", 2)
+		if len(tokenParts) != 2 || tokenParts[0] != "Bearer" {
+			c.JSON(http.StatusUnauthorized, models.APIResponse{
+				Success: false,
+				Message: "管理員認證格式錯誤",
+				Error: &models.APIError{
+					Code:    "INVALID_ADMIN_AUTH_FORMAT",
+					Message: "Authorization header 格式應為 'Bearer <admin_token>'",
+				},
+			})
+			c.Abort()
 			return
 		}
 
-		// 非管理員用戶
-		c.JSON(http.StatusForbidden, models.APIResponse{
-			Success: false,
-			Message: "需要管理員權限",
-			Error: &models.APIError{
-				Code:    "INSUFFICIENT_PRIVILEGES",
-				Message: "此操作需要管理員權限",
-			},
-		})
-		c.Abort()
+		token := tokenParts[1]
+
+		// 驗證管理員 JWT token
+		claims, err := utils.ValidateAdminToken(token)
+		if err != nil {
+			c.JSON(http.StatusUnauthorized, models.APIResponse{
+				Success: false,
+				Message: "無效的管理員認證令牌",
+				Error: &models.APIError{
+					Code:    "INVALID_ADMIN_TOKEN",
+					Message: "管理員 JWT token 無效或已過期: " + err.Error(),
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		// 設定管理員資訊到 context
+		c.Set("admin_id", claims.AdminID)
+		c.Set("admin_username", claims.Username)
+		c.Set("admin_email", claims.Email)
+		c.Set("admin_role", claims.Role)
+		c.Set("admin_permissions", claims.Permissions)
+		c.Set("admin_claims", claims)
+
+		c.Next()
 	}
 }
 
+// RequireSuperAdmin 要求超級管理員權限的中間件
+func RequireSuperAdmin() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// 首先必須通過 AdminMiddleware
+		adminRole, roleExists := c.Get("admin_role")
+
+		if !roleExists {
+			c.JSON(http.StatusForbidden, models.APIResponse{
+				Success: false,
+				Message: "權限檢查失敗",
+				Error: &models.APIError{
+					Code:    "PERMISSION_CHECK_FAILED",
+					Message: "無法驗證管理員權限",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		// 只有超級管理員可以訪問
+		if adminRole.(string) != "super_admin" {
+			c.JSON(http.StatusForbidden, models.APIResponse{
+				Success: false,
+				Message: "需要超級管理員權限",
+				Error: &models.APIError{
+					Code:    "INSUFFICIENT_ADMIN_PRIVILEGES",
+					Message: "此操作需要超級管理員權限",
+				},
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
+}

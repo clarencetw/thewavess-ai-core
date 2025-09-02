@@ -14,7 +14,7 @@ var (
 func InitDB() *App {
 	globalAppOnce.Do(func() {
 		globalApp = NewApp()
-		
+
 		// 註冊預設鉤子
 		RegisterDefaultHooks(globalApp)
 		RegisterMigrationStatusHook(globalApp)

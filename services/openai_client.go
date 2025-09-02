@@ -59,7 +59,7 @@ type OpenAIResponse struct {
 func NewOpenAIClient() *OpenAIClient {
 	// 確保環境變數已載入
 	utils.LoadEnv()
-	
+
 	apiKey := utils.GetEnvWithDefault("OPENAI_API_KEY", "")
 	if apiKey == "" {
 		utils.Logger.Warn("OPENAI_API_KEY not set, using mock responses")
@@ -67,13 +67,13 @@ func NewOpenAIClient() *OpenAIClient {
 
 	// 從環境變數讀取配置，提供預設值
 	model := utils.GetEnvWithDefault("OPENAI_MODEL", "gpt-4o")
-	maxTokens := utils.GetEnvIntWithDefault("OPENAI_MAX_TOKENS", 800)
+	maxTokens := utils.GetEnvIntWithDefault("OPENAI_MAX_TOKENS", 1200)
 	temperature := utils.GetEnvFloatWithDefault("OPENAI_TEMPERATURE", 0.8)
 
 	// 獲取自定義 API URL，支援 Azure 或其他端點
 	baseURL := utils.GetEnvWithDefault("OPENAI_API_URL", "https://api.openai.com/v1")
 	isAzure := false
-	
+
 	// 檢查是否為 Azure OpenAI
 	if strings.Contains(baseURL, "azure.com") {
 		isAzure = true
@@ -91,10 +91,10 @@ func NewOpenAIClient() *OpenAIClient {
 				return model // 使用模型名稱作為部署名稱
 			}
 			client = openai.NewClientWithConfig(config)
-			
+
 			utils.Logger.WithFields(map[string]interface{}{
-				"base_url": baseURL,
-				"api_type": "azure",
+				"base_url":    baseURL,
+				"api_type":    "azure",
 				"api_version": config.APIVersion,
 			}).Info("Using Azure OpenAI API")
 		} else if baseURL != "https://api.openai.com/v1" {
@@ -102,7 +102,7 @@ func NewOpenAIClient() *OpenAIClient {
 			config := openai.DefaultConfig(apiKey)
 			config.BaseURL = baseURL
 			client = openai.NewClientWithConfig(config)
-			
+
 			utils.Logger.WithField("base_url", baseURL).Info("Using custom OpenAI API URL")
 		} else {
 			// 使用默認 OpenAI API
@@ -192,7 +192,7 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 			"model":   c.model,
 			"user":    request.User,
 		}).Error("OpenAI API call failed")
-		return nil, fmt.Errorf("OpenAI API call failed: %w", err)
+		return nil, fmt.Errorf("failed OpenAI API call: %w", err)
 	}
 
 	// 記錄API響應信息
@@ -278,8 +278,60 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 
 // generateMockResponse 生成模擬回應（當 API key 未設置時）
 func (c *OpenAIClient) generateMockResponse(request *OpenAIRequest) *OpenAIResponse {
+	// 分析整個對話上下文生成智能回應
+	var mockContent string
+	userMessage := ""
+	systemPrompt := ""
+	
+	// 獲取用戶消息和system prompt
+	if len(request.Messages) > 0 {
+		// 獲取system prompt（通常是第一條消息）
+		if request.Messages[0].Role == "system" {
+			systemPrompt = strings.ToLower(request.Messages[0].Content)
+		}
+		
+		// 獲取最後的用戶消息
+		for i := len(request.Messages) - 1; i >= 0; i-- {
+			if request.Messages[i].Role == "user" {
+				userMessage = strings.ToLower(request.Messages[i].Content)
+				break
+			}
+		}
+		
+		// 分析角色和場景
+		isNSFW := strings.Contains(systemPrompt, "level") && (strings.Contains(systemPrompt, "3") || strings.Contains(systemPrompt, "4"))
+		
+		// 根據關鍵詞和場景生成符合女性向風格的回應
+		if strings.Contains(userMessage, "你好") || strings.Contains(userMessage, "嗨") {
+			if isNSFW {
+				mockContent = "你好...很高興又見到你了。今天想要怎麼度過呢？"
+			} else {
+				mockContent = "你好呢～很高興見到你。今天過得怎麼樣？"
+			}
+		} else if strings.Contains(userMessage, "累") || strings.Contains(userMessage, "疲憊") {
+			mockContent = "辛苦了...來我這裡休息一下吧。我會一直陪在你身邊的。"
+		} else if strings.Contains(userMessage, "開心") || strings.Contains(userMessage, "高興") {
+			mockContent = "看到你這麼開心，我也跟著開心起來了呢～能分享一下是什麼好事嗎？"
+		} else if strings.Contains(userMessage, "愛") {
+			if isNSFW {
+				mockContent = "我也愛你...讓我用行動證明我的心意吧。"
+			} else {
+				mockContent = "我的心裡也有著同樣溫暖的感受...你對我來說很特別。"
+			}
+		} else {
+			// 默認根據場景回應
+			if isNSFW {
+				mockContent = "我明白你的想法...在這個只屬於我們的空間裡，我會好好照顧你。"
+			} else {
+				mockContent = "我明白你想說的...無論何時，我都會認真聆聽你的心聲。"
+			}
+		}
+	} else {
+		mockContent = "很高興能與你對話...有什麼想聊的嗎？"
+	}
+	
 	return &OpenAIResponse{
-		ID:      "chatcmpl-mock",
+		ID:      fmt.Sprintf("chatcmpl-mock-%d", 1234567890),
 		Object:  "chat.completion",
 		Created: 1234567890,
 		Model:   c.model,
@@ -298,7 +350,7 @@ func (c *OpenAIClient) generateMockResponse(request *OpenAIRequest) *OpenAIRespo
 					Content string `json:"content"`
 				}{
 					Role:    "assistant",
-					Content: "[模擬回應] 這是一個來自 OpenAI 的模擬回應。請設置 OPENAI_API_KEY 環境變數以使用真實 API。",
+					Content: mockContent,
 				},
 				FinishReason: "stop",
 			},
@@ -308,33 +360,26 @@ func (c *OpenAIClient) generateMockResponse(request *OpenAIRequest) *OpenAIRespo
 			CompletionTokens int `json:"completion_tokens"`
 			TotalTokens      int `json:"total_tokens"`
 		}{
-			PromptTokens:     50,
-			CompletionTokens: 30,
-			TotalTokens:      80,
+			PromptTokens:     len(userMessage) / 4,
+			CompletionTokens: len(mockContent) / 4,
+			TotalTokens:      (len(userMessage) + len(mockContent)) / 4,
 		},
 	}
 }
 
-
 // BuildCharacterPrompt 構建角色提示詞（使用統一模板）
-func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescription string, conversationContext *ConversationContext, nsfwLevel int) []OpenAIMessage {
-	// 構建記憶提示詞
-	memoryPrompt := ""
-	if conversationContext != nil && conversationContext.MemoryPrompt != "" {
-		memoryPrompt = conversationContext.MemoryPrompt
-	}
+func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) []OpenAIMessage {
 
-	// 使用統一的prompt模板
+	// 使用OpenAI專屬的prompt構建器
 	characterService := GetCharacterService()
-	promptBuilder := NewPromptBuilder(characterService)
+	promptBuilder := NewOpenAIPromptBuilder(characterService)
 	ctx := context.Background()
 	systemPrompt := promptBuilder.
 		WithCharacter(ctx, characterID).
 		WithContext(conversationContext).
 		WithNSFWLevel(nsfwLevel).
 		WithUserMessage(userMessage).
-		WithSceneDescription(sceneDescription).
-		WithMemory(memoryPrompt).
+		WithChatMode(chatMode).
 		Build(ctx)
 
 	messages := []OpenAIMessage{
@@ -365,4 +410,3 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage, sceneDescr
 
 	return messages
 }
-

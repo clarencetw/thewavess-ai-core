@@ -22,9 +22,14 @@ COPY . .
 # Generate Swagger docs
 RUN swag init --parseDependency --parseInternal
 
-# Build the application with optimizations
+# Set build arguments
+ARG VERSION=unknown
+ARG BUILD_TIME=unknown  
+ARG GIT_COMMIT=unknown
+
+# Build the application with optimizations and real build info
 RUN CGO_ENABLED=0 GOOS=linux go build \
-    -ldflags="-w -s -X main.Version=1.0.0 -X main.BuildTime=$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+    -ldflags="-w -s -X main.Version=${VERSION} -X main.BuildTime=${BUILD_TIME} -X main.GitCommit=${GIT_COMMIT}" \
     -a -installsuffix cgo -o main .
 
 # Runtime stage - use minimal alpine for better security and functionality

@@ -30,11 +30,11 @@ func NewHookManager() *HookManager {
 func (hm *HookManager) OnStart(name string, hook Hook) {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
-	
+
 	if hm.hooks == nil {
 		hm.hooks = make(map[string]Hook)
 	}
-	
+
 	hm.hooks[name] = hook
 	utils.Logger.WithField("hook", name).Info("Hook registered")
 }
@@ -54,10 +54,10 @@ func (hm *HookManager) RunHooks(ctx context.Context, app *App) error {
 	}
 
 	utils.Logger.WithField("count", len(hooks)).Info("Starting to execute hooks")
-	
+
 	// 使用 errgroup 並發執行鉤子
 	g, ctx := errgroup.WithContext(ctx)
-	
+
 	for name, hook := range hooks {
 		name, hook := name, hook // 捕獲循環變數
 		g.Go(func() error {
@@ -78,7 +78,7 @@ func (hm *HookManager) RunHooks(ctx context.Context, app *App) error {
 // runSingleHook 執行單個鉤子並記錄性能
 func (hm *HookManager) runSingleHook(ctx context.Context, app *App, name string, hook Hook) error {
 	start := time.Now()
-	
+
 	// 為每個鉤子設置 30 秒超時
 	hookCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
@@ -109,7 +109,7 @@ func (hm *HookManager) runSingleHook(ctx context.Context, app *App, name string,
 func (hm *HookManager) GetRegisteredHooks() []string {
 	hm.mu.RLock()
 	defer hm.mu.RUnlock()
-	
+
 	names := make([]string, 0, len(hm.hooks))
 	for name := range hm.hooks {
 		names = append(names, name)
@@ -121,7 +121,7 @@ func (hm *HookManager) GetRegisteredHooks() []string {
 func (hm *HookManager) RemoveHook(name string) bool {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
-	
+
 	if _, exists := hm.hooks[name]; exists {
 		delete(hm.hooks, name)
 		utils.Logger.WithField("hook", name).Info("Hook removed")
@@ -134,7 +134,7 @@ func (hm *HookManager) RemoveHook(name string) bool {
 func (hm *HookManager) ClearHooks() {
 	hm.mu.Lock()
 	defer hm.mu.Unlock()
-	
+
 	count := len(hm.hooks)
 	hm.hooks = make(map[string]Hook)
 	utils.Logger.WithField("count", count).Info("All hooks cleared")

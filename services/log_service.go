@@ -5,16 +5,16 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sirupsen/logrus"
 	"github.com/clarencetw/thewavess-ai-core/models"
+	"github.com/sirupsen/logrus"
 )
 
 // LogService 日誌服務
 type LogService struct {
-	mutex        sync.RWMutex
-	logs         []models.SystemLog
-	maxLogSize   int
-	nextID       int64
+	mutex      sync.RWMutex
+	logs       []models.SystemLog
+	maxLogSize int
+	nextID     int64
 }
 
 var logService *LogService
@@ -95,11 +95,11 @@ func (ls *LogService) GetLogStats() map[string]int {
 	defer ls.mutex.RUnlock()
 
 	stats := map[string]int{
-		"total": len(ls.logs),
-		"debug": 0,
-		"info":  0,
+		"total":   len(ls.logs),
+		"debug":   0,
+		"info":    0,
 		"warning": 0,
-		"error": 0,
+		"error":   0,
 	}
 
 	for _, log := range ls.logs {
@@ -141,7 +141,7 @@ func (hook *LogHook) Levels() []logrus.Level {
 func (hook *LogHook) Fire(entry *logrus.Entry) error {
 	// 轉換 logrus.Entry 為我們的格式
 	data := make(map[string]interface{})
-	
+
 	// 複製字段
 	for key, value := range entry.Data {
 		data[key] = value
@@ -162,7 +162,7 @@ func (hook *LogHook) Fire(entry *logrus.Entry) error {
 // LogStructuredData 記錄結構化數據
 func LogStructuredData(level string, message string, data interface{}) {
 	logService := GetLogService()
-	
+
 	// 將數據轉換為 map
 	var dataMap map[string]interface{}
 	if data != nil {
@@ -188,7 +188,7 @@ func LogSystemEvent(event string, data map[string]interface{}) {
 	}
 	data["event_type"] = "system_event"
 	data["event_name"] = event
-	
+
 	LogStructuredData("info", "System event: "+event, data)
 }
 
@@ -197,17 +197,17 @@ func LogAPIEvent(method, path string, statusCode int, duration int64, userID str
 	if data == nil {
 		data = make(map[string]interface{})
 	}
-	
+
 	data["event_type"] = "api_request"
 	data["method"] = method
 	data["path"] = path
 	data["status_code"] = statusCode
 	data["duration_ms"] = duration
-	
+
 	if userID != "" {
 		data["user_id"] = userID
 	}
-	
+
 	level := "info"
 	if statusCode >= 400 {
 		level = "warning"
@@ -215,32 +215,32 @@ func LogAPIEvent(method, path string, statusCode int, duration int64, userID str
 	if statusCode >= 500 {
 		level = "error"
 	}
-	
+
 	message := "API request: " + method + " " + path
 	LogStructuredData(level, message, data)
 }
 
 // LogChatEvent 記錄聊天事件
-func LogChatEvent(sessionID, userID, characterID string, success bool, duration int64, data map[string]interface{}) {
+func LogChatEvent(chatID, userID, characterID string, success bool, duration int64, data map[string]interface{}) {
 	if data == nil {
 		data = make(map[string]interface{})
 	}
-	
+
 	data["event_type"] = "chat_message"
-	data["session_id"] = sessionID
+	data["chat_id"] = chatID
 	data["user_id"] = userID
 	data["character_id"] = characterID
 	data["success"] = success
 	data["duration_ms"] = duration
-	
+
 	level := "info"
 	message := "Chat message processed"
-	
+
 	if !success {
 		level = "error"
 		message = "Chat message failed"
 	}
-	
+
 	LogStructuredData(level, message, data)
 }
 
@@ -249,11 +249,11 @@ func LogError(err error, context string, data map[string]interface{}) {
 	if data == nil {
 		data = make(map[string]interface{})
 	}
-	
+
 	data["event_type"] = "error"
 	data["error_message"] = err.Error()
 	data["context"] = context
-	
+
 	message := "Error occurred: " + context
 	LogStructuredData("error", message, data)
 }

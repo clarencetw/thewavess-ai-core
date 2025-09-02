@@ -3,20 +3,28 @@ package main
 import (
 	"context"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/gin-contrib/cors"
-	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/clarencetw/thewavess-ai-core/database"
 	_ "github.com/clarencetw/thewavess-ai-core/docs"
+	"github.com/clarencetw/thewavess-ai-core/handlers/pages"
 	"github.com/clarencetw/thewavess-ai-core/middleware"
 	"github.com/clarencetw/thewavess-ai-core/routes"
 	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
+)
+
+// 構建時變數
+var (
+	Version   = "dev"
+	BuildTime = "unknown"
+	GitCommit = "unknown"
 )
 
 // @title           Thewavess AI Core API
@@ -33,54 +41,78 @@ import (
 
 // @host      localhost:8080
 // @BasePath  /api/v1
+//
+// Note: This API supports multiple environments:
+// - Local development: http://localhost:8080
+// - Development server: https://thewavess-ai-core.clarence.ltd
+// Change the host in Swagger UI as needed.
 
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description Type "Bearer" followed by a space and JWT token.
+// @description 請輸入 'Bearer ' + JWT token，例如: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
-// configureStaticFiles 配置靜態檔案中間件
-func configureStaticFiles() gin.HandlerFunc {
-	return static.Serve("/public", static.LocalFile("./public", false))
+// configureStaticFiles 已移除，改用 router.Static 直接配置
+
+// setupWebRoutes 設置網頁路由（非 API）
+func setupWebRoutes(router *gin.Engine) {
+	// 管理員頁面路由（純HTML結構，無需後端認證）
+	// AJAX架構：認證檢查由前端JavaScript + AJAX API完成
+	adminPages := router.Group("/admin")
+	{
+		// 登入頁面
+		adminPages.GET("/login", pages.AdminLoginPageHandler)
+		
+		// 管理頁面（純HTML結構，數據通過AJAX載入）
+		adminPages.GET("/dashboard", pages.AdminDashboardPageHandler)
+		adminPages.GET("/users", pages.AdminUsersPageHandler)
+		adminPages.GET("/chats", pages.AdminChatHistoryPageHandler)
+		adminPages.GET("/characters", pages.AdminCharactersPageHandler)
+	}
 }
 
 // configureCORS 配置 CORS 中間件
 func configureCORS() cors.Config {
 	config := cors.DefaultConfig()
-	
+
 	// 從環境變數讀取允許的來源，預設為全開
 	allowedOrigins := utils.GetEnvWithDefault("CORS_ALLOWED_ORIGINS", "*")
-	
+
 	if allowedOrigins == "*" {
 		config.AllowAllOrigins = true
 	} else {
 		config.AllowOrigins = strings.Split(allowedOrigins, ",")
 	}
-	
+
 	// 從環境變數讀取允許的方法，預設為常用方法
 	allowedMethods := utils.GetEnvWithDefault("CORS_ALLOWED_METHODS", "GET,POST,PUT,PATCH,DELETE,HEAD,OPTIONS")
 	config.AllowMethods = strings.Split(allowedMethods, ",")
-	
+
 	// 從環境變數讀取允許的標頭，預設為常用標頭
 	allowedHeaders := utils.GetEnvWithDefault("CORS_ALLOWED_HEADERS", "Origin,Content-Length,Content-Type,Authorization,X-Requested-With,Accept,Accept-Encoding,Accept-Language,Connection,Host,User-Agent")
 	config.AllowHeaders = strings.Split(allowedHeaders, ",")
-	
+
 	// 允許認證
 	config.AllowCredentials = true
-	
+
 	// 從環境變數讀取暴露的標頭
 	exposedHeaders := utils.GetEnvWithDefault("CORS_EXPOSED_HEADERS", "")
 	if exposedHeaders != "" {
 		config.ExposeHeaders = strings.Split(exposedHeaders, ",")
 	}
-	
+
 	return config
 }
 
 func main() {
+	// 設置構建資訊為環境變數，供handlers使用
+	os.Setenv("APP_VERSION", Version)
+	os.Setenv("BUILD_TIME", BuildTime) 
+	os.Setenv("GIT_COMMIT", GitCommit)
+
 	// Initialize logger first
 	utils.InitLogger()
-	
+
 	// Initialize log hook after logger
 	logHook := services.NewLogHook()
 	utils.Logger.AddHook(logHook)
@@ -100,32 +132,33 @@ func main() {
 	} else {
 		dbInitialized = true
 		defer app.Close()
-		
+
 		// Run startup hooks
 		ctx := context.Background()
 		if err := app.RunStartHooks(ctx); err != nil {
 			utils.Logger.WithError(err).Warn("Startup hooks failed")
 		}
-		
+
 		utils.Logger.Info("Database and hooks initialized successfully")
 	}
 
 	// Initialize Gin router
 	router := gin.Default()
 
+	// Load HTML templates
+	router.LoadHTMLGlob("templates/*")
+
 	// Add middleware
 	router.Use(cors.New(configureCORS()))
-	router.Use(utils.RequestIDMiddleware())
+	router.Use(middleware.RequestIDMiddleware())
 	router.Use(utils.RecoverMiddleware())
 	router.Use(middleware.LoggingMiddleware())
 
-	// Root path redirect to web interface
-	router.GET("/", func(c *gin.Context) {
-		c.Redirect(http.StatusMovedPermanently, "/public/")
-	})
-	
-	// Static files for web interface
-	router.Use(configureStaticFiles())
+	// Root path redirect to health page
+	router.GET("/", pages.HealthPageHandler)
+
+	// Static files (minimal CSS only)
+	router.Static("/public", "./public")
 
 	// Swagger documentation
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
@@ -133,13 +166,16 @@ func main() {
 	// Health check
 	router.GET("/health", healthCheck)
 
+	// Web page routes (outside API)
+	setupWebRoutes(router)
+
 	// Setup API routes
 	api := router.Group("/api/v1")
 	routes.SetupRoutes(api)
 
 	// Start server
 	utils.LogServiceEvent("server_starting", map[string]interface{}{
-		"port": 8080,
+		"port":               8080,
 		"database_available": dbInitialized,
 		"endpoints": map[string]string{
 			"web_interface": "http://localhost:8080",
@@ -154,7 +190,7 @@ func main() {
 	if !dbInitialized {
 		utils.Logger.Warn("⚠️  Warning: Running in database-free mode - some endpoints may not work")
 	}
-	
+
 	if err := http.ListenAndServe(":8080", router); err != nil {
 		utils.Logger.WithError(err).Fatal("Failed to start server")
 	}

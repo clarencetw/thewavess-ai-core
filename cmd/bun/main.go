@@ -117,11 +117,11 @@ func dbInit(c *cli.Context) error {
 	ctx := context.Background()
 	app := c.Context.Value("app").(*database.App)
 	migrator := migrate.NewMigrator(app.DB(), migrations.Migrations)
-	
+
 	if err := migrator.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize migrator: %w", err)
 	}
-	
+
 	fmt.Println("✅ Migration tables initialized successfully")
 	return nil
 }
@@ -130,7 +130,7 @@ func dbMigrate(c *cli.Context) error {
 	ctx := context.Background()
 	app := c.Context.Value("app").(*database.App)
 	migrator := migrate.NewMigrator(app.DB(), migrations.Migrations)
-	
+
 	if err := migrator.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize migrator: %w", err)
 	}
@@ -145,7 +145,7 @@ func dbMigrate(c *cli.Context) error {
 	} else {
 		fmt.Printf("✅ Migration completed successfully: %s\n", group)
 	}
-	
+
 	return nil
 }
 
@@ -153,7 +153,7 @@ func dbRollback(c *cli.Context) error {
 	ctx := context.Background()
 	app := c.Context.Value("app").(*database.App)
 	migrator := migrate.NewMigrator(app.DB(), migrations.Migrations)
-	
+
 	if err := migrator.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize migrator: %w", err)
 	}
@@ -168,7 +168,7 @@ func dbRollback(c *cli.Context) error {
 	} else {
 		fmt.Printf("✅ Rollback completed successfully: %s\n", group)
 	}
-	
+
 	return nil
 }
 
@@ -176,7 +176,7 @@ func dbStatus(c *cli.Context) error {
 	ctx := context.Background()
 	app := c.Context.Value("app").(*database.App)
 	migrator := migrate.NewMigrator(app.DB(), migrations.Migrations)
-	
+
 	if err := migrator.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize migrator: %w", err)
 	}
@@ -190,7 +190,7 @@ func dbStatus(c *cli.Context) error {
 	fmt.Printf("  All migrations: %s\n", ms)
 	fmt.Printf("  Unapplied: %s\n", ms.Unapplied())
 	fmt.Printf("  Last group: %s\n", ms.LastGroup())
-	
+
 	return nil
 }
 
@@ -207,7 +207,7 @@ func dbReset(c *cli.Context) error {
 	ctx := context.Background()
 	app := c.Context.Value("app").(*database.App)
 	migrator := migrate.NewMigrator(app.DB(), migrations.Migrations)
-	
+
 	if err := migrator.Init(ctx); err != nil {
 		return fmt.Errorf("failed to initialize migrator: %w", err)
 	}
@@ -245,13 +245,13 @@ func dbFixtures(c *cli.Context) error {
 	registerModels(db)
 
 	fmt.Println("🌱 Loading fixtures...")
-	
+
 	var options []dbfixture.FixtureOption
 	if recreate {
 		options = append(options, dbfixture.WithRecreateTables())
 		fmt.Println("🔄 Recreating tables...")
 	}
-	
+
 	fixture := dbfixture.New(db, options...)
 
 	if err := fixture.Load(ctx, os.DirFS("cmd/bun/fixtures"), "fixtures.yml"); err != nil {
@@ -263,33 +263,25 @@ func dbFixtures(c *cli.Context) error {
 }
 
 func registerModels(db *bun.DB) {
-	// Register all database models
+	// Register all database models (7 tables total)
 	db.RegisterModel(
+		// Core tables
 		(*dbmodels.UserDB)(nil),
 		(*dbmodels.CharacterDB)(nil),
-		(*dbmodels.CharacterProfileDB)(nil),
-		(*dbmodels.CharacterLocalizationDB)(nil),
-		(*dbmodels.CharacterSpeechStyleDB)(nil),
-		(*dbmodels.CharacterSceneDB)(nil),
-		(*dbmodels.CharacterStateDB)(nil),
-		(*dbmodels.CharacterEmotionalConfigDB)(nil),
-		(*dbmodels.CharacterNSFWConfigDB)(nil),
-		(*dbmodels.CharacterNSFWLevelDB)(nil),
-		(*dbmodels.CharacterInteractionRuleDB)(nil),
-		(*dbmodels.CharacterSnapshotDB)(nil),
-		(*dbmodels.ChatSessionDB)(nil),
+
+		// Chat system
+		(*dbmodels.ChatDB)(nil),
 		(*dbmodels.MessageDB)(nil),
-		(*dbmodels.EmotionStateDB)(nil),
-		(*dbmodels.EmotionHistoryDB)(nil),
-		(*dbmodels.EmotionMilestoneDB)(nil),
-		(*dbmodels.LongTermMemoryModelDB)(nil),
-		(*dbmodels.MemoryPreferenceDB)(nil),
-		(*dbmodels.MemoryNicknameDB)(nil),
-		(*dbmodels.MemoryMilestoneDB)(nil),
-		(*dbmodels.MemoryDislikeDB)(nil),
-		(*dbmodels.MemoryPersonalInfoDB)(nil),
-		(*dbmodels.TagDB)(nil),
-		(*dbmodels.CharacterTagDB)(nil),
+
+		// Optimized relationship system (renamed from emotion_states)
+		(*dbmodels.RelationshipDB)(nil),
+
+		// Admin system
+		(*dbmodels.AdminDB)(nil),
+
+		// Speech styles and scenes removed - functionality integrated into character.user_description
+		// Memory system removed - functionality integrated into relationships.emotion_data
+
 	)
 }
 
@@ -312,7 +304,7 @@ func createMigration(c *cli.Context) error {
 			return fmt.Errorf("failed to create up migration: %w", err)
 		}
 
-		// Create down migration file  
+		// Create down migration file
 		if err := os.WriteFile(downFile, []byte("-- SQL migration down\n"), 0644); err != nil {
 			return fmt.Errorf("failed to create down migration: %w", err)
 		}
@@ -323,7 +315,7 @@ func createMigration(c *cli.Context) error {
 
 	case "go":
 		goFile := fmt.Sprintf("cmd/bun/migrations/%s_%s.go", timestamp, name)
-		
+
 		template := fmt.Sprintf(`package migrations
 
 import (
@@ -342,7 +334,7 @@ func init() {
 	})
 }
 `)
-		
+
 		if err := os.WriteFile(goFile, []byte(template), 0644); err != nil {
 			return fmt.Errorf("failed to create Go migration: %w", err)
 		}

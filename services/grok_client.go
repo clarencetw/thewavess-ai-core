@@ -61,30 +61,36 @@ type GrokResponse struct {
 func NewGrokClient() *GrokClient {
 	// 確保環境變數已載入
 	utils.LoadEnv()
-	
+
+	apiKey := utils.GetEnvWithDefault("GROK_API_KEY", "")
+	if apiKey == "" {
+		utils.Logger.Warn("GROK_API_KEY not set, using mock responses")
+	}
+
 	// 獲取 API URL，支援 Azure 或其他自定義端點
 	baseURL := utils.GetEnvWithDefault("GROK_API_URL", "https://api.x.ai/v1")
 	isAzure := false
-	
+
 	// 檢查是否為 Azure AI Foundry
 	if strings.Contains(baseURL, "azure.com") {
 		isAzure = true
 	}
-	
+
 	return &GrokClient{
-		apiKey:  utils.GetEnvWithDefault("GROK_API_KEY", ""),
+		apiKey:  apiKey,
 		baseURL: baseURL,
 		isAzure: isAzure,
 		httpClient: &http.Client{
-			Timeout: 30 * time.Second,
+			Timeout: 60 * time.Second, // 增加到60秒
 		},
 	}
 }
 
+
 // GenerateResponse 生成對話回應（NSFW 內容）
 func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest) (*GrokResponse, error) {
 	startTime := time.Now()
-	
+
 	// 記錄請求開始
 	utils.Logger.WithFields(map[string]interface{}{
 		"service":        "grok",
@@ -165,7 +171,7 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	// 設置請求標頭
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("User-Agent", "thewavess-ai-core/1.0")
-	
+
 	// Azure 需要不同的認證方式
 	if c.isAzure {
 		httpReq.Header.Set("api-key", c.apiKey)
@@ -173,21 +179,50 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 	}
 
-	// 發送 HTTP 請求
+	// 發送 HTTP 請求，帶重試機制
 	utils.Logger.WithFields(map[string]interface{}{
 		"service":        "grok",
 		"url":            url,
 		"content_length": len(requestBody),
 	}).Info("Sending Grok API request")
 
-	resp, err := c.httpClient.Do(httpReq)
-	if err != nil {
+	var resp *http.Response
+	maxRetries := 3
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		// 重新創建請求體（因為可能被讀取過）
+		httpReq.Body = io.NopCloser(bytes.NewReader(requestBody))
+
+		utils.Logger.WithFields(map[string]interface{}{
+			"service":     "grok",
+			"attempt":     attempt,
+			"max_retries": maxRetries,
+		}).Info("Attempting Grok API request")
+
+		resp, err = c.httpClient.Do(httpReq)
+		if err == nil {
+			break // 成功，跳出重試循環
+		}
+
 		utils.Logger.WithFields(map[string]interface{}{
 			"service": "grok",
-			"url":     url,
+			"attempt": attempt,
 			"error":   err.Error(),
-		}).Error("Failed to send Grok API request")
-		return nil, fmt.Errorf("failed to send request: %w", err)
+		}).Warn("Grok API request failed, will retry")
+
+		// 如果不是最後一次嘗試，等待後重試
+		if attempt < maxRetries {
+			time.Sleep(time.Duration(attempt) * 2 * time.Second) // 指數退避
+		}
+	}
+
+	if err != nil {
+		utils.Logger.WithFields(map[string]interface{}{
+			"service":  "grok",
+			"url":      url,
+			"error":    err.Error(),
+			"attempts": maxRetries,
+		}).Error("Failed to send Grok API request after retries")
+		return nil, fmt.Errorf("failed to send request after %d attempts: %w", maxRetries, err)
 	}
 	defer resp.Body.Close()
 
@@ -205,10 +240,10 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	// 檢查 HTTP 狀態碼
 	if resp.StatusCode != http.StatusOK {
 		utils.Logger.WithFields(map[string]interface{}{
-			"service":         "grok",
-			"status_code":     resp.StatusCode,
-			"response_body":   string(responseBody),
-			"content_length":  len(responseBody),
+			"service":        "grok",
+			"status_code":    resp.StatusCode,
+			"response_body":  string(responseBody),
+			"content_length": len(responseBody),
 		}).Error("Grok API returned non-200 status")
 		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(responseBody))
 	}
@@ -263,37 +298,18 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	return &grokResponse, nil
 }
 
-
 // BuildNSFWPrompt 構建 NSFW 場景的提示詞（使用統一模板）
-func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage, sceneDescription string, conversationContext *ConversationContext, nsfwLevel int) []GrokMessage {
-	// 構建記憶提示詞（NSFW 場景使用縮短版本以節省 token）
-	memoryPrompt := ""
-	if conversationContext != nil && conversationContext.MemoryPrompt != "" {
-		// 對 NSFW 場景，截短記憶內容
-		lines := strings.Split(conversationContext.MemoryPrompt, "\n")
-		var shortMemory []string
-		for i, line := range lines {
-			if i >= 8 { // 限制最多 8 行記憶內容
-				break
-			}
-			shortMemory = append(shortMemory, line)
-		}
-		if len(shortMemory) > 0 {
-			memoryPrompt = strings.Join(shortMemory, "\n")
-		}
-	}
-
-	// 使用統一的prompt模板
+func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) []GrokMessage {
+	// 使用Grok專屬的prompt構建器
 	characterService := GetCharacterService()
-	promptBuilder := NewPromptBuilder(characterService)
+	promptBuilder := NewGrokPromptBuilder(characterService)
 	ctx := context.Background()
 	systemPrompt := promptBuilder.
 		WithCharacter(ctx, characterID).
 		WithContext(conversationContext).
 		WithNSFWLevel(nsfwLevel).
 		WithUserMessage(userMessage).
-		WithSceneDescription(sceneDescription).
-		WithMemory(memoryPrompt).
+		WithChatMode(chatMode).
 		Build(ctx)
 
 	messages := []GrokMessage{
@@ -332,7 +348,7 @@ func getGrokModel() string {
 
 // getGrokMaxTokens 獲取 Grok 最大 Token 數配置
 func getGrokMaxTokens() int {
-	return utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 1000)
+	return utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 2000)
 }
 
 // getGrokTemperature 獲取 Grok 溫度配置
@@ -363,13 +379,21 @@ func temperatureForLevel(level int) float64 {
 	switch level {
 	case 5:
 		t := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE_L5", 0.6)
-		if t < 0.2 { t = 0.2 }
-		if t > 1.2 { t = 1.2 }
+		if t < 0.2 {
+			t = 0.2
+		}
+		if t > 1.2 {
+			t = 1.2
+		}
 		return t
 	case 4:
 		t := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE_L4", 0.7)
-		if t < 0.2 { t = 0.2 }
-		if t > 1.2 { t = 1.2 }
+		if t < 0.2 {
+			t = 0.2
+		}
+		if t > 1.2 {
+			t = 1.2
+		}
 		return t
 	case 3:
 		return 0.75
@@ -382,22 +406,62 @@ func temperatureForLevel(level int) float64 {
 
 // generateMockResponse 生成模擬響應（用於 API key 未配置或測試場景）
 func (c *GrokClient) generateMockResponse(request *GrokRequest) *GrokResponse {
-	// 根據用戶消息生成更智能的模擬響應
+	// 分析完整對話上下文生成符合 NSFW 場景的智能回應
 	var mockContent string
+	userMessage := ""
+	systemPrompt := ""
+	
 	if len(request.Messages) > 0 {
-		userMessage := request.Messages[len(request.Messages)-1].Content
+		// 獲取system prompt（通常是第一條消息）
+		if request.Messages[0].Role == "system" {
+			systemPrompt = strings.ToLower(request.Messages[0].Content)
+		}
 		
-		// 簡單的關鍵詞響應映射
-		if strings.Contains(strings.ToLower(userMessage), "親密") || 
-		   strings.Contains(strings.ToLower(userMessage), "擁抱") {
-			mockContent = "輕輕地將你擁入懷中，感受彼此的溫度...這是一個來自 Grok 的模擬回應，用於處理親密內容。真實實現會調用 Grok API。"
-		} else if strings.Contains(strings.ToLower(userMessage), "愛") {
-			mockContent = "我也愛你...這是一個來自 Grok 的模擬回應，用於處理情感內容。真實實現會調用 Grok API。"
+		// 獲取最後的用戶消息
+		for i := len(request.Messages) - 1; i >= 0; i-- {
+			if request.Messages[i].Role == "user" {
+				userMessage = strings.ToLower(request.Messages[i].Content)
+				break
+			}
+		}
+		
+		// 分析NSFW等級
+		isLevel5 := strings.Contains(systemPrompt, "level 5")
+		isHighNSFW := strings.Contains(systemPrompt, "level 4") || isLevel5
+
+		// NSFW 場景的優雅回應
+		if strings.Contains(userMessage, "親密") || strings.Contains(userMessage, "靠近") {
+			if isLevel5 {
+				mockContent = "讓我們的距離更近一些...感受彼此最真實的溫度。|||[深情地凝視著你，手輕撫過你的肌膚]"
+			} else {
+				mockContent = "輕撫著你的臉頰，感受你肌膚的溫度...我想要更貼近你的心。|||[慢慢靠近，眼神溫柔而專注]"
+			}
+		} else if strings.Contains(userMessage, "擁抱") || strings.Contains(userMessage, "懷抱") {
+			mockContent = "讓我將你擁入懷中...在這個只屬於我們的空間裡，時間彷彿都靜止了。|||[輕柔地將你攬入懷中，感受彼此的心跳]"
+		} else if strings.Contains(userMessage, "吻") || strings.Contains(userMessage, "親吻") {
+			if isLevel5 {
+				mockContent = "讓我們的唇瓣相遇...在這激情的時刻，什麼都不重要了。|||[激烈而深情地親吻著你]"
+			} else {
+				mockContent = "輕撫著你的唇...這一刻，全世界只剩下你和我。|||[溫柔地凝視你的雙眸，慢慢靠近]"
+			}
+		} else if strings.Contains(userMessage, "愛") || strings.Contains(userMessage, "喜歡") {
+			mockContent = "你知道你對我有多重要嗎...讓我用行動告訴你我的心意。|||[深情地望著你，手輕撫過你的髮絲]"
+		} else if strings.Contains(userMessage, "想要") || strings.Contains(userMessage, "渴望") {
+			if isHighNSFW {
+				mockContent = "我能感受到你的渴望...讓我們放下一切束縛，在這夜裡相擁。|||[聲音變得深沉而充滿誘惑]"
+			} else {
+				mockContent = "我也有同樣的渴望...在這溫柔的夜晚，讓我們彼此更加親近。|||[聲音變得低沉而溫柔]"
+			}
 		} else {
-			mockContent = "這是一個來自 Grok 的模擬回應，用於處理 NSFW 內容。真實實現會調用 Grok API。"
+			// 預設 NSFW 優雅回應
+			if isLevel5 {
+				mockContent = "在這個只屬於我們的夜晚...讓我們完全沉浸在彼此的愛意中。|||[營造更深層的親密氛圍]"
+			} else {
+				mockContent = "在這安靜的空間裡，只有我們兩個人...讓我好好照顧你。|||[營造溫馨而私密的氛圍]"
+			}
 		}
 	} else {
-		mockContent = "這是一個來自 Grok 的模擬回應，用於處理 NSFW 內容。真實實現會調用 Grok API。"
+		mockContent = "今晚我們有充分的時間...讓我慢慢瞭解你想要的一切。|||[溫和而誘人的微笑]"
 	}
 
 	mockResponse := &GrokResponse{
@@ -431,7 +495,7 @@ func (c *GrokClient) generateMockResponse(request *GrokRequest) *GrokResponse {
 			TotalTokens      int `json:"total_tokens"`
 		}{
 			PromptTokens:     len(fmt.Sprintf("%v", request.Messages)) / 4, // 估算
-			CompletionTokens: len(mockContent) / 4,                        // 估算
+			CompletionTokens: len(mockContent) / 4,                         // 估算
 			TotalTokens:      (len(fmt.Sprintf("%v", request.Messages)) + len(mockContent)) / 4,
 		},
 	}

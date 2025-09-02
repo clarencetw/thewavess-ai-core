@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Thewavess AI 管理後台</title>
+    
+    <!-- Essential CDN Resources -->
+    <script src="https://cdn.jsdelivr.net/npm/axios@1.6.2/dist/axios.min.js"></script>
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    
+    <!-- Local Resources -->
+    <link href="/public/styles.css" rel="stylesheet">
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <!-- Shared Navigation -->
+    {{template "admin-nav-shared" .}}
+    
+    <!-- Main Content Area -->
+    <main class="container mx-auto px-4 py-8" id="mainContent">
+        {{if eq .CurrentPage "dashboard"}}
+            {{template "dashboard-content" .}}
+        {{else if eq .CurrentPage "users"}}
+            {{template "users-content" .}}
+        {{else if eq .CurrentPage "chats"}}
+            {{template "chats-content" .}}
+        {{else if eq .CurrentPage "characters"}}
+            {{template "characters-content" .}}
+        {{else}}
+            <div class="text-center py-8">
+                <h2 class="text-2xl font-bold text-gray-900">頁面載入中...</h2>
+            </div>
+        {{end}}
+    </main>
+    
+    <!-- Loading State -->
+    <div id="loadingState" class="hidden fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div class="bg-white rounded-lg p-6 flex items-center">
+            <i class="fas fa-spinner animate-spin text-2xl text-blue-600 mr-3"></i>
+            <span class="text-lg">載入中...</span>
+        </div>
+    </div>
+    
+    <!-- Error Message -->
+    <div id="errorAlert" class="hidden fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded shadow-lg z-40">
+        <div class="flex items-center">
+            <i class="fas fa-exclamation-triangle mr-2"></i>
+            <span id="errorMessage">發生錯誤</span>
+            <button onclick="Utils.hideById('errorAlert')" class="ml-3 text-red-500 hover:text-red-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Success Message -->
+    <div id="successAlert" class="hidden fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded shadow-lg z-40">
+        <div class="flex items-center">
+            <i class="fas fa-check-circle mr-2"></i>
+            <span id="successMessage">操作成功</span>
+            <button onclick="Utils.hideById('successAlert')" class="ml-3 text-green-500 hover:text-green-700">
+                <i class="fas fa-times"></i>
+            </button>
+        </div>
+    </div>
+    
+    <!-- Shared JavaScript -->
+    <script src="/public/app.js"></script>
+    <script>
+        // Initialize API and load page content
+        document.addEventListener('DOMContentLoaded', function() {
+            API.init();
+            
+            // Check authentication
+            if (!API.isAuthenticated()) {
+                window.location.href = '/admin/login';
+                return;
+            }
+            
+            // Initialize page-specific content
+            const mainContent = document.getElementById('mainContent');
+            const pageElement = mainContent?.querySelector('[data-page]');
+            const pageName = pageElement?.dataset.page;
+            
+            console.log('🔍 檢測頁面:', pageName);
+            
+            if (pageName && AdminPages[pageName]) {
+                console.log('🚀 初始化頁面模組:', pageName);
+                AdminPages[pageName].init();
+            } else {
+                console.warn('⚠️ 找不到頁面模組:', pageName);
+            }
+            
+            // Initialize shared components
+            initMobileNav();
+            initLogout();
+            updateAdminWelcome();
+            updateActiveNavLink();
+        });
+        
+        // Mobile navigation
+        function initMobileNav() {
+            const mobileMenuBtn = document.getElementById('mobileMenuBtn');
+            const mobileMenu = document.getElementById('mobileMenu');
+            
+            if (mobileMenuBtn && mobileMenu) {
+                mobileMenuBtn.addEventListener('click', () => {
+                    mobileMenu.classList.toggle('hidden');
+                });
+                
+                document.addEventListener('click', (event) => {
+                    if (!mobileMenuBtn.contains(event.target) && !mobileMenu.contains(event.target)) {
+                        mobileMenu.classList.add('hidden');
+                    }
+                });
+            }
+        }
+        
+        // Logout functionality
+        function initLogout() {
+            document.getElementById('logoutBtn')?.addEventListener('click', () => {
+                if (confirm('確定要登出嗎？')) {
+                    API.auth.logout();
+                    window.location.href = '/admin/login';
+                }
+            });
+        }
+
+        // Update admin welcome message
+        function updateAdminWelcome() {
+            const welcomeElement = document.getElementById('adminWelcome');
+            if (welcomeElement) {
+                const auth = API.getAuth();
+                if (auth && auth.adminInfo) {
+                    welcomeElement.textContent = `歡迎, ${auth.adminInfo.username}`;
+                    welcomeElement.classList.remove('hidden');
+                } else {
+                    welcomeElement.textContent = '載入中...';
+                }
+            }
+        }
+
+        // Update active navigation link
+        function updateActiveNavLink() {
+            const currentPath = window.location.pathname;
+            console.log('🔍 當前路徑:', currentPath);
+            
+            // 清除所有活躍狀態
+            document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(link => {
+                link.classList.remove('active');
+            });
+            
+            // 設置活躍狀態
+            let activeFound = false;
+            document.querySelectorAll('.nav-link, .mobile-nav-link').forEach(link => {
+                if (link.getAttribute('href') === currentPath) {
+                    link.classList.add('active');
+                    activeFound = true;
+                    console.log('✅ 設置活躍導航:', link.textContent.trim());
+                }
+            });
+            
+            if (!activeFound) {
+                console.log('⚠️ 沒有找到匹配的導航項目');
+            }
+        }
+    </script>
+</body>
+</html>
+
+{{define "admin-nav-shared"}}
+<nav class="bg-white shadow-sm border-b border-gray-200">
+    <div class="container mx-auto px-4">
+        <div class="flex justify-between items-center h-16">
+            <div class="flex items-center space-x-6">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <a href="/admin/dashboard" class="text-xl font-bold text-gray-900 hover:text-blue-600 transition-colors">
+                        <i class="fas fa-shield-alt text-blue-600 mr-2"></i>管理後台
+                    </a>
+                </div>
+                
+                <!-- Navigation Menu -->
+                <div class="hidden md:flex items-center space-x-1">
+                    <a href="/admin/dashboard" class="nav-link" data-page="dashboard">
+                        <i class="fas fa-tachometer-alt mr-2"></i>儀表板
+                    </a>
+                    <a href="/admin/users" class="nav-link" data-page="users">
+                        <i class="fas fa-users mr-2"></i>用戶管理
+                    </a>
+                    <a href="/admin/chats" class="nav-link" data-page="chats">
+                        <i class="fas fa-comments mr-2"></i>聊天記錄
+                    </a>
+                    <a href="/admin/characters" class="nav-link" data-page="characters">
+                        <i class="fas fa-user-friends mr-2"></i>角色管理
+                    </a>
+                </div>
+
+                <!-- Mobile Menu Button -->
+                <button id="mobileMenuBtn" class="md:hidden p-2 text-gray-600 hover:text-blue-600 transition-colors">
+                    <i class="fas fa-bars"></i>
+                </button>
+            </div>
+            
+            <!-- Right Side -->
+            <div class="flex items-center space-x-4">
+                <span id="adminWelcome" class="text-sm text-gray-600 hidden sm:block">載入中...</span>
+                <button id="logoutBtn" class="px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-md transition-colors">
+                    <i class="fas fa-sign-out-alt mr-1"></i><span class="hidden sm:inline">登出</span>
+                </button>
+            </div>
+        </div>
+        
+        <!-- Mobile Menu -->
+        <div id="mobileMenu" class="hidden md:hidden border-t border-gray-200 py-2">
+            <div class="space-y-1">
+                <a href="/admin/dashboard" class="mobile-nav-link" data-page="dashboard">
+                    <i class="fas fa-tachometer-alt mr-2"></i>儀表板
+                </a>
+                <a href="/admin/users" class="mobile-nav-link" data-page="users">
+                    <i class="fas fa-users mr-2"></i>用戶管理
+                </a>
+                <a href="/admin/chats" class="mobile-nav-link" data-page="chats">
+                    <i class="fas fa-comments mr-2"></i>聊天記錄
+                </a>
+                <a href="/admin/characters" class="mobile-nav-link" data-page="characters">
+                    <i class="fas fa-user-friends mr-2"></i>角色管理
+                </a>
+            </div>
+        </div>
+    </div>
+</nav>
+{{end}}

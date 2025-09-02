@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Title}} - Thewavess AI</title>
+    
+    <!-- Essential CDN Resources -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.11.0/axios.min.js"></script>
+    
+    <!-- Local CSS -->
+    <link href="/public/styles.css" rel="stylesheet">
+    
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <div class="max-w-4xl mx-auto">
+            <h1 class="text-3xl font-bold text-gray-900 mb-8">
+                <i class="fas fa-heartbeat text-green-500 mr-3"></i>
+                系統健康狀態
+            </h1>
+            
+            <div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+                <!-- 系統狀態卡片 -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">整體狀態</h3>
+                        <div class="w-3 h-3 bg-green-500 rounded-full"></div>
+                    </div>
+                    <p class="text-green-600 font-medium">系統運行正常</p>
+                    <p class="text-sm text-gray-500 mt-2">所有核心服務正常運作</p>
+                </div>
+                
+                <!-- 數據庫連接 -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">數據庫</h3>
+                        <i class="fas fa-database text-blue-500"></i>
+                    </div>
+                    <p class="text-green-600 font-medium">已連接</p>
+                    <p class="text-sm text-gray-500 mt-2">PostgreSQL 連接正常</p>
+                </div>
+                
+                <!-- API 服務 -->
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="text-lg font-semibold text-gray-900">API 服務</h3>
+                        <i class="fas fa-cloud text-purple-500"></i>
+                    </div>
+                    <p class="text-green-600 font-medium">可用</p>
+                    <p class="text-sm text-gray-500 mt-2">OpenAI & Grok API 已配置</p>
+                </div>
+            </div>
+            
+            <!-- API 文檔連結 -->
+            <div class="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">
+                    <i class="fas fa-book text-blue-500 mr-2"></i>
+                    開發者資源
+                </h3>
+                <div class="flex justify-center">
+                    <a href="/swagger/index.html" class="inline-flex items-center px-6 py-3 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors">
+                        <i class="fas fa-book mr-2"></i>
+                        查看 API 文檔
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

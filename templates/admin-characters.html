@@ -1,0 +1,126 @@
+{{template "admin-layout-shared.html" .}}
+
+{{define "characters-content"}}
+<div class="space-y-6" data-page="characters">
+    <!-- Header -->
+    <div class="flex justify-between items-center">
+        <div>
+            <h1 class="text-3xl font-bold text-gray-900">角色管理</h1>
+            <p class="text-gray-600 mt-1">管理系統角色和設定</p>
+        </div>
+        <div class="flex items-center space-x-4">
+            <div class="relative">
+                <input type="text" id="characterSearchInput" placeholder="搜尋角色..." 
+                       class="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+            </div>
+            <select id="characterTypeFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="all">所有類型</option>
+                <option value="system">系統角色</option>
+                <option value="user">用戶角色</option>
+            </select>
+            <select id="characterActiveFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="all">所有狀態</option>
+                <option value="active">活躍角色</option>
+                <option value="inactive">已停用角色</option>
+            </select>
+            <select id="characterDeletedFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                <option value="">正常角色</option>
+                <option value="true">包含已刪除</option>
+            </select>
+            <button onclick="AdminPages.characters.reload()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                <i class="fas fa-sync-alt mr-2"></i>重新整理
+            </button>
+        </div>
+    </div>
+
+    <!-- Character Statistics -->
+    <div class="grid grid-cols-1 md:grid-cols-4 gap-4" id="characterStatsGrid">
+        <!-- Dynamic stats cards -->
+    </div>
+
+    <!-- Characters Table -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200">
+            <h3 class="text-lg font-medium text-gray-900">角色列表</h3>
+        </div>
+        
+        <div class="overflow-x-auto">
+            <table class="w-full" id="charactersTable">
+                <thead class="bg-gray-50">
+                    <tr>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">角色資訊</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">類型</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">創建者</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人氣度</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">更新時間</th>
+                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                    </tr>
+                </thead>
+                <tbody class="bg-white divide-y divide-gray-200" id="charactersTableBody">
+                    <!-- Dynamic content -->
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Loading State -->
+        <div id="charactersTableLoading" class="hidden p-8 text-center">
+            <i class="fas fa-spinner animate-spin text-2xl text-blue-600 mb-2"></i>
+            <p class="text-gray-600">載入角色資料中...</p>
+        </div>
+        
+        <!-- Empty State -->
+        <div id="charactersTableEmpty" class="hidden p-8 text-center">
+            <i class="fas fa-user-friends text-4xl text-gray-300 mb-4"></i>
+            <p class="text-gray-600">沒有找到角色資料</p>
+        </div>
+    </div>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between" id="charactersPagination">
+        <!-- Dynamic pagination -->
+    </div>
+</div>
+
+<!-- Character Detail Modal -->
+<div id="characterDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-900">角色詳情</h3>
+            <button onclick="Utils.hideById('characterDetailModal')" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <div id="characterDetailContent">
+            <!-- Dynamic content -->
+        </div>
+    </div>
+</div>
+
+<!-- Character Edit Modal -->
+<div id="characterEditModal" class="hidden fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50">
+    <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white">
+        <div class="flex justify-between items-center mb-4">
+            <h3 class="text-lg font-bold text-gray-900">編輯角色</h3>
+            <button onclick="Utils.hideById('characterEditModal')" class="text-gray-400 hover:text-gray-600">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+        </div>
+        <form id="characterEditForm">
+            <div id="characterEditContent">
+                <!-- Dynamic form content -->
+            </div>
+            <div class="flex justify-end space-x-3 mt-6 pt-4 border-t">
+                <button type="button" onclick="Utils.hideById('characterEditModal')" 
+                        class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 transition-colors">
+                    取消
+                </button>
+                <button type="submit" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-save mr-2"></i>儲存變更
+                </button>
+            </div>
+        </form>
+    </div>
+</div>
+{{end}}

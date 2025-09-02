@@ -3,8 +3,8 @@ package migrations
 import (
 	"context"
 
-	"github.com/uptrace/bun"
 	dbmodels "github.com/clarencetw/thewavess-ai-core/models/db"
+	"github.com/uptrace/bun"
 )
 
 func init() {
@@ -24,6 +24,9 @@ func init() {
 			"CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)",
 			"CREATE INDEX IF NOT EXISTS idx_users_status ON users(status)",
 			"CREATE INDEX IF NOT EXISTS idx_users_created_at ON users(created_at)",
+			"CREATE INDEX IF NOT EXISTS idx_users_registration_ip ON users(registration_ip)",
+			"CREATE INDEX IF NOT EXISTS idx_users_last_login_ip ON users(last_login_ip)",
+			"CREATE INDEX IF NOT EXISTS idx_users_deleted_at ON users(deleted_at) WHERE deleted_at IS NOT NULL",
 		}
 
 		for _, idx := range indexes {

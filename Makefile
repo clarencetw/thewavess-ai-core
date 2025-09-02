@@ -1,4 +1,4 @@
-.PHONY: help install run build test clean docs docs-serve migrate migrate-down migrate-status migrate-reset db-init db-setup fixtures fixtures-recreate create-migration test-api run-bg stop-bg docker-build docker-run dev check
+.PHONY: help install run build test clean docs docs-serve migrate migrate-down migrate-status migrate-reset db-init db-setup fixtures fixtures-recreate create-migration test-api test-all test-integration test-system run-bg stop-bg docker-build docker-run dev check
 
 # 預設目標
 help: ## 📋 顯示幫助訊息
@@ -7,10 +7,10 @@ help: ## 📋 顯示幫助訊息
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "  %-20s %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 	@echo ""
 	@echo "💡 常用指令組合："
-	@echo "  make dev           🔄 開發模式 (文檔+服務+日誌)"
+	@echo "  make dev           🔄 開發模式 (Ctrl+C停止)"
+	@echo "  make stop-dev      ⏹️ 停止開發伺服器"
 	@echo "  make db-setup      🏗️ 完整資料庫設置"
 	@echo "  make fixtures      🌱 載入 fixtures 數據"
-	@echo "  make check         🔍 檢查服務狀態"
 
 # ===============================
 # 📦 基礎開發指令
@@ -26,8 +26,17 @@ install: ## 📦 安裝依賴套件
 build: ## 🔨 編譯應用程式
 	@echo "🔨 Building application..."
 	@mkdir -p bin
-	@go build -o bin/thewavess-ai-core main.go
+	@echo "🔖 Setting build variables..."
+	$(eval VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "v1.0.0"))
+	$(eval BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ"))
+	$(eval GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown"))
+	@go build \
+		-ldflags "-X 'main.Version=$(VERSION)' -X 'main.BuildTime=$(BUILD_TIME)' -X 'main.GitCommit=$(GIT_COMMIT)'" \
+		-o bin/thewavess-ai-core main.go
 	@echo "✅ Build completed: bin/thewavess-ai-core"
+	@echo "   Version: $(VERSION)"
+	@echo "   Build Time: $(BUILD_TIME)"
+	@echo "   Git Commit: $(GIT_COMMIT)"
 
 test: ## 🧪 執行測試
 	@echo "🧪 Running tests..."
@@ -140,17 +149,14 @@ stop-bg: ## ⏹️ 停止後台伺服器
 		echo "❌ No background server found"; \
 	fi
 
-dev: docs ## 🔄 開發模式：生成文檔並運行伺服器 (自動重啟)
-	@echo "🔄 Starting development mode with auto-reload..."
-	@echo "📚 Documentation generated"
-	@echo "🌐 Web interface: http://localhost:8080"
-	@echo "📖 Swagger UI: http://localhost:8080/swagger/index.html"
-	@echo "💚 Health check: http://localhost:8080/health"
-	@echo "🔄 Auto-reload enabled - files will be watched for changes"
-	@echo ""
-	@echo "🎯 Press Ctrl+C to stop the server"
-	@echo "================================================"
-	@air 2>&1 | tee server.log
+stop-dev: ## ⏹️ 停止開發伺服器
+	@pkill -f "air" 2>/dev/null || echo "✅ No air processes found"
+
+dev: docs ## 🔄 開發模式 (前台運行，Ctrl+C停止)
+	@echo "🔄 Starting development server..."
+	@echo "🌐 http://localhost:8080 | 📖 http://localhost:8080/swagger/"
+	@echo "🎯 Press Ctrl+C to stop"
+	@air
 
 dev-manual: docs ## 🔄 開發模式：生成文檔並運行伺服器 (手動重啟)
 	@echo "🔄 Starting development mode (manual restart)..."
@@ -187,10 +193,44 @@ test-api: run-bg ## 🧪 測試 API 端點
 	@echo "🧪 Testing API endpoints..."
 	@echo "⏰ Waiting for server to start..."
 	@sleep 3
-	@if [ -f test_api.sh ]; then \
-		./test_api.sh; \
+	@if [ -f tests/api/test_api.sh ]; then \
+		cd tests && ./api/test_api.sh; \
 	else \
-		echo "❌ test_api.sh not found"; \
+		echo "❌ tests/api/test_api.sh not found"; \
+	fi
+	@$(MAKE) stop-bg
+
+# 測試套件指令
+test-all: run-bg ## 🧪 執行所有測試
+	@echo "🧪 Running all tests..."
+	@echo "⏰ Waiting for server to start..."
+	@sleep 3
+	@if [ -f tests/run-all.sh ]; then \
+		cd tests && ./run-all.sh all; \
+	else \
+		echo "❌ tests/run-all.sh not found"; \
+	fi
+	@$(MAKE) stop-bg
+
+test-integration: run-bg ## 🔄 執行整合測試
+	@echo "🔄 Running integration tests..."
+	@echo "⏰ Waiting for server to start..."
+	@sleep 3
+	@if [ -f tests/run-all.sh ]; then \
+		cd tests && ./run-all.sh integration; \
+	else \
+		echo "❌ tests/run-all.sh not found"; \
+	fi
+	@$(MAKE) stop-bg
+
+test-system: run-bg ## 🔧 執行系統測試
+	@echo "🔧 Running system tests..."
+	@echo "⏰ Waiting for server to start..."
+	@sleep 3
+	@if [ -f tests/run-all.sh ]; then \
+		cd tests && ./run-all.sh system; \
+	else \
+		echo "❌ tests/run-all.sh not found"; \
 	fi
 	@$(MAKE) stop-bg
 
@@ -200,8 +240,31 @@ test-api: run-bg ## 🧪 測試 API 端點
 
 docker-build: ## 🐳 構建 Docker 映像
 	@echo "🐳 Building Docker image..."
-	@docker build -t thewavess-ai-core .
+	@echo "🔖 Setting build variables..."
+	$(eval VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "v1.0.0"))
+	$(eval BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ"))
+	$(eval GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown"))
+	@docker build \
+		--build-arg VERSION=$(VERSION) \
+		--build-arg BUILD_TIME=$(BUILD_TIME) \
+		--build-arg GIT_COMMIT=$(GIT_COMMIT) \
+		-t thewavess-ai-core .
 	@echo "✅ Docker image built: thewavess-ai-core"
+	@echo "   Version: $(VERSION)"
+	@echo "   Build Time: $(BUILD_TIME)"
+	@echo "   Git Commit: $(GIT_COMMIT)"
+
+docker-compose-build: ## 🐳 使用 docker-compose 構建映像
+	@echo "🐳 Building with docker-compose..."
+	@echo "🔖 Setting build variables..."
+	$(eval VERSION := $(shell git describe --tags --always --dirty 2>/dev/null || echo "v1.0.0"))
+	$(eval BUILD_TIME := $(shell date -u +"%Y-%m-%dT%H:%M:%SZ"))
+	$(eval GIT_COMMIT := $(shell git rev-parse HEAD 2>/dev/null || echo "unknown"))
+	@VERSION=$(VERSION) BUILD_TIME=$(BUILD_TIME) GIT_COMMIT=$(GIT_COMMIT) docker compose build
+	@echo "✅ Docker-compose build completed"
+	@echo "   Version: $(VERSION)"
+	@echo "   Build Time: $(BUILD_TIME)"
+	@echo "   Git Commit: $(GIT_COMMIT)"
 
 docker-run: ## 🐳 運行 Docker 容器
 	@echo "🐳 Running Docker container..."
@@ -221,3 +284,4 @@ quick-setup: db-setup fixtures ## ⚡ 快速設置：資料庫+fixtures
 	@echo ""
 	@echo "⚡ Quick setup completed!"
 	@echo "💡 Ready to run: make dev"
+

@@ -7,16 +7,12 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
-)
-
-var (
-	chatMapper = models.NewChatMapper()
+	"github.com/gin-gonic/gin"
 )
 
 // CreateChatSession godoc
@@ -26,13 +22,12 @@ var (
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        session body models.CreateSessionRequest true "會話信息"
-// @Success      201 {object} models.APIResponse{data=models.ChatSessionResponse} "創建成功"
+// @Param        chat body models.CreateChatRequest true "聊天信息"
+// @Success      201 {object} models.APIResponse{data=models.ChatResponse} "創建成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /chat/session [post]
+// @Router       /chats [post]
 func CreateChatSession(c *gin.Context) {
-	ctx := context.Background()
 
 	// 從中間件獲取用戶ID
 	userID, exists := c.Get("user_id")
@@ -47,7 +42,7 @@ func CreateChatSession(c *gin.Context) {
 		return
 	}
 
-	var req models.CreateSessionRequest
+	var req models.CreateChatRequest
 	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
@@ -56,8 +51,8 @@ func CreateChatSession(c *gin.Context) {
 	characterExists, err := GetDB().NewSelect().
 		Model((*db.CharacterDB)(nil)).
 		Where("id = ? AND is_active = ?", req.CharacterID, true).
-		Exists(ctx)
-	
+		Exists(context.Background())
+
 	if err != nil || !characterExists {
 		utils.Logger.WithError(err).WithField("character_id", req.CharacterID).Error("Character not found")
 		c.JSON(http.StatusBadRequest, models.APIResponse{
@@ -69,220 +64,61 @@ func CreateChatSession(c *gin.Context) {
 		})
 		return
 	}
-	
-	// 為了後續使用，創建簡單的 character 物件
-	// TODO: 應該使用 character service 或 mapper 來正確轉換
-	var character models.Character
-	character.ID = req.CharacterID
-	character.Name = "角色" // 簡化版本，後續應該正確查詢
 
-	// 檢查是否已存在用戶-角色會話（一對一架構）
-	sessionExists, err := GetDB().NewSelect().
-		Model((*db.ChatSessionDB)(nil)).
-		Where("user_id = ? AND character_id = ? AND status != ?", userID.(string), req.CharacterID, "deleted").
-		Exists(ctx)
-
+	// 使用 character service 獲取完整角色信息
+	characterService := services.GetCharacterService()
+	character, err := characterService.GetCharacter(context.Background(), req.CharacterID)
 	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to check existing session")
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
+		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "DATABASE_ERROR",
-				Message: "檢查會話失敗",
+				Code:    "CHARACTER_SERVICE_ERROR",
+				Message: "無法獲取角色信息",
 			},
 		})
 		return
 	}
 
-	var session models.ChatSession
-	if sessionExists {
-		// 如果已存在會話，返回現有會話
-		var sessionDB db.ChatSessionDB
-		err = GetDB().NewSelect().
-			Model(&sessionDB).
-			Where("user_id = ? AND character_id = ? AND status != ?", userID.(string), req.CharacterID, "deleted").
-			Scan(ctx)
-		
-		if err == nil {
-			// 轉換 DB 模型到 domain 模型
-			session = models.ChatSession{
-				ID:              sessionDB.ID,
-				UserID:          sessionDB.UserID,
-				CharacterID:     sessionDB.CharacterID,
-				Title:           sessionDB.Title,
-				Status:          sessionDB.Status,
-				MessageCount:    sessionDB.MessageCount,
-				TotalCharacters: sessionDB.TotalCharacters,
-				LastMessageAt:   sessionDB.LastMessageAt,
-				CreatedAt:       sessionDB.CreatedAt,
-				UpdatedAt:       sessionDB.UpdatedAt,
-			}
-		}
 
-		if err != nil {
-			utils.Logger.WithError(err).Error("Failed to get existing session")
-			c.JSON(http.StatusInternalServerError, models.APIResponse{
-				Success: false,
-				Error: &models.APIError{
-					Code:    "DATABASE_ERROR",
-					Message: "獲取現有會話失敗",
-				},
-			})
-			return
-		}
-
-		// 如果提供了新標題，更新會話標題
-		if req.Title != "" && req.Title != session.Title {
-			session.Title = req.Title
-			session.UpdatedAt = time.Now()
-			_, err = GetDB().NewUpdate().
-				Model(&session).
-				Column("title", "updated_at").
-				Where("id = ?", session.ID).
-				Exec(ctx)
-			if err != nil {
-				utils.Logger.WithError(err).Error("Failed to update session title")
-			}
-		}
-
-		// 關聯角色信息
-		session.Character = &character
-
-		c.JSON(http.StatusOK, models.APIResponse{
-			Success: true,
-			Message: "獲取現有聊天會話成功",
-			Data:    session.ToResponse(),
-		})
-		return
-	}
-
-	// 檢查是否有已刪除的會話可以重新啟用
-	deletedExists, err := GetDB().NewSelect().
-		Model((*db.ChatSessionDB)(nil)).
-		Where("user_id = ? AND character_id = ? AND status = ?", userID.(string), req.CharacterID, "deleted").
-		Exists(ctx)
-	
-	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to check deleted session")
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "DATABASE_ERROR",
-				Message: "檢查已刪除會話失敗",
-			},
-		})
-		return
-	}
-
-	var deletedSession models.ChatSession
-	if deletedExists {
-		// 重新啟用已刪除的會話
-		var deletedSessionDB db.ChatSessionDB
-		err = GetDB().NewSelect().
-			Model(&deletedSessionDB).
-			Where("user_id = ? AND character_id = ? AND status = ?", userID.(string), req.CharacterID, "deleted").
-			Scan(ctx)
-		
-		if err == nil {
-			// 轉換 DB 模型到 domain 模型
-			deletedSession = models.ChatSession{
-				ID:              deletedSessionDB.ID,
-				UserID:          deletedSessionDB.UserID,
-				CharacterID:     deletedSessionDB.CharacterID,
-				Title:           deletedSessionDB.Title,
-				Status:          deletedSessionDB.Status,
-				MessageCount:    deletedSessionDB.MessageCount,
-				TotalCharacters: deletedSessionDB.TotalCharacters,
-				LastMessageAt:   deletedSessionDB.LastMessageAt,
-				CreatedAt:       deletedSessionDB.CreatedAt,
-				UpdatedAt:       deletedSessionDB.UpdatedAt,
-			}
-		}
-
-		if err != nil {
-			utils.Logger.WithError(err).Error("Failed to get deleted session")
-			c.JSON(http.StatusInternalServerError, models.APIResponse{
-				Success: false,
-				Error: &models.APIError{
-					Code:    "DATABASE_ERROR",
-					Message: "獲取已刪除會話失敗",
-				},
-			})
-			return
-		}
-
-		// 更新會話資訊並重新啟用
-		deletedSession.Status = "active"
-		deletedSession.UpdatedAt = time.Now()
-		if req.Title != "" {
-			deletedSession.Title = req.Title
-		}
-
-		_, err = GetDB().NewUpdate().
-			Model(&deletedSession).
-			Column("status", "title", "updated_at").
-			Where("id = ?", deletedSession.ID).
-			Exec(ctx)
-
-		if err != nil {
-			utils.Logger.WithError(err).Error("Failed to reactivate deleted session")
-			c.JSON(http.StatusInternalServerError, models.APIResponse{
-				Success: false,
-				Error: &models.APIError{
-					Code:    "DATABASE_ERROR",
-					Message: "重新啟用會話失敗",
-				},
-			})
-			return
-		}
-
-		// 關聯角色信息
-		deletedSession.Character = &character
-
-		c.JSON(http.StatusCreated, models.APIResponse{
-			Success: true,
-			Message: "聊天會話重新啟用成功",
-			Data:    deletedSession.ToResponse(),
-		})
-		return
-	}
-
-	// 如果不存在會話，創建新的聊天會話
-	sessionID := utils.GenerateSessionID()
-	sessionTitle := req.Title
-	if sessionTitle == "" {
-		sessionTitle = "與 " + character.Name + " 的對話"
+	// 創建新的聊天會話
+	chatID := utils.GenerateChatID()
+	var chat models.Chat
+	chatTitle := req.Title
+	if chatTitle == "" {
+		chatTitle = "與 " + character.Name + " 的對話"
 	}
 
 	// 創建 DB 模型並插入
-	sessionDB := db.ChatSessionDB{
-		ID:          sessionID,
+	chatDB := db.ChatDB{
+		ID:          chatID,
 		UserID:      userID.(string),
 		CharacterID: req.CharacterID,
-		Title:       sessionTitle,
+		Title:       chatTitle,
 		Status:      "active",
 		CreatedAt:   time.Now(),
 		UpdatedAt:   time.Now(),
 	}
 
-	// 插入數據庫
-	_, err = GetDB().NewInsert().Model(&sessionDB).Exec(ctx)
-	
-	if err == nil {
-		// 轉換到 domain 模型
-		session = models.ChatSession{
-			ID:              sessionDB.ID,
-			UserID:          sessionDB.UserID,
-			CharacterID:     sessionDB.CharacterID,
-			Title:           sessionDB.Title,
-			Status:          sessionDB.Status,
-			MessageCount:    sessionDB.MessageCount,
-			TotalCharacters: sessionDB.TotalCharacters,
-			LastMessageAt:   sessionDB.LastMessageAt,
-			CreatedAt:       sessionDB.CreatedAt,
-			UpdatedAt:       sessionDB.UpdatedAt,
-		}
+	// 使用事務同時創建聊天和關係記錄
+	// 重要：必須同時創建關係記錄，否則關係端點會返回404錯誤
+	// 這確保了多會話架構中每個對話都有獨立的關係狀態
+	ctx := context.Background()
+	tx, err := GetDB().BeginTx(ctx, nil)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to begin transaction")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "創建聊天會話失敗",
+			},
+		})
+		return
 	}
+	defer tx.Rollback()
+
+	// 插入聊天記錄
+	_, err = tx.NewInsert().Model(&chatDB).Exec(ctx)
 	if err != nil {
 		utils.Logger.WithError(err).Error("Failed to create chat session")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -295,30 +131,118 @@ func CreateChatSession(c *gin.Context) {
 		return
 	}
 
+	// 初始化關係記錄 - 為多會話架構設置默認值
+	// 注意：ChatID 必須是指針類型 (*string)，因為數據庫模型定義為可選字段
+	relationshipDB := db.RelationshipDB{
+		ID:                 utils.GenerateRelationshipID(),
+		UserID:             userID.(string),
+		CharacterID:        req.CharacterID,
+		ChatID:             &chatID,
+		Affection:          50, // 默認好感度
+		Mood:               "neutral",
+		Relationship:       "stranger",
+		IntimacyLevel:      "casual",
+		TotalInteractions:  0,
+		LastInteraction:    time.Now(),
+		CreatedAt:          time.Now(),
+		UpdatedAt:          time.Now(),
+	}
+
+	_, err = tx.NewInsert().Model(&relationshipDB).Exec(ctx)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to create relationship record")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "創建關係記錄失敗",
+			},
+		})
+		return
+	}
+
+	// 提交事務
+	err = tx.Commit()
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to commit transaction")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "DATABASE_ERROR",
+				Message: "創建聊天會話失敗",
+			},
+		})
+		return
+	}
+
+	// 轉換到 domain 模型
+	chat = models.Chat{
+		ID:              chatDB.ID,
+		UserID:          chatDB.UserID,
+		CharacterID:     chatDB.CharacterID,
+		Title:           chatDB.Title,
+		Status:          chatDB.Status,
+		ChatMode:        chatDB.ChatMode,
+		MessageCount:    chatDB.MessageCount,
+		TotalCharacters: chatDB.TotalCharacters,
+		LastMessageAt:   chatDB.LastMessageAt,
+		CreatedAt:       chatDB.CreatedAt,
+		UpdatedAt:       chatDB.UpdatedAt,
+	}
+
 	// 關聯角色信息
-	session.Character = &character
+	chat.Character = character
+
+	// 準備響應數據
+	response := chat.ToResponse()
+
+	// 生成歡迎消息作為第一條消息
+	chatService := services.NewChatService()
+	welcomeMessage, err := chatService.GenerateWelcomeMessage(ctx, userID.(string), req.CharacterID, chatID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to generate welcome message")
+		// 不阻塞會話創建，繼續返回成功響應
+	} else if welcomeMessage != nil {
+		// 將歡迎消息作為 LastMessage 包含在響應中
+		response.LastMessage = &models.MessageResponse{
+			ID:             welcomeMessage.MessageID,
+			ChatID:         welcomeMessage.ChatID,
+			Role:           "assistant",
+			Dialogue:       welcomeMessage.Content,
+			EmotionalState: map[string]interface{}{"affection": welcomeMessage.Affection},
+			AIEngine:       welcomeMessage.AIEngine,
+			ResponseTimeMs: int(welcomeMessage.ResponseTime.Milliseconds()),
+			NSFWLevel:      welcomeMessage.NSFWLevel,
+			IsRegenerated:  false,
+			CreatedAt:      time.Now(),
+		}
+		
+		// 更新會話計數和時間
+		response.MessageCount = 1
+		now := time.Now()
+		response.LastMessageAt = &now
+	}
 
 	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
 		Message: "聊天會話創建成功",
-		Data:    session.ToResponse(),
+		Data:    response,
 	})
 }
 
 // GetChatSession godoc
-// @Summary      獲取聊天會話詳情
-// @Description  獲取特定聊天會話的詳細信息
+// @Summary      獲取會話詳情
+// @Description  特定聊天會話的詳細信息
 // @Tags         Chat
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        session_id path string true "會話ID"
-// @Success      200 {object} models.APIResponse{data=models.ChatSessionResponse} "獲取成功"
+// @Param        chat_id path string true "會話ID"
+// @Success      200 {object} models.APIResponse{data=models.ChatResponse} "獲取成功"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Failure      404 {object} models.APIResponse{error=models.APIError} "會話不存在"
-// @Router       /chat/session/{session_id} [get]
+// @Router       /chats/{chat_id} [get]
 func GetChatSession(c *gin.Context) {
-	ctx := context.Background()
 
 	// 從中間件獲取用戶ID
 	userID, exists := c.Get("user_id")
@@ -333,16 +257,16 @@ func GetChatSession(c *gin.Context) {
 		return
 	}
 
-	sessionID := c.Param("session_id")
+	sessionID := c.Param("chat_id")
 
-	var sessionDB db.ChatSessionDB
+	var chatDB db.ChatDB
 	err := GetDB().NewSelect().
-		Model(&sessionDB).
+		Model(&chatDB).
 		Where("id = ? AND user_id = ? AND status != ?", sessionID, userID, "deleted").
-		Scan(ctx)
+		Scan(context.Background())
 
 	if err != nil {
-		utils.Logger.WithError(err).WithField("session_id", sessionID).Error("Failed to query chat session")
+		utils.Logger.WithError(err).WithField("chat_id", sessionID).Error("Failed to query chat session")
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
@@ -354,18 +278,18 @@ func GetChatSession(c *gin.Context) {
 	}
 
 	// 轉換為領域模型
-	session := chatMapper.ChatSessionFromDB(&sessionDB)
+	chat := models.ChatFromDB(&chatDB)
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "獲取聊天會話成功",
-		Data:    session.ToResponse(),
+		Data:    chat.ToResponse(),
 	})
 }
 
 // GetChatSessions godoc
-// @Summary      獲取用戶聊天會話列表
-// @Description  獲取用戶的聊天會話列表，支援分頁和角色篩選
+// @Summary      獲取會話列表
+// @Description  支援分頁和角色篩選的會話列表
 // @Tags         Chat
 // @Accept       json
 // @Produce      json
@@ -374,11 +298,10 @@ func GetChatSession(c *gin.Context) {
 // @Param        limit query int false "每頁數量" default(20)
 // @Param        status query string false "會話狀態篩選"
 // @Param        character_id query string false "角色ID篩選"
-// @Success      200 {object} models.APIResponse{data=models.ChatSessionListResponse} "獲取成功"
+// @Success      200 {object} models.APIResponse{data=models.ChatListResponse} "獲取成功"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /chat/sessions [get]
+// @Router       /chats [get]
 func GetChatSessions(c *gin.Context) {
-	ctx := context.Background()
 
 	// 從中間件獲取用戶ID
 	userID, exists := c.Get("user_id")
@@ -410,7 +333,7 @@ func GetChatSessions(c *gin.Context) {
 
 	// 構建查詢
 	query := GetDB().NewSelect().
-		Model((*db.ChatSessionDB)(nil)).
+		Model((*db.ChatDB)(nil)).
 		Where("user_id = ? AND status != ?", userID, "deleted")
 
 	// 應用狀態篩選
@@ -424,7 +347,7 @@ func GetChatSessions(c *gin.Context) {
 	}
 
 	// 獲取總數
-	totalCount, err := query.Count(ctx)
+	totalCount, err := query.Count(context.Background())
 	if err != nil {
 		utils.Logger.WithError(err).Error("Failed to count chat sessions")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -438,12 +361,12 @@ func GetChatSessions(c *gin.Context) {
 	}
 
 	// 分頁查詢
-	var sessionsDB []*db.ChatSessionDB
+	var chatsDB []*db.ChatDB
 	err = query.
 		Order("updated_at DESC").
 		Limit(limit).
-		Offset((page - 1) * limit).
-		Scan(ctx, &sessionsDB)
+		Offset((page-1)*limit).
+		Scan(context.Background(), &chatsDB)
 
 	if err != nil {
 		utils.Logger.WithError(err).Error("Failed to query chat sessions")
@@ -458,17 +381,17 @@ func GetChatSessions(c *gin.Context) {
 	}
 
 	// 轉換為領域模型並生成響應格式
-	sessionResponses := make([]*models.ChatSessionResponse, len(sessionsDB))
-	for i, sessionDB := range sessionsDB {
-		session := chatMapper.ChatSessionFromDB(sessionDB)
-		sessionResponses[i] = session.ToResponse()
+	chatResponses := make([]*models.ChatResponse, len(chatsDB))
+	for i, chatDB := range chatsDB {
+		chat := models.ChatFromDB(chatDB)
+		chatResponses[i] = chat.ToResponse()
 	}
 
 	// 計算分頁信息
 	totalPages := (totalCount + limit - 1) / limit
 
-	response := &models.ChatSessionListResponse{
-		Sessions: sessionResponses,
+	response := &models.ChatListResponse{
+		Chats: chatResponses,
 		Pagination: models.PaginationResponse{
 			Page:       page,
 			PageSize:   limit,
@@ -488,18 +411,18 @@ func GetChatSessions(c *gin.Context) {
 
 // SendMessage godoc
 // @Summary      發送聊天消息
-// @Description  發送新消息到聊天會話
+// @Description  發送新消息到指定的聊天會話
 // @Tags         Chat
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
+// @Param        chat_id path string true "會話ID"
 // @Param        message body models.SendMessageRequest true "消息內容"
 // @Success      201 {object} models.APIResponse{data=models.MessageResponse} "發送成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /chat/message [post]
+// @Router       /chats/{chat_id}/messages [post]
 func SendMessage(c *gin.Context) {
-	ctx := context.Background()
 
 	// 從中間件獲取用戶ID
 	userID, exists := c.Get("user_id")
@@ -514,37 +437,51 @@ func SendMessage(c *gin.Context) {
 		return
 	}
 
+	// 從URL路徑參數獲取chat_id
+	chatID := c.Param("chat_id")
+	if chatID == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_PARAMETERS",
+				Message: "缺少會話ID參數",
+			},
+		})
+		return
+	}
+
 	var req models.SendMessageRequest
 	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
 		return
 	}
 
 	// 驗證會話是否存在且屬於當前用戶
-	var sessionDB db.ChatSessionDB
+	var chatDB db.ChatDB
 	err := GetDB().NewSelect().
-		Model(&sessionDB).
-		Where("id = ? AND user_id = ? AND status = ?", req.SessionID, userID, "active").
-		Scan(ctx)
-	
-	var session models.ChatSession
+		Model(&chatDB).
+		Where("id = ? AND user_id = ? AND status = ?", chatID, userID, "active").
+		Scan(context.Background())
+
+	var chat models.Chat
 	if err == nil {
 		// 轉換 DB 模型到 domain 模型
-		session = models.ChatSession{
-			ID:              sessionDB.ID,
-			UserID:          sessionDB.UserID,
-			CharacterID:     sessionDB.CharacterID,
-			Title:           sessionDB.Title,
-			Status:          sessionDB.Status,
-			MessageCount:    sessionDB.MessageCount,
-			TotalCharacters: sessionDB.TotalCharacters,
-			LastMessageAt:   sessionDB.LastMessageAt,
-			CreatedAt:       sessionDB.CreatedAt,
-			UpdatedAt:       sessionDB.UpdatedAt,
+		chat = models.Chat{
+			ID:              chatDB.ID,
+			UserID:          chatDB.UserID,
+			CharacterID:     chatDB.CharacterID,
+			Title:           chatDB.Title,
+			Status:          chatDB.Status,
+			ChatMode:        chatDB.ChatMode,
+			MessageCount:    chatDB.MessageCount,
+			TotalCharacters: chatDB.TotalCharacters,
+			LastMessageAt:   chatDB.LastMessageAt,
+			CreatedAt:       chatDB.CreatedAt,
+			UpdatedAt:       chatDB.UpdatedAt,
 		}
 	}
 
 	if err != nil {
-		utils.Logger.WithError(err).WithField("session_id", req.SessionID).Error("Session not found")
+		utils.Logger.WithError(err).WithField("chat_id", chatID).Error("Session not found")
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
@@ -555,79 +492,54 @@ func SendMessage(c *gin.Context) {
 		return
 	}
 
-    // 整合女性向AI聊天服務
-    chatService := services.NewChatService()
-	
+	// 整合女性向AI聊天服務
+	chatService := services.NewChatService()
+
 	// 構建處理請求
 	processRequest := &services.ProcessMessageRequest{
-		SessionID:   req.SessionID,
+		ChatID:      chatID,
 		UserMessage: req.Message,
-		CharacterID: session.CharacterID, // 從會話獲取角色ID
+		CharacterID: chat.CharacterID, // 從會話獲取角色ID
 		UserID:      userID.(string),
+		ChatMode:    chat.ChatMode, // 從會話獲取聊天模式
 		Metadata:    map[string]interface{}{},
 	}
-	
-    // 處理女性向AI對話
-    chatResponse, err := chatService.ProcessMessage(ctx, processRequest)
-    if err != nil {
-        utils.Logger.WithError(err).Error("女性向AI對話處理失敗")
-    }
-    // 構建保底回應（避免 nil 導致 500）
-    if chatResponse == nil {
-        chatResponse = &services.ChatResponse{
-            SessionID:         req.SessionID,
-            MessageID:         utils.GenerateMessageID(),
-            CharacterDialogue: "抱歉，我現在有些困惑...能再說一遍嗎？",
-            SceneDescription:  "房間裡的氣氛有些緊張",
-            CharacterAction:   "他皺了皺眉，似乎在思考什麼",
-            EmotionState: &services.EmotionState{
-                Affection:     50,
-                Mood:          "concerned",
-                Relationship:  "friend",
-                IntimacyLevel: "friendly",
-            },
-            AIEngine:     "fallback",
-            NSFWLevel:    1,
-            ResponseTime: 0,
-        }
-    } else if chatResponse.EmotionState == nil {
-        // 確保情感狀態存在
-        chatResponse.EmotionState = &services.EmotionState{
-            Affection:     50,
-            Mood:          "neutral",
-            Relationship:  "friend",
-            IntimacyLevel: "friendly",
-        }
-    }
-	
+
+	// 處理女性向AI對話
+	chatResponse, err := chatService.ProcessMessage(context.Background(), processRequest)
+	if err != nil {
+		utils.Logger.WithError(err).Error("女性向AI對話處理失敗")
+	}
+	// 構建保底回應（避免 nil 導致 500）
+	if chatResponse == nil {
+		chatResponse = &services.ChatResponse{
+			ChatID:       chatID,
+			MessageID:    utils.GenerateMessageID(),
+			Content:      "*皺眉思考*\n抱歉，我現在有些困惑...能再說一遍嗎？\n*房間裡的氣氛有些緊張*",
+			Affection:    50,
+			AIEngine:     "fallback",
+			NSFWLevel:    1,
+			ResponseTime: 0,
+		}
+	} else if chatResponse.Affection == 0 {
+		// 確保好感度存在
+		chatResponse.Affection = 50
+	}
+
 	// ChatService 已經處理了 AI 消息插入和會話統計更新
 	// 這裡不需要重複操作
 
 	// 構建完整的女性向聊天回應
-    // 安全構建情感狀態
-    emotion := map[string]interface{}{}
-    if chatResponse.EmotionState != nil {
-        emotion = map[string]interface{}{
-            "affection":      chatResponse.EmotionState.Affection,
-            "mood":           chatResponse.EmotionState.Mood,
-            "relationship":   chatResponse.EmotionState.Relationship,
-            "intimacy_level": chatResponse.EmotionState.IntimacyLevel,
-        }
-    }
-
-    response := map[string]interface{}{
-        "session_id":         chatResponse.SessionID,
-        "message_id":         chatResponse.MessageID,
-        "content":            chatResponse.CharacterDialogue,
-        "scene_description":  chatResponse.SceneDescription,
-        "character_action":   chatResponse.CharacterAction,
-        "emotion_state":      emotion,
-        "ai_engine":          chatResponse.AIEngine,
-        "nsfw_level":         chatResponse.NSFWLevel,
-        "response_time":      chatResponse.ResponseTime.Milliseconds(),
-        "special_event":      chatResponse.SpecialEvent,
-        "timestamp":          time.Now(),
-    }
+	response := map[string]interface{}{
+		"chat_id":       chatResponse.ChatID,
+		"message_id":    chatResponse.MessageID,
+		"content":       chatResponse.Content,       // 統一的內容格式
+		"affection":     chatResponse.Affection,     // 直接返回好感度
+		"ai_engine":     chatResponse.AIEngine,
+		"nsfw_level":    chatResponse.NSFWLevel,
+		"response_time": chatResponse.ResponseTime.Milliseconds(),
+		"timestamp":     time.Now(),
+	}
 
 	c.JSON(http.StatusCreated, models.APIResponse{
 		Success: true,
@@ -643,15 +555,14 @@ func SendMessage(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        session_id path string true "會話ID"
+// @Param        chat_id path string true "會話ID"
 // @Param        page query int false "頁碼" default(1)
 // @Param        limit query int false "每頁數量" default(50)
 // @Success      200 {object} models.APIResponse{data=models.MessageHistoryResponse} "獲取成功"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Failure      404 {object} models.APIResponse{error=models.APIError} "會話不存在"
-// @Router       /chat/session/{session_id}/history [get]
+// @Router       /chats/{chat_id}/history [get]
 func GetMessageHistory(c *gin.Context) {
-	ctx := context.Background()
 
 	// 從中間件獲取用戶ID
 	userID, exists := c.Get("user_id")
@@ -666,17 +577,17 @@ func GetMessageHistory(c *gin.Context) {
 		return
 	}
 
-	sessionID := c.Param("session_id")
+	sessionID := c.Param("chat_id")
 
 	// 驗證會話是否存在且屬於當前用戶
-	var sessionDB db.ChatSessionDB
+	var chatDB db.ChatDB
 	err := GetDB().NewSelect().
-		Model(&sessionDB).
+		Model(&chatDB).
 		Where("id = ? AND user_id = ? AND status != ?", sessionID, userID, "deleted").
-		Scan(ctx)
+		Scan(context.Background())
 
 	if err != nil {
-		utils.Logger.WithError(err).WithField("session_id", sessionID).Error("Session not found")
+		utils.Logger.WithError(err).WithField("chat_id", sessionID).Error("Session not found")
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
@@ -688,7 +599,7 @@ func GetMessageHistory(c *gin.Context) {
 	}
 
 	// 轉換為領域模型
-	session := chatMapper.ChatSessionFromDB(&sessionDB)
+	chat := models.ChatFromDB(&chatDB)
 
 	// 解析查詢參數
 	page := 1
@@ -709,11 +620,11 @@ func GetMessageHistory(c *gin.Context) {
 	var messagesDB []*db.MessageDB
 	err = GetDB().NewSelect().
 		Model(&messagesDB).
-		Where("session_id = ?", sessionID).
+		Where("chat_id = ?", sessionID).
 		Order("created_at ASC").
 		Limit(limit).
 		Offset((page - 1) * limit).
-		Scan(ctx)
+		Scan(context.Background())
 
 	if err != nil {
 		utils.Logger.WithError(err).Error("Failed to query message history")
@@ -730,19 +641,19 @@ func GetMessageHistory(c *gin.Context) {
 	// 轉換為領域模型並生成響應格式
 	messageResponses := make([]*models.MessageResponse, len(messagesDB))
 	for i, messageDB := range messagesDB {
-		message := chatMapper.MessageFromDB(messageDB)
+		message := models.MessageFromDB(messageDB)
 		messageResponses[i] = message.ToResponse()
 	}
 
 	// 獲取總消息數
-	totalCount := session.MessageCount
+	totalCount := chat.MessageCount
 
 	// 計算分頁信息
 	totalPages := (totalCount + limit - 1) / limit
 
 	response := &models.MessageHistoryResponse{
-		SessionID: sessionID,
-		Messages:  messageResponses,
+		ChatID:   sessionID,
+		Messages: messageResponses,
 		Pagination: models.PaginationResponse{
 			Page:       page,
 			PageSize:   limit,
@@ -767,13 +678,12 @@ func GetMessageHistory(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        session_id path string true "會話ID"
+// @Param        chat_id path string true "會話ID"
 // @Success      200 {object} models.APIResponse "刪除成功"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Failure      404 {object} models.APIResponse{error=models.APIError} "會話不存在"
-// @Router       /chat/session/{session_id} [delete]
+// @Router       /chats/{chat_id} [delete]
 func DeleteChatSession(c *gin.Context) {
-	ctx := context.Background()
 
 	// 從中間件獲取用戶ID
 	userID, exists := c.Get("user_id")
@@ -788,18 +698,18 @@ func DeleteChatSession(c *gin.Context) {
 		return
 	}
 
-	sessionID := c.Param("session_id")
+	sessionID := c.Param("chat_id")
 
 	// 軟刪除會話
 	result, err := GetDB().NewUpdate().
-		Model((*db.ChatSessionDB)(nil)).
+		Model((*db.ChatDB)(nil)).
 		Set("status = ?", "deleted").
 		Set("updated_at = ?", time.Now()).
 		Where("id = ? AND user_id = ? AND status != ?", sessionID, userID, "deleted").
-		Exec(ctx)
+		Exec(context.Background())
 
 	if err != nil {
-		utils.Logger.WithError(err).WithField("session_id", sessionID).Error("Failed to delete chat session")
+		utils.Logger.WithError(err).WithField("chat_id", sessionID).Error("Failed to delete chat session")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
@@ -831,17 +741,18 @@ func DeleteChatSession(c *gin.Context) {
 
 // UpdateSessionMode godoc
 // @Summary      切換會話模式
-// @Description  切換聊天會話的對話模式
+// @Description  切換聊天會話的對話模式，支援兩種模式：chat（簡潔對話）和 novel（小說敘述）。不同模式會影響 AI 的回應風格和提示詞策略。
 // @Tags         Chat
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        session_id path string true "會話ID"
-// @Param        mode body object true "模式設定"
-// @Success      200 {object} models.APIResponse "切換成功"
-// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
+// @Param        chat_id path string true "會話ID"
+// @Param        request body object{mode=string} true "模式設定。mode: 'chat' | 'novel'"
+// @Success      200 {object} models.APIResponse{data=object{chat_id=string,current_mode=string,mode_description=string,previous_mode=string,updated_at=string,user_id=string}} "切換成功"
+// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤或無效的模式"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /chat/session/{session_id}/mode [put]
+// @Failure      404 {object} models.APIResponse{error=models.APIError} "會話不存在"
+// @Router       /chats/{chat_id}/mode [put]
 func UpdateSessionMode(c *gin.Context) {
 	// 檢查認證
 	userID, exists := c.Get("user_id")
@@ -856,7 +767,7 @@ func UpdateSessionMode(c *gin.Context) {
 		return
 	}
 
-	sessionID := c.Param("session_id")
+	sessionID := c.Param("chat_id")
 
 	var req struct {
 		Mode string `json:"mode" binding:"required"`
@@ -866,8 +777,8 @@ func UpdateSessionMode(c *gin.Context) {
 		return
 	}
 
-	// 驗證模式
-	validModes := []string{"normal", "romantic", "adventure", "roleplay", "novel"}
+	// 支援聊天模式和小說模式
+	validModes := []string{"chat", "novel"}
 	isValid := false
 	for _, validMode := range validModes {
 		if req.Mode == validMode {
@@ -887,83 +798,60 @@ func UpdateSessionMode(c *gin.Context) {
 		return
 	}
 
-	// 靜態回應 - 模擬模式切換
-	c.JSON(http.StatusOK, models.APIResponse{
-		Success: true,
-		Message: "對話模式已切換",
-		Data: gin.H{
-			"session_id":   sessionID,
-			"user_id":      userID,
-			"previous_mode": "normal",
-			"current_mode":  req.Mode,
-			"updated_at":   time.Now(),
-			"mode_description": map[string]string{
-				"normal":   "日常對話模式",
-				"romantic": "浪漫互動模式", 
-				"adventure": "冒險探索模式",
-				"roleplay": "角色扮演模式",
-				"novel":    "小說敘述模式",
-			}[req.Mode],
-		},
-	})
-}
+	// 獲取當前會話
+	var chat db.ChatDB
+	err := database.GetApp().DB().NewSelect().
+		Model(&chat).
+		Where("id = ? AND user_id = ?", sessionID, userID).
+		Scan(context.Background())
 
-// AddSessionTag godoc
-// @Summary      為會話添加標籤
-// @Description  為聊天會話添加分類標籤
-// @Tags         Chat
-// @Accept       json
-// @Produce      json
-// @Security     BearerAuth
-// @Param        session_id path string true "會話ID"
-// @Param        tag body object true "標籤信息"
-// @Success      200 {object} models.APIResponse "添加成功"
-// @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
-// @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /chat/session/{session_id}/tag [post]
-func AddSessionTag(c *gin.Context) {
-	// 檢查認證
-	userID, exists := c.Get("user_id")
-	if !exists {
-		c.JSON(http.StatusUnauthorized, models.APIResponse{
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "UNAUTHORIZED",
-				Message: "未授權訪問",
+				Code:    "SESSION_NOT_FOUND",
+				Message: "會話不存在",
 			},
 		})
 		return
 	}
 
-	sessionID := c.Param("session_id")
+	// 更新會話模式
+	previousMode := "chat"
 
-	var req struct {
-		Tag   string `json:"tag" binding:"required"`
-		Color string `json:"color"`
-	}
+	// 更新會話模式
+	_, err = database.GetApp().DB().NewUpdate().
+		Model(&chat).
+		Set("chat_mode = ?", req.Mode).
+		Set("updated_at = ?", time.Now()).
+		Where("id = ? AND user_id = ?", sessionID, userID).
+		Exec(context.Background())
 
-	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to update chat mode")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UPDATE_FAILED",
+				Message: "更新對話模式失敗",
+			},
+		})
 		return
 	}
 
-	// 靜態回應 - 模擬標籤添加
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
-		Message: "標籤添加成功",
+		Message: "對話模式已切換",
 		Data: gin.H{
-			"session_id": sessionID,
-			"user_id":    userID,
-			"tag": gin.H{
-				"name":       req.Tag,
-				"color":      req.Color,
-				"created_at": time.Now(),
-				"tag_id":     utils.GenerateTagID(),
-			},
-			"current_tags": []gin.H{
-				{"name": "浪漫", "color": "#ff69b4"},
-				{"name": "日常", "color": "#87ceeb"},
-				{"name": req.Tag, "color": req.Color},
-			},
+			"chat_id":       sessionID,
+			"user_id":       userID,
+			"previous_mode": previousMode,
+			"current_mode":  req.Mode,
+			"updated_at":    time.Now(),
+			"mode_description": map[string]string{
+				"chat":  "簡潔對話模式 - 1-2句話的日常聊天風格",
+				"novel": "小說敘述模式 - 包含細緻描寫的文學風格",
+			}[req.Mode],
 		},
 	})
 }
@@ -975,12 +863,12 @@ func AddSessionTag(c *gin.Context) {
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        session_id path string true "會話ID"
+// @Param        chat_id path string true "會話ID"
 // @Param        format query string false "匯出格式" Enums(json,txt,pdf) default(json)
 // @Success      200 {object} models.APIResponse "匯出成功"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Failure      404 {object} models.APIResponse{error=models.APIError} "會話不存在"
-// @Router       /chat/session/{session_id}/export [get]
+// @Router       /chats/{chat_id}/export [get]
 func ExportChatSession(c *gin.Context) {
 	// 檢查認證
 	userID, exists := c.Get("user_id")
@@ -995,7 +883,7 @@ func ExportChatSession(c *gin.Context) {
 		return
 	}
 
-	sessionID := c.Param("session_id")
+	sessionID := c.Param("chat_id")
 	format := c.DefaultQuery("format", "json")
 
 	// 驗證格式
@@ -1011,12 +899,12 @@ func ExportChatSession(c *gin.Context) {
 	}
 
 	// 查詢會話資訊
-	var sessionDB db.ChatSessionDB
+	var chatDB db.ChatDB
 	err := database.GetApp().DB().NewSelect().
-		Model(&sessionDB).
+		Model(&chatDB).
 		Relation("Character").
 		Where("cs.id = ? AND cs.user_id = ?", sessionID, userID).
-		Scan(context.Background(), &sessionDB)
+		Scan(context.Background(), &chatDB)
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
@@ -1032,7 +920,7 @@ func ExportChatSession(c *gin.Context) {
 	var messagesDB []db.MessageDB
 	err = database.GetApp().DB().NewSelect().
 		Model(&messagesDB).
-		Where("session_id = ?", sessionID).
+		Where("chat_id = ?", sessionID).
 		Order("created_at ASC").
 		Scan(context.Background(), &messagesDB)
 	if err != nil {
@@ -1047,12 +935,11 @@ func ExportChatSession(c *gin.Context) {
 	}
 
 	// 轉換為domain模型
-	mapper := models.NewChatMapper()
-	session := mapper.ChatSessionFromDB(&sessionDB)
-	
+	chat := models.ChatFromDB(&chatDB)
+
 	var messages []*models.Message
 	for _, msgDB := range messagesDB {
-		messages = append(messages, mapper.MessageFromDB(&msgDB))
+		messages = append(messages, models.MessageFromDB(&msgDB))
 	}
 
 	// 計算會話統計
@@ -1064,12 +951,12 @@ func ExportChatSession(c *gin.Context) {
 
 	// 構建匯出數據
 	characterName := "未知角色"
-	if session.Character != nil {
-		characterName = session.Character.Name
+	if chat.Character != nil {
+		characterName = chat.Character.Name
 	}
 
 	exportData := gin.H{
-		"session_id":    sessionID,
+		"chat_id":       sessionID,
 		"user_id":       userID,
 		"export_format": format,
 		"generated_at":  time.Now(),
@@ -1082,7 +969,7 @@ func ExportChatSession(c *gin.Context) {
 			"message_count": messageCount,
 			"duration":      formatDuration(duration),
 			"characters":    []string{characterName},
-			"created_at":    session.CreatedAt,
+			"created_at":    chat.CreatedAt,
 		},
 		"messages": func() interface{} {
 			if format == "json" {
@@ -1096,7 +983,7 @@ func ExportChatSession(c *gin.Context) {
 				if msg.Role == "assistant" {
 					role = characterName
 				}
-				textMessages = append(textMessages, fmt.Sprintf("[%s] %s: %s", timestamp, role, msg.Content))
+				textMessages = append(textMessages, fmt.Sprintf("[%s] %s: %s", timestamp, role, msg.Dialogue))
 			}
 			return textMessages
 		}(),
@@ -1115,10 +1002,10 @@ func formatDuration(d time.Duration) string {
 	if d == 0 {
 		return "0分鐘"
 	}
-	
+
 	hours := int(d.Hours())
 	minutes := int(d.Minutes()) % 60
-	
+
 	if hours > 0 {
 		return fmt.Sprintf("%d小時%d分鐘", hours, minutes)
 	}
@@ -1127,16 +1014,18 @@ func formatDuration(d time.Duration) string {
 
 // RegenerateResponse godoc
 // @Summary      重新生成回應
-// @Description  重新生成最後一個 AI 回應
+// @Description  重新生成指定消息的 AI 回應
 // @Tags         Chat
 // @Accept       json
 // @Produce      json
 // @Security     BearerAuth
-// @Param        request body object true "重新生成請求"
+// @Param        chat_id path string true "會話ID"
+// @Param        message_id path string true "消息ID"
 // @Success      200 {object} models.APIResponse "生成成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
-// @Router       /chat/regenerate [post]
+// @Failure      404 {object} models.APIResponse{error=models.APIError} "消息不存在"
+// @Router       /chats/{chat_id}/messages/{message_id}/regenerate [post]
 func RegenerateResponse(c *gin.Context) {
 	// 檢查認證
 	userID, exists := c.Get("user_id")
@@ -1151,34 +1040,116 @@ func RegenerateResponse(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		SessionID string `json:"session_id" binding:"required"`
-		MessageID string `json:"message_id" binding:"required"`
-	}
+	// 從URL路徑參數獲取ID
+	chatID := c.Param("chat_id")
+	messageID := c.Param("message_id")
 
-	if !utils.ValidationHelperInstance.BindAndValidate(c, &req) {
+	if chatID == "" || messageID == "" {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "INVALID_PARAMETERS",
+				Message: "缺少必要的路徑參數",
+			},
+		})
 		return
 	}
 
-	// 靜態回應 - 模擬重新生成
-	newMessage := gin.H{
-		"message_id":       utils.GenerateUUID(),
-		"session_id":       req.SessionID,
-		"user_id":          userID,
-		"role":             "assistant",
-		"content":          "讓我重新組織一下思緒...其實我想說的是，和你在一起的時光總是過得特別快，就像時間也捨不得打擾我們的對話一樣。",
-		"character_name":   "陸燁銘",
-		"emotion":          "溫柔",
-		"scene_description": "夕陽西下，辦公室裡只剩下溫暖的燈光",
-		"created_at":       time.Now(),
-		"regenerated":      true,
-		"previous_message_id": req.MessageID,
+	// 獲取原始消息
+	var originalMessage db.MessageDB
+	err := database.GetApp().DB().NewSelect().
+		Model(&originalMessage).
+		Where("id = ? AND chat_id = ?", messageID, chatID).
+		Scan(context.Background())
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "MESSAGE_NOT_FOUND",
+				Message: "消息不存在",
+			},
+		})
+		return
+	}
+
+	// 獲取會話信息
+	var chat db.ChatDB
+	err = database.GetApp().DB().NewSelect().
+		Model(&chat).
+		Where("id = ? AND user_id = ?", chatID, userID).
+		Scan(context.Background())
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "SESSION_NOT_FOUND",
+				Message: "會話不存在",
+			},
+		})
+		return
+	}
+
+	// 獲取會話歷史記錄（用於上下文）
+	var messages []db.MessageDB
+	err = database.GetApp().DB().NewSelect().
+		Model(&messages).
+		Where("chat_id = ? AND created_at <= ?", chatID, originalMessage.CreatedAt).
+		Order("created_at ASC").
+		Limit(10). // 最近10條消息作為上下文
+		Scan(context.Background())
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to retrieve message history")
+	}
+
+	// 使用聊天服務重新生成回應
+	chatService := services.NewChatService()
+
+	// 構建正確的ProcessMessageRequest
+	processReq := &services.ProcessMessageRequest{
+		ChatID:      chatID,
+		UserMessage: "[重新生成]",
+		CharacterID: chat.CharacterID,
+		UserID:      userID.(string),
+		Metadata:    map[string]interface{}{},
+	}
+
+	response, err := chatService.ProcessMessage(context.Background(), processReq)
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to regenerate message")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "REGENERATION_FAILED",
+				Message: "重新生成失敗",
+			},
+		})
+		return
+	}
+
+	// 標記原消息為已替換
+	_, err = database.GetApp().DB().NewUpdate().
+		Model(&originalMessage).
+		Set("is_regenerated = true").
+		Set("updated_at = ?", time.Now()).
+		Where("id = ?", messageID).
+		Exec(context.Background())
+
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to mark original message as regenerated")
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "回應重新生成成功",
-		Data:    newMessage,
+		Data: gin.H{
+			"message":             response,
+			"previous_message_id": messageID,
+			"regenerated":         true,
+		},
 	})
 }
 

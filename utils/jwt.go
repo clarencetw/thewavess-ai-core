@@ -15,6 +15,16 @@ type JWTClaims struct {
 	jwt.RegisteredClaims
 }
 
+// AdminJWTClaims 管理員JWT 聲明
+type AdminJWTClaims struct {
+	AdminID     string   `json:"admin_id"`
+	Username    string   `json:"username"`
+	Email       string   `json:"email"`
+	Role        string   `json:"role"`
+	Permissions []string `json:"permissions"`
+	jwt.RegisteredClaims
+}
+
 // GenerateAccessToken 生成訪問令牌
 func GenerateAccessToken(userID, username, email string) (string, error) {
 	secretKey := GetEnvWithDefault("JWT_SECRET", "your-super-secret-jwt-key-here")
@@ -105,4 +115,58 @@ func ValidateRefreshToken(tokenString string) (string, error) {
 	}
 
 	return "", errors.New("invalid refresh token")
+}
+
+// GenerateAdminAccessToken 生成管理員訪問令牌
+func GenerateAdminAccessToken(adminID, username, email, role string, permissions []string) (string, error) {
+	secretKey := GetEnvWithDefault("JWT_SECRET", "your-super-secret-jwt-key-here")
+	if secretKey == "" {
+		secretKey = "default-secret-key-for-development"
+	}
+
+	claims := AdminJWTClaims{
+		AdminID:     adminID,
+		Username:    username,
+		Email:       email,
+		Role:        role,
+		Permissions: permissions,
+		RegisteredClaims: jwt.RegisteredClaims{
+			ExpiresAt: jwt.NewNumericDate(time.Now().Add(8 * time.Hour)), // 8小時有效期（比用戶短）
+			IssuedAt:  jwt.NewNumericDate(time.Now()),
+			NotBefore: jwt.NewNumericDate(time.Now()),
+			Issuer:    "thewavess-ai-core-admin",
+		},
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	return token.SignedString([]byte(secretKey))
+}
+
+// ValidateAdminToken 驗證管理員令牌
+func ValidateAdminToken(tokenString string) (*AdminJWTClaims, error) {
+	secretKey := GetEnvWithDefault("JWT_SECRET", "your-super-secret-jwt-key-here")
+	if secretKey == "" {
+		secretKey = "default-secret-key-for-development"
+	}
+
+	token, err := jwt.ParseWithClaims(tokenString, &AdminJWTClaims{}, func(token *jwt.Token) (interface{}, error) {
+		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, errors.New("invalid signing method")
+		}
+		return []byte(secretKey), nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	if claims, ok := token.Claims.(*AdminJWTClaims); ok && token.Valid {
+		// 檢查是否為管理員令牌（通過issuer判斷）
+		if claims.Issuer != "thewavess-ai-core-admin" {
+			return nil, errors.New("not an admin token")
+		}
+		return claims, nil
+	}
+
+	return nil, errors.New("invalid admin token")
 }

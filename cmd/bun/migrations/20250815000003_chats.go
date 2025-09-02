@@ -3,15 +3,15 @@ package migrations
 import (
 	"context"
 
-	"github.com/uptrace/bun"
 	dbmodels "github.com/clarencetw/thewavess-ai-core/models/db"
+	"github.com/uptrace/bun"
 )
 
 func init() {
 	Migrations.MustRegister(func(ctx context.Context, db *bun.DB) error {
-		// 1. 創建聊天會話表
+		// 1. 創建聊天表
 		_, err := db.NewCreateTable().
-			Model((*dbmodels.ChatSessionDB)(nil)).
+			Model((*dbmodels.ChatDB)(nil)).
 			IfNotExists().
 			Exec(ctx)
 		if err != nil {
@@ -29,19 +29,20 @@ func init() {
 
 		// 創建索引
 		indexes := []string{
-			// chat_sessions 表索引
-			"CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_id ON chat_sessions(user_id)",
-			"CREATE INDEX IF NOT EXISTS idx_chat_sessions_character_id ON chat_sessions(character_id)",
-			"CREATE INDEX IF NOT EXISTS idx_chat_sessions_status ON chat_sessions(status)",
-			"CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated_at ON chat_sessions(updated_at)",
-			"CREATE INDEX IF NOT EXISTS idx_chat_sessions_user_character ON chat_sessions(user_id, character_id)",
+			// chats 表索引
+			"CREATE INDEX IF NOT EXISTS idx_chats_user_id ON chats(user_id)",
+			"CREATE INDEX IF NOT EXISTS idx_chats_character_id ON chats(character_id)",
+			"CREATE INDEX IF NOT EXISTS idx_chats_status ON chats(status)",
+			"CREATE INDEX IF NOT EXISTS idx_chats_updated_at ON chats(updated_at)",
+			"CREATE INDEX IF NOT EXISTS idx_chats_user_character ON chats(user_id, character_id)",
+			"CREATE INDEX IF NOT EXISTS idx_chats_chat_mode ON chats(chat_mode)",
 
 			// messages 表索引
-			"CREATE INDEX IF NOT EXISTS idx_messages_session_id ON messages(session_id)",
+			"CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id)",
 			"CREATE INDEX IF NOT EXISTS idx_messages_role ON messages(role)",
 			"CREATE INDEX IF NOT EXISTS idx_messages_created_at ON messages(created_at)",
 			"CREATE INDEX IF NOT EXISTS idx_messages_nsfw_level ON messages(nsfw_level)",
-			"CREATE INDEX IF NOT EXISTS idx_messages_session_created ON messages(session_id, created_at DESC)",
+			"CREATE INDEX IF NOT EXISTS idx_messages_chat_created ON messages(chat_id, created_at DESC)",
 		}
 
 		for _, idx := range indexes {
@@ -55,7 +56,7 @@ func init() {
 		// 回滾 - 按相反順序刪除表
 		tables := []interface{}{
 			(*dbmodels.MessageDB)(nil),
-			(*dbmodels.ChatSessionDB)(nil),
+			(*dbmodels.ChatDB)(nil),
 		}
 
 		for _, table := range tables {

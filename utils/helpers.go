@@ -1,47 +1,11 @@
 package utils
 
 import (
-	"strconv"
 	"time"
 
+	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
-
-// ParseInt 安全地將字符串轉換為整數
-func ParseInt(s string) (int, error) {
-	return strconv.Atoi(s)
-}
-
-// IntToString 將整數轉換為字符串
-func IntToString(i int) string {
-	return strconv.Itoa(i)
-}
-
-// StringInSlice 檢查字符串是否在切片中
-func StringInSlice(str string, slice []string) bool {
-	for _, item := range slice {
-		if item == str {
-			return true
-		}
-	}
-	return false
-}
-
-// Max 返回兩個整數中的較大值
-func Max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
-
-// Min 返回兩個整數中的較小值
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 // GenerateUUID 生成標準 UUID v4
 func GenerateUUID() string {
@@ -54,16 +18,14 @@ func GenerateID(prefix string) string {
 }
 
 // 常用的帶前綴ID生成函數
-func GenerateUserID() string     { return GenerateID("user") }
-func GenerateSessionID() string  { return GenerateID("session") }
-func GenerateMessageID() string  { return GenerateID("msg") }
-func GenerateCharacterID() string { return GenerateID("char") }
-func GenerateEventID() string    { return GenerateID("event") }
-func GenerateTagID() string      { return GenerateID("tag") }
-func GenerateMemoryID() string   { return GenerateID("mem") }
-func GenerateTTSID() string      { return GenerateID("tts") }
-func GenerateNovelID() string    { return GenerateID("novel") }
-func GenerateBatchID() string    { return GenerateID("batch") }
+func GenerateUserID() string         { return GenerateID("user") }
+func GenerateChatID() string         { return GenerateID("chat") }
+func GenerateMessageID() string      { return GenerateID("msg") }
+func GenerateCharacterID() string    { return GenerateID("char") }
+func GenerateEventID() string        { return GenerateID("event") }
+func GenerateRelationshipID() string { return GenerateID("rel") }
+func GenerateAdminID() string        { return GenerateID("admin") } // 注意：由於循環依賴，Admin模型中直接使用uuid.New()
+func GenerateTTSID() string          { return GenerateID("tts") }
 
 // GetCurrentTimestampString 獲取當前時間戳字串
 func GetCurrentTimestampString() string {
@@ -75,3 +37,54 @@ func Now() time.Time {
 	return time.Now().UTC()
 }
 
+// GetClientIP 獲取客戶端IP地址（使用Gin內建功能）
+func GetClientIP(c *gin.Context) string {
+	return c.ClientIP()
+}
+
+// CalculateAgeFromBirthDate 根據生日計算年齡並判斷是否為成人
+func CalculateAgeFromBirthDate(birthDate *time.Time) (age int, isAdult bool) {
+	if birthDate == nil {
+		return 0, false
+	}
+
+	now := time.Now()
+	age = now.Year() - birthDate.Year()
+
+	// 檢查是否還沒過生日
+	if now.YearDay() < birthDate.YearDay() {
+		age--
+	}
+
+	isAdult = age >= 18
+	return age, isAdult
+}
+
+// GenerateDefaultAvatarURL 生成預設頭像URL（隨機）
+func GenerateDefaultAvatarURL() string {
+	return "https://avatar.iran.liara.run/public"
+}
+
+// GenerateDefaultAvatarURLByGender 根據性別生成預設頭像URL
+func GenerateDefaultAvatarURLByGender(gender *string) string {
+	if gender == nil {
+		return GenerateDefaultAvatarURL() // 隨機選擇
+	}
+
+	switch *gender {
+	case "male":
+		return "https://avatar.iran.liara.run/public/boy"
+	case "female":
+		return "https://avatar.iran.liara.run/public/girl"
+	default:
+		return GenerateDefaultAvatarURL() // 其他性別隨機選擇
+	}
+}
+
+// Min 返回兩個整數中的較小值
+func Min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}

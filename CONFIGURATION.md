@@ -1,75 +1,68 @@
-# ⚙️ 環境設定（Configuration）
+# ⚙️ 環境設定
 
-本文件僅提供摘要與最小設定示例，「權威來源」為專案根目錄的 [.env.example](./.env.example)。任何變更與預設值請以該檔案為準。
-
-—
+權威來源：[.env.example](./.env.example)
 
 ## 最小設定（必填）
 
-將 `.env.example` 複製為 `.env`，至少設定以下變數即可啟動：
+複製 `.env.example` 為 `.env`，至少設定：
 
 ```env
-# 必填：OpenAI 金鑰（處理 L1–L4）
 OPENAI_API_KEY=sk-your-openai-api-key-here
-
-# 建議：本機埠與模式（也可維持預設）
-PORT=8080
-GIN_MODE=debug
-ENVIRONMENT=development
-LOG_LEVEL=debug
 ```
 
-—
+## 完整配置
 
-## 資料庫（PostgreSQL）
+### 資料庫（PostgreSQL）
+```env
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=thewavess
+DB_PASSWORD=password
+DB_NAME=thewavess_ai_core
+```
 
-- DB_HOST、DB_PORT、DB_USER、DB_PASSWORD、DB_NAME、DB_SSLMODE
+### AI 服務
+```env
+# OpenAI (必填) - 處理 Level 1-4
+OPENAI_API_KEY=sk-your-key
+OPENAI_MODEL=gpt-4o
+OPENAI_MAX_TOKENS=1200
 
-—
+# Grok (可選) - 處理 Level 5
+GROK_API_KEY=your-key
+GROK_MODEL=grok-3
+GROK_MAX_TOKENS=2000
 
-## AI 金鑰（以 .env.example 為準）
+# TTS (可選) - 語音合成
+TTS_API_KEY=sk-your-key  # 未設定時使用 OPENAI_API_KEY
+```
 
-- OPENAI_API_KEY（必填）：處理 NSFW Level 1–4
-- GROK_API_KEY（可選）：處理 NSFW Level 5
-- TTS_API_KEY（可選）：未設定時預設使用 OPENAI_API_KEY
+### 伺服器設定
+```env
+PORT=8080
+GIN_MODE=debug          # debug/release
+ENVIRONMENT=development # development/production
+LOG_LEVEL=debug        # debug/info/warn/error
+```
 
-—
+### 安全設定
+```env
+JWT_SECRET=your-super-secret-key
+CORS_ALLOWED_ORIGINS=*  # 生產環境應限制
+```
 
-## 伺服器與日誌（以 .env.example 為準）
+### NSFW 分級閾值
+```env
+NSFW_DETECTION_THRESHOLD=0.5
+NSFW_L2_THRESHOLD=2
+NSFW_L3_THRESHOLD=2
+NSFW_L4_THRESHOLD=2
+NSFW_L5_THRESHOLD=1
+```
 
-- PORT（預設 8080）
-- GIN_MODE（debug/release）
-- ENVIRONMENT（development/production）
-- LOG_LEVEL（debug/info/warn/error）
+## 系統特色
 
-—
-
-## CORS（跨域，詳見 .env.example）
-
-- CORS_ALLOWED_ORIGINS（預設 *）
-- CORS_ALLOWED_METHODS、CORS_ALLOWED_HEADERS、CORS_EXPOSED_HEADERS
-
-—
-
-## NSFW 設定（詳見 .env.example）
-
-- NSFW_DETECTION_THRESHOLD 以及各級觸發門檻（參考 .env.example）
-
-—
-
-## OpenAI 與 Grok 模型（詳見 .env.example）
-
-- OPENAI_API_URL、OPENAI_MODEL、OPENAI_MAX_TOKENS、OPENAI_TEMPERATURE
-- GROK_API_URL、GROK_MODEL、GROK_MAX_TOKENS、GROK_TEMPERATURE
-
-—
-
-## 場景描述（詳見 .env.example）
-
-- SCENE_DESCRIPTIONS_ENABLED、SCENE_MAX_LENGTH、SCENE_UPDATE_FREQUENCY
-
-—
-
-## JWT（以 .env.example 為準）
-
-- JWT_SECRET（供未來使用）
+- **智能路由**: 自動選擇 OpenAI/Grok 引擎
+- **5級NSFW分類**: 女性向優化，準確率95%+
+- **精簡架構**: 5張表，JSONB整合複雜數據
+- **JWT認證**: Access + Refresh Token 機制

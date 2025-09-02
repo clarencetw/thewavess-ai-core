@@ -3,7 +3,7 @@ package utils
 import (
 	"os"
 	"strconv"
-	
+
 	"github.com/joho/godotenv"
 )
 
@@ -15,7 +15,7 @@ func LoadEnv() error {
 	if envLoaded {
 		return nil
 	}
-	
+
 	err := godotenv.Load()
 	if err != nil {
 		// 在生產環境中，.env 文件可能不存在（使用系統環境變數）
@@ -23,7 +23,7 @@ func LoadEnv() error {
 			return err
 		}
 	}
-	
+
 	envLoaded = true
 	return nil
 }

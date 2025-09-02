@@ -26,7 +26,7 @@ type TTSResponse struct {
 func NewTTSService() *TTSService {
 	// 確保環境變數已載入
 	utils.LoadEnv()
-	
+
 	// 優先使用專用的 TTS API key，如果沒有則使用 OpenAI API key
 	apiKey := utils.GetEnvWithDefault("TTS_API_KEY", "")
 	if apiKey == "" {
@@ -55,7 +55,7 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 	// 記錄請求開始
 	utils.Logger.WithFields(map[string]interface{}{
 		"service": "tts",
-		"text":    text[:minInt(len(text), 50)] + "...", // 只記錄前50個字符
+		"text":    text[:utils.Min(len(text), 50)] + "...", // 只記錄前50個字符
 		"voice":   voice,
 		"speed":   speed,
 	}).Info("TTS generation started")
@@ -101,11 +101,11 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 	durationStr := fmt.Sprintf("%.1fs", estimatedDuration)
 
 	utils.Logger.WithFields(map[string]interface{}{
-		"service":       "tts",
-		"text_length":   len(text),
-		"audio_size":    len(audioData),
-		"duration":      durationStr,
-		"voice":         voice,
+		"service":     "tts",
+		"text_length": len(text),
+		"audio_size":  len(audioData),
+		"duration":    durationStr,
+		"voice":       voice,
 	}).Info("TTS generation completed")
 
 	return &TTSResponse{
@@ -119,17 +119,17 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 // mapVoiceToOpenAI 將角色語音映射到 OpenAI TTS 語音
 func (s *TTSService) mapVoiceToOpenAI(voice string) openai.SpeechVoice {
 	voiceMapping := map[string]openai.SpeechVoice{
-		"voice_001": openai.VoiceAlloy,  // 沈宸標準音
-		"voice_002": openai.VoiceEcho,   // 沈宸深情音
-		"voice_003": openai.VoiceFable,  // 林知遠溫雅音
-		"voice_004": openai.VoiceOnyx,   // 周曜活潑音
+		"voice_001": openai.VoiceAlloy, // 沈宸標準音
+		"voice_002": openai.VoiceEcho,  // 沈宸深情音
+		"voice_003": openai.VoiceFable, // 林知遠溫雅音
+		"voice_004": openai.VoiceOnyx,  // 周曜活潑音
 		"default":   openai.VoiceAlloy,
 	}
 
 	if mappedVoice, exists := voiceMapping[voice]; exists {
 		return mappedVoice
 	}
-	
+
 	return openai.VoiceAlloy // 默認語音
 }
 
@@ -149,7 +149,7 @@ func (s *TTSService) mockTTSResponse(text string, voice string) *TTSResponse {
 	utils.Logger.WithFields(map[string]interface{}{
 		"service": "tts",
 		"mode":    "mock",
-		"text":    text[:minInt(len(text), 50)] + "...",
+		"text":    text[:utils.Min(len(text), 50)] + "...",
 		"voice":   voice,
 	}).Info("TTS mock response generated")
 
@@ -159,42 +159,6 @@ func (s *TTSService) mockTTSResponse(text string, voice string) *TTSResponse {
 		Duration:  durationStr,
 		Size:      int64(len(mockAudioData)),
 	}
-}
-
-// BatchGenerateSpeech 批量生成語音
-func (s *TTSService) BatchGenerateSpeech(ctx context.Context, texts []string, voice string, speed float64) ([]*TTSResponse, error) {
-	utils.Logger.WithFields(map[string]interface{}{
-		"service":    "tts",
-		"batch_size": len(texts),
-		"voice":      voice,
-		"speed":      speed,
-	}).Info("Batch TTS generation started")
-
-	responses := make([]*TTSResponse, len(texts))
-	
-	for i, text := range texts {
-		response, err := s.GenerateSpeech(ctx, text, voice, speed)
-		if err != nil {
-			utils.Logger.WithFields(map[string]interface{}{
-				"service": "tts",
-				"index":   i,
-				"error":   err.Error(),
-			}).Error("Batch TTS generation failed for item")
-			
-			// 如果單個項目失敗，使用mock響應
-			responses[i] = s.mockTTSResponse(text, voice)
-		} else {
-			responses[i] = response
-		}
-	}
-
-	utils.Logger.WithFields(map[string]interface{}{
-		"service":       "tts",
-		"batch_size":    len(texts),
-		"success_count": len(responses),
-	}).Info("Batch TTS generation completed")
-
-	return responses, nil
 }
 
 // GetAvailableVoices 獲取可用語音列表
@@ -235,10 +199,3 @@ func (s *TTSService) GetAvailableVoices() []map[string]interface{} {
 	}
 }
 
-// minInt 返回兩個整數中的較小值
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

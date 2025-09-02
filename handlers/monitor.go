@@ -13,12 +13,12 @@ import (
 
 // HealthResponse 健康檢查回應結構
 type HealthResponse struct {
-	Status     string            `json:"status"`
-	Timestamp  time.Time         `json:"timestamp"`
-	Version    string            `json:"version"`
-	Uptime     string            `json:"uptime"`
-	Services   map[string]string `json:"services"`
-	Message    string            `json:"message,omitempty"`
+	Status    string            `json:"status"`
+	Timestamp time.Time         `json:"timestamp"`
+	Version   string            `json:"version"`
+	Uptime    string            `json:"uptime"`
+	Services  map[string]string `json:"services"`
+	Message   string            `json:"message,omitempty"`
 }
 
 // SystemStatsResponse 系統狀態回應結構
@@ -49,11 +49,11 @@ type DatabaseInfo struct {
 
 // RuntimeInfo 運行時資訊
 type RuntimeInfo struct {
-	Goroutines   int    `json:"goroutines"`
-	MemoryUsage  string `json:"memory_usage"`
-	GCCount      uint32 `json:"gc_count"`
-	NextGC       string `json:"next_gc"`
-	LastGC       string `json:"last_gc"`
+	Goroutines  int    `json:"goroutines"`
+	MemoryUsage string `json:"memory_usage"`
+	GCCount     uint32 `json:"gc_count"`
+	NextGC      string `json:"next_gc"`
+	LastGC      string `json:"last_gc"`
 }
 
 // ServicesStatus 服務狀態
@@ -63,7 +63,7 @@ type ServicesStatus struct {
 	TTS    string `json:"tts"`
 }
 
-var monitorStartTime = time.Now()
+var MonitorStartTime = time.Now() // 導出供其他包使用
 
 // HealthCheck godoc
 // @Summary      系統健康檢查
@@ -104,7 +104,7 @@ func HealthCheck(c *gin.Context) {
 		status = "degraded"
 	}
 
-	uptime := time.Since(monitorStartTime).Round(time.Second).String()
+	uptime := time.Since(MonitorStartTime).Round(time.Second).String()
 
 	response := HealthResponse{
 		Status:    status,
@@ -221,7 +221,7 @@ func GetMetrics(c *gin.Context) {
 	var memStats runtime.MemStats
 	runtime.ReadMemStats(&memStats)
 
-	uptime := time.Since(monitorStartTime).Seconds()
+	uptime := time.Since(MonitorStartTime).Seconds()
 
 	// 簡單的Prometheus格式指標
 	metrics := `# HELP thewavess_uptime_seconds 系統運行時間（秒）
@@ -275,8 +275,8 @@ func Ready(c *gin.Context) {
 	}
 
 	// 檢查必要的環境變數
-	if utils.GetEnvWithDefault("OPENAI_API_KEY", "") == "" && 
-	   utils.GetEnvWithDefault("GROK_API_KEY", "") == "" {
+	if utils.GetEnvWithDefault("OPENAI_API_KEY", "") == "" &&
+		utils.GetEnvWithDefault("GROK_API_KEY", "") == "" {
 		ready = false
 		services["ai_engines"] = false
 	} else {
@@ -289,8 +289,8 @@ func Ready(c *gin.Context) {
 	}
 
 	c.JSON(status, gin.H{
-		"ready":    ready,
-		"services": services,
+		"ready":     ready,
+		"services":  services,
 		"timestamp": time.Now(),
 	})
 }
@@ -307,9 +307,9 @@ func Ready(c *gin.Context) {
 func Live(c *gin.Context) {
 	// 簡單的存活檢查
 	c.JSON(http.StatusOK, gin.H{
-		"alive": true,
+		"alive":     true,
 		"timestamp": time.Now(),
-		"uptime": time.Since(monitorStartTime).Round(time.Second).String(),
+		"uptime":    time.Since(MonitorStartTime).Round(time.Second).String(),
 	})
 }
 

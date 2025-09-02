@@ -1,9 +1,9 @@
 package routes
 
 import (
-	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/handlers"
 	"github.com/clarencetw/thewavess-ai-core/middleware"
+	"github.com/gin-gonic/gin"
 )
 
 // SetupRoutes 設置所有 API 路由
@@ -21,7 +21,6 @@ func SetupRoutes(router *gin.RouterGroup) {
 		monitor.GET("/stats", handlers.GetSystemStats)
 		monitor.GET("/metrics", handlers.GetMetrics)
 	}
-	
 
 	// 認證路由（無需認證）
 	auth := router.Group("/auth")
@@ -46,12 +45,8 @@ func SetupRoutes(router *gin.RouterGroup) {
 	{
 		user.GET("/profile", handlers.GetUserProfile)
 		user.PUT("/profile", handlers.UpdateUserProfile)
-		user.GET("/preferences", handlers.GetUserPreferences)
-		user.PUT("/preferences", handlers.UpdateUserPreferences)
 		user.POST("/avatar", handlers.UploadAvatar)
 		user.DELETE("/account", handlers.DeleteAccount)
-		user.POST("/verify", handlers.VerifyAge)
-		// 用戶角色選擇已移除，改為直接使用角色ID
 	}
 
 	// 公開的角色端點（無需認證）
@@ -61,81 +56,43 @@ func SetupRoutes(router *gin.RouterGroup) {
 		publicCharacter.GET("/search", handlers.SearchCharacters)
 		publicCharacter.GET("/:id", handlers.GetCharacterByID)
 		publicCharacter.GET("/:id/stats", handlers.GetCharacterStats)
-		publicCharacter.GET("/nsfw-guideline/:level", handlers.GetNSFWGuideline)
 	}
 
 	// 需要認證的角色端點
 	character := authenticated.Group("/character")
 	{
-		// 基礎角色管理（需要管理員權限）
-		character.POST("", middleware.AdminMiddleware(), handlers.CreateCharacter)
-		character.PUT("/:id", middleware.AdminMiddleware(), handlers.UpdateCharacter)
-		character.DELETE("/:id", middleware.AdminMiddleware(), handlers.DeleteCharacter)
-		
+		// 基礎角色管理（一般用戶可以創建和管理自己的角色）
+		character.POST("", handlers.CreateCharacter)
+		character.PUT("/:id", handlers.UpdateCharacter)
+		character.DELETE("/:id", handlers.DeleteCharacter)
+
 		// 角色配置管理（一般用戶可查看，管理員可修改）
 		character.GET("/:id/profile", handlers.GetCharacterProfile)
-		character.GET("/:id/speech-styles", handlers.GetCharacterSpeechStyles)
-		character.GET("/:id/speech-styles/best", handlers.GetBestSpeechStyle)
-		character.GET("/:id/scenes", handlers.GetCharacterScenes)
 	}
 
 	// 對話管理路由
-	chat := authenticated.Group("/chat")
+	chats := authenticated.Group("/chats")
 	{
-		chat.POST("/session", handlers.CreateChatSession)
-		chat.GET("/session/:session_id", handlers.GetChatSession)
-		chat.GET("/sessions", handlers.GetChatSessions)
-		chat.POST("/message", handlers.SendMessage)
-		chat.GET("/session/:session_id/history", handlers.GetMessageHistory)
-		chat.DELETE("/session/:session_id", handlers.DeleteChatSession)
-		chat.PUT("/session/:session_id/mode", handlers.UpdateSessionMode)
-		chat.POST("/session/:session_id/tag", handlers.AddSessionTag)
-		chat.GET("/session/:session_id/export", handlers.ExportChatSession)
-		chat.POST("/regenerate", handlers.RegenerateResponse)
+		chats.POST("", handlers.CreateChatSession)
+		chats.GET("/:chat_id", handlers.GetChatSession)
+		chats.GET("", handlers.GetChatSessions)
+		chats.POST("/:chat_id/messages", handlers.SendMessage)
+		chats.GET("/:chat_id/history", handlers.GetMessageHistory)
+		chats.DELETE("/:chat_id", handlers.DeleteChatSession)
+		chats.PUT("/:chat_id/mode", handlers.UpdateSessionMode)
+		chats.GET("/:chat_id/export", handlers.ExportChatSession)
+		chats.POST("/:chat_id/messages/:message_id/regenerate", handlers.RegenerateResponse)
 	}
 
-	// 標籤系統路由（公開）
-	tags := router.Group("/tags")
+	// 關係系統路由 - 統一使用chat_id在URL路徑中
+	relationships := authenticated.Group("/relationships/chat/:chat_id")
 	{
-		tags.GET("", handlers.GetAllTags)
-		tags.GET("/popular", handlers.GetPopularTags)
+		relationships.GET("/status", handlers.GetRelationshipStatus)
+		relationships.GET("/affection", handlers.GetAffectionLevel)
+		relationships.GET("/history", handlers.GetRelationshipHistory)
 	}
 
-	// 情感系統路由
-	emotion := authenticated.Group("/emotion")
-	{
-		emotion.GET("/status", handlers.GetEmotionStatus)
-		emotion.GET("/affection", handlers.GetAffectionLevel)
-		emotion.POST("/event", handlers.TriggerEmotionEvent)
-		emotion.GET("/affection/history", handlers.GetAffectionHistory)
-		emotion.GET("/milestones", handlers.GetRelationshipMilestones)
-	}
-
-	// 記憶系統路由
-	memory := authenticated.Group("/memory")
-	{
-		memory.GET("/timeline", handlers.GetMemoryTimeline)
-		memory.POST("/save", handlers.SaveMemory)
-		memory.GET("/search", handlers.SearchMemory)
-		memory.GET("/user/:id", handlers.GetUserMemory)
-		memory.DELETE("/forget", handlers.ForgetMemory)
-		memory.GET("/stats", handlers.GetMemoryStats)
-		memory.POST("/backup", handlers.BackupMemory)
-		memory.POST("/restore", handlers.RestoreMemory)
-	}
-
-	// 小說模式路由
-	novel := authenticated.Group("/novel")
-	{
-		novel.POST("/start", handlers.StartNovel)
-		novel.POST("/choice", handlers.MakeNovelChoice)
-		novel.GET("/progress/:novel_id", handlers.GetNovelProgress)
-		novel.GET("/list", handlers.GetNovelList)
-		novel.POST("/progress/save", handlers.SaveNovelProgress)
-		novel.GET("/progress/list", handlers.GetNovelSaveList)
-		novel.GET("/:id/stats", handlers.GetNovelStats)
-		novel.DELETE("/progress/:id", handlers.DeleteNovelSave)
-	}
+	// 小說模式已移除
 
 	// 搜尋功能路由
 	search := authenticated.Group("/search")
@@ -156,20 +113,48 @@ func SetupRoutes(router *gin.RouterGroup) {
 		publicTTS.GET("/voices", handlers.GetVoiceList)
 	}
 
-	// 管理系統路由（需要認證）
-	admin := authenticated.Group("/admin")
+	// 管理員認證路由（無需認證）
+	adminAuth := router.Group("/admin/auth")
 	{
-		admin.GET("/stats", handlers.GetAdminStats)
-		admin.GET("/logs", handlers.GetAdminLogs)
-		
-		// 用戶管理路由
-		admin.GET("/users", handlers.GetAdminUsers)
-		admin.PUT("/users/:id", handlers.UpdateAdminUser)
-		admin.PUT("/users/:id/password", handlers.UpdateAdminUserPassword)
+		adminAuth.POST("/login", handlers.AdminLogin)
 	}
 
 
-	// TODO: 添加其他模組路由
-	// - 通知系統路由
-	// - 資料分析路由
+	// 管理員API路由（需要管理員認證）- 保留必要的AJAX API
+	adminAPI := router.Group("/admin")
+	adminAPI.Use(middleware.AdminMiddleware())
+	{
+		// 統計資料API（AJAX用）
+		adminAPI.GET("/stats", handlers.GetAdminStats)
+		
+		// 系統日誌API（AJAX用）
+		adminAPI.GET("/logs", handlers.GetAdminLogs)
+		
+		// 用戶管理API（AJAX用）
+		adminAPI.GET("/users", handlers.GetAdminUsers)
+		adminAPI.GET("/users/:id", handlers.GetAdminUserByID)
+		adminAPI.PUT("/users/:id", handlers.UpdateAdminUser)
+		adminAPI.PUT("/users/:id/password", handlers.UpdateAdminUserPassword)
+		adminAPI.PUT("/users/:id/status", handlers.UpdateAdminUserStatus)
+		
+		// 聊天記錄API（AJAX用）
+		adminAPI.GET("/chats", handlers.AdminSearchChats)
+		adminAPI.GET("/chats/:chat_id/history", handlers.AdminGetChatHistory)
+		
+		// 角色管理API（AJAX用）
+		adminAPI.PUT("/character/:id/status", handlers.UpdateCharacterStatus)
+		adminAPI.GET("/characters", handlers.AdminGetCharacters)
+		adminAPI.GET("/characters/:id", handlers.AdminGetCharacterByID)
+		adminAPI.PUT("/characters/:id", handlers.AdminUpdateCharacter)
+		adminAPI.POST("/characters/:id/restore", handlers.AdminRestoreCharacter)
+		adminAPI.DELETE("/characters/:id/permanent", handlers.AdminPermanentDeleteCharacter)
+
+		// 管理員管理API（僅超級管理員可訪問）
+		adminManagement := adminAPI.Group("/admins")
+		adminManagement.Use(middleware.RequireSuperAdmin())
+		{
+			adminManagement.GET("", handlers.GetAdminList)
+			adminManagement.POST("", handlers.CreateAdmin)
+		}
+	}
 }

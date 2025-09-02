@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"runtime"
 
-	"github.com/gin-gonic/gin"
 	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/utils"
+	"github.com/gin-gonic/gin"
 )
 
 // GetVersion godoc
@@ -15,13 +15,14 @@ import (
 // @Tags         System
 // @Accept       json
 // @Produce      json
-// @Success      200 {object} models.APIResponse
+// @Success      200 {object} models.APIResponse{data=object} "版本資訊"
+// @Failure      500 {object} models.APIResponse{error=models.APIError} "伺服器錯誤"
 // @Router       /version [get]
 func GetVersion(c *gin.Context) {
-	// 獲取環境變數或使用默認值
-	version := "1.0.0"
-	buildTime := "2025-08-16T00:00:00Z"
-	gitCommit := "latest"
+	// 從環境變數或構建時變數獲取真實資訊
+	version := utils.GetEnvWithDefault("APP_VERSION", "1.0.0")
+	buildTime := utils.GetEnvWithDefault("BUILD_TIME", utils.GetCurrentTimestampString())
+	gitCommit := utils.GetEnvWithDefault("GIT_COMMIT", "unknown")
 	environment := utils.GetEnvWithDefault("ENVIRONMENT", "development")
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -43,7 +44,8 @@ func GetVersion(c *gin.Context) {
 // @Tags         System
 // @Accept       json
 // @Produce      json
-// @Success      200 {object} models.APIResponse
+// @Success      200 {object} models.APIResponse{data=object} "系統狀態"
+// @Failure      500 {object} models.APIResponse{error=models.APIError} "伺服器錯誤"
 // @Router       /status [get]
 func GetStatus(c *gin.Context) {
 	// 系統內存統計
@@ -71,7 +73,7 @@ func GetStatus(c *gin.Context) {
 		grokStatus = "configured"
 	}
 
-	// 計算內存使用率 (簡化)
+	// 計算內存使用率
 	memUsageMB := float64(m.Alloc) / 1024 / 1024
 
 	c.JSON(http.StatusOK, models.APIResponse{

@@ -4,9 +4,9 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/gin-gonic/gin"
 	"github.com/go-playground/validator/v10"
-	"github.com/clarencetw/thewavess-ai-core/models"
 )
 
 // ValidationHelper 提供統一的驗證錯誤處理
@@ -47,10 +47,10 @@ func (v *ValidationHelper) HandleValidationError(c *gin.Context, err error) {
 // formatValidationErrors 格式化驗證錯誤為友好的中文消息
 func (v *ValidationHelper) formatValidationErrors(errs validator.ValidationErrors) string {
 	var messages []string
-	
+
 	for _, err := range errs {
 		fieldName := v.getChineseFieldName(err.Field())
-		
+
 		var message string
 		switch err.Tag() {
 		case "required":
@@ -78,7 +78,7 @@ func (v *ValidationHelper) formatValidationErrors(errs validator.ValidationError
 		}
 		messages = append(messages, message)
 	}
-	
+
 	return strings.Join(messages, "; ")
 }
 
@@ -96,7 +96,6 @@ func (v *ValidationHelper) getChineseFieldName(field string) string {
 		"Description": "描述",
 		"Background":  "背景",
 		"Tone":        "語氣",
-		"StyleType":   "語言風格",
 		"SceneType":   "場景類型",
 		"TimeOfDay":   "時間",
 		"StateKey":    "狀態鍵",
@@ -109,7 +108,7 @@ func (v *ValidationHelper) getChineseFieldName(field string) string {
 		"PageSize":    "每頁數量",
 		"SortOrder":   "排序方式",
 	}
-	
+
 	if chinese, exists := fieldMap[field]; exists {
 		return chinese
 	}

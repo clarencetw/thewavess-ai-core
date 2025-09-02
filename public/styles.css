@@ -1,0 +1,75 @@
+/* Thewavess AI Core - 純 Tailwind CSS */
+
+/* 所有樣式都使用 Tailwind utility classes */
+/* 如需載入動畫：animate-spin */
+/* 如需 pulse 動畫：animate-pulse */ 
+/* 如需 disabled 狀態：opacity-50 cursor-not-allowed */
+/* 如需 fade 效果：transition-opacity duration-300 */
+
+/* =============================================================================
+ * 管理頁面導航樣式
+ * ============================================================================= */
+
+/* 導航連結基本樣式 */
+.nav-link {
+    @apply px-3 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-200;
+}
+
+/* 導航連結活躍狀態 */
+.nav-link.active {
+    @apply text-blue-600 bg-blue-50 font-medium;
+}
+
+/* 行動版導航連結基本樣式 */
+.mobile-nav-link {
+    @apply block px-3 py-2 text-sm text-gray-600 hover:text-blue-600 hover:bg-blue-50 rounded-md transition-colors duration-200;
+}
+
+/* 行動版導航連結活躍狀態 */
+.mobile-nav-link.active {
+    @apply text-blue-600 bg-blue-50 font-medium;
+}
+
+/* =============================================================================
+ * 表格樣式優化
+ * ============================================================================= */
+
+/* 表格懸停效果優化 */
+.hover\:bg-gray-50:hover {
+    @apply bg-gray-50;
+}
+
+/* 狀態標籤樣式 */
+.status-badge {
+    @apply px-2 py-1 text-xs font-semibold rounded-full;
+}
+
+/* =============================================================================
+ * 載入動畫
+ * ============================================================================= */
+
+/* 旋轉載入動畫 */
+@keyframes spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+    animation: spin 1s linear infinite;
+}
+
+/* =============================================================================
+ * 響應式調整
+ * ============================================================================= */
+
+/* 確保小螢幕上表格橫向捲動 */
+.overflow-x-auto {
+    @apply overflow-x-auto;
+}
+
+/* 確保模態框在小螢幕上的適當顯示 */
+@media (max-width: 640px) {
+    .modal-content {
+        @apply m-4 w-auto;
+    }
+}

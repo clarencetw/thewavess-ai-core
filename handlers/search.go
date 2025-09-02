@@ -1,19 +1,19 @@
 package handlers
 
 import (
-    "context"
-    "fmt"
-    "net/http"
-    "strconv"
-    "strings"
-    "time"
+	"context"
+	"fmt"
+	"net/http"
+	"strconv"
+	"strings"
+	"time"
 
-    "github.com/gin-gonic/gin"
-    "github.com/uptrace/bun"
-    "github.com/clarencetw/thewavess-ai-core/models"
-    dbmodel "github.com/clarencetw/thewavess-ai-core/models/db"
-    "github.com/clarencetw/thewavess-ai-core/services"
-    "github.com/clarencetw/thewavess-ai-core/utils"
+	"github.com/clarencetw/thewavess-ai-core/models"
+	dbmodel "github.com/clarencetw/thewavess-ai-core/models/db"
+	"github.com/clarencetw/thewavess-ai-core/services"
+	"github.com/clarencetw/thewavess-ai-core/utils"
+	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
 // 使用全局character service實例
@@ -23,7 +23,7 @@ func getCharacterServiceForSearch() *services.CharacterService {
 
 // SearchChats godoc
 // @Summary      搜尋對話
-// @Description  搜尋對話歷史記錄
+// @Description  用戶搜尋自己的對話歷史記錄
 // @Tags         Search
 // @Accept       json
 // @Produce      json
@@ -40,7 +40,7 @@ func SearchChats(c *gin.Context) {
 	startTime := time.Now()
 	ctx := context.Background()
 
-	// 從中間件獲取用戶ID
+	// 檢查用戶認證
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, models.APIResponse{
@@ -85,10 +85,10 @@ func SearchChats(c *gin.Context) {
 		}
 	}
 
-	// 執行搜尋
+	// 執行用戶搜尋
 	results, totalCount, facets, err := searchChatMessages(ctx, userID.(string), query, characterID, dateFrom, dateTo, page, limit)
 	if err != nil {
-		utils.Logger.WithError(err).Error("搜尋對話失敗")
+		utils.Logger.WithError(err).WithField("user_id", userID).Error("搜尋對話失敗")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
@@ -101,6 +101,13 @@ func SearchChats(c *gin.Context) {
 
 	totalPages := (totalCount + limit - 1) / limit
 	searchTime := time.Since(startTime)
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"user_id":     userID,
+		"query":       query,
+		"total_found": totalCount,
+		"search_time": searchTime.Milliseconds(),
+	}).Info("用戶執行聊天搜尋")
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
@@ -122,6 +129,7 @@ func SearchChats(c *gin.Context) {
 	})
 }
 
+
 // searchChatMessages performs the actual database search for chat messages
 func searchChatMessages(ctx context.Context, userID, query, characterID, dateFrom, dateTo string, page, limit int) ([]gin.H, int, gin.H, error) {
 	db := GetDB()
@@ -130,22 +138,21 @@ func searchChatMessages(ctx context.Context, userID, query, characterID, dateFro
 	}
 
 	// Base query for messages with session information
-    baseQuery := GetDB().NewSelect().
-        // 使用 DB 模型以取得正確的表別名 (m)
-        Model((*dbmodel.MessageDB)(nil)).
-        Column("m.id", "m.session_id", "m.role", "m.content", "m.scene_description", "m.character_action", "m.nsfw_level", "m.created_at").
-        Column("cs.title", "cs.character_id").
-        Column("c.name", "c.avatar_url").
-        Join("JOIN chat_sessions cs ON cs.id = m.session_id").
-        Join("JOIN characters c ON c.id = cs.character_id").
-        Where("cs.user_id = ?", userID).
-        Where("cs.status != ?", "deleted")
+	baseQuery := GetDB().NewSelect().
+		// 使用 DB 模型以取得正確的表別名 (m)
+		Model((*dbmodel.MessageDB)(nil)).
+		Column("m.id", "m.chat_id", "m.role", "m.dialogue", "m.scene_description", "m.action", "m.nsfw_level", "m.created_at").
+		Column("cs.title", "cs.character_id", "cs.user_id").
+		Column("c.name", "c.avatar_url").
+		Join("JOIN chats cs ON cs.id = m.chat_id").
+		Join("JOIN characters c ON c.id = cs.character_id").
+		Where("cs.status != ?", "deleted")
+	
+	// 限制為特定用戶的記錄
+	baseQuery = baseQuery.Where("cs.user_id = ?", userID)
 
 	// Add full-text search on message content
-	if query != "" {
-		// Use PostgreSQL full-text search
-		baseQuery = baseQuery.Where("to_tsvector('simple', m.content) @@ plainto_tsquery('simple', ?)", query)
-	}
+	baseQuery = baseQuery.Where("to_tsvector('simple', m.dialogue) @@ plainto_tsquery('simple', ?)", query)
 
 	// Apply filters
 	if characterID != "" {
@@ -169,13 +176,14 @@ func searchChatMessages(ctx context.Context, userID, query, characterID, dateFro
 
 	// Apply pagination and ordering
 	offset := (page - 1) * limit
-    var results []struct {
-        dbmodel.MessageDB
-        SessionTitle   string `bun:"title"`
-        CharacterID    string `bun:"character_id"`
-        CharacterName  string `bun:"name"`
-        CharacterAvatar string `bun:"avatar_url"`
-    }
+	var results []struct {
+		dbmodel.MessageDB
+		SessionTitle    string `bun:"title"`
+		CharacterID     string `bun:"character_id"`
+		UserID          string `bun:"user_id"`
+		CharacterName   string `bun:"name"`
+		CharacterAvatar string `bun:"avatar_url"`
+	}
 
 	err = baseQuery.
 		Order("m.created_at DESC").
@@ -194,21 +202,22 @@ func searchChatMessages(ctx context.Context, userID, query, characterID, dateFro
 
 	for i, result := range results {
 		searchResults[i] = gin.H{
-			"id":               result.ID,
-			"session_id":       result.SessionID,
-			"session_title":    result.SessionTitle,
-			"role":             result.Role,
-			"content":          result.Content,
+			"id":                result.ID,
+			"chat_id":           result.ChatID,
+			"chat_title":        result.SessionTitle,
+			"user_id":           result.UserID,
+			"role":              result.Role,
+			"dialogue":          result.Dialogue,
 			"scene_description": result.SceneDescription,
-			"character_action": result.CharacterAction,
-			"nsfw_level":       result.NSFWLevel,
-			"created_at":       result.CreatedAt,
+			"action":            result.Action,
+			"nsfw_level":        result.NSFWLevel,
+			"created_at":        result.CreatedAt,
 			"character": gin.H{
 				"id":         result.CharacterID,
 				"name":       result.CharacterName,
 				"avatar_url": result.CharacterAvatar,
 			},
-			"relevance": calculateSearchRelevance(result.Content, query),
+			"relevance": calculateSearchRelevance(result.Dialogue, query),
 		}
 
 		// Count facets
@@ -218,7 +227,7 @@ func searchChatMessages(ctx context.Context, userID, query, characterID, dateFro
 
 	// Build facets for filtering
 	facets := gin.H{
-		"characters": characterCounts,
+		"characters":  characterCounts,
 		"nsfw_levels": nsfw_level_counts,
 	}
 
@@ -259,7 +268,7 @@ func calculateSearchRelevance(content, query string) float64 {
 	return 0.1
 }
 
-// GlobalSearch godoc  
+// GlobalSearch godoc
 // @Summary      全局搜尋
 // @Description  在所有內容中搜尋（對話、角色、記憶等）
 // @Tags         Search
@@ -343,7 +352,7 @@ func performGlobalSearch(ctx context.Context, userID, query, typeFilter string) 
 			return nil, fmt.Errorf("chat search failed: %w", err)
 		}
 		categories["chats"] = gin.H{
-			"count": count,
+			"count":       count,
 			"top_results": chatResults,
 		}
 		totalResults += count
@@ -356,32 +365,21 @@ func performGlobalSearch(ctx context.Context, userID, query, typeFilter string) 
 			return nil, fmt.Errorf("character search failed: %w", err)
 		}
 		categories["characters"] = gin.H{
-			"count": count,
+			"count":       count,
 			"top_results": characterResults,
 		}
 		totalResults += count
 	}
 
-	// Search in memories if type filter allows
-	if typeFilter == "" || typeFilter == "all" || typeFilter == "memories" {
-		memoryResults, count, err := searchInMemories(ctx, db, userID, query)
-		if err != nil {
-			return nil, fmt.Errorf("memory search failed: %w", err)
-		}
-		categories["memories"] = gin.H{
-			"count": count,
-			"top_results": memoryResults,
-		}
-		totalResults += count
-	}
+	// Memory search removed - functionality integrated into relationships.emotion_data
 
 	// Generate search suggestions based on query
 	suggestions := generateSearchSuggestions(query)
 
 	results := gin.H{
-		"categories": categories,
+		"categories":    categories,
 		"total_results": totalResults,
-		"suggestions": suggestions,
+		"suggestions":   suggestions,
 	}
 
 	return results, nil
@@ -389,24 +387,24 @@ func performGlobalSearch(ctx context.Context, userID, query, typeFilter string) 
 
 // searchInChats searches for messages in chat sessions
 func searchInChats(ctx context.Context, db *bun.DB, userID, query string) ([]gin.H, int, error) {
-    var results []struct {
-        dbmodel.MessageDB
-        SessionTitle   string `bun:"title"`
-        CharacterName  string `bun:"name"`
-    }
+	var results []struct {
+		dbmodel.MessageDB
+		SessionTitle  string `bun:"title"`
+		CharacterName string `bun:"name"`
+	}
 
 	// Search in message content
-    err := GetDB().NewSelect().
-        // 使用 DB 模型以取得正確的表別名 (m)
-        Model((*dbmodel.MessageDB)(nil)).
-        Column("m.id", "m.session_id", "m.content", "m.created_at").
-        Column("cs.title").
-        Column("c.name").
-        Join("JOIN chat_sessions cs ON cs.id = m.session_id").
-        Join("JOIN characters c ON c.id = cs.character_id").
+	err := GetDB().NewSelect().
+		// 使用 DB 模型以取得正確的表別名 (m)
+		Model((*dbmodel.MessageDB)(nil)).
+		Column("m.id", "m.chat_id", "m.dialogue", "m.created_at").
+		Column("cs.title").
+		Column("c.name").
+		Join("JOIN chats cs ON cs.id = m.chat_id").
+		Join("JOIN characters c ON c.id = cs.character_id").
 		Where("cs.user_id = ?", userID).
 		Where("cs.status != ?", "deleted").
-		Where("to_tsvector('simple', m.content) @@ plainto_tsquery('simple', ?)", query).
+		Where("to_tsvector('simple', m.dialogue) @@ plainto_tsquery('simple', ?)", query).
 		Order("m.created_at DESC").
 		Limit(5).
 		Scan(ctx, &results)
@@ -418,18 +416,18 @@ func searchInChats(ctx context.Context, db *bun.DB, userID, query string) ([]gin
 	// Convert to response format
 	chatResults := make([]gin.H, len(results))
 	for i, result := range results {
-		excerpt := result.Content
+		excerpt := result.Dialogue
 		if len(excerpt) > 100 {
 			excerpt = excerpt[:100] + "..."
 		}
 
 		chatResults[i] = gin.H{
-			"id":        result.SessionID,
-			"title":     result.SessionTitle,
-			"excerpt":   excerpt,
-			"type":      "chat_session",
-			"relevance": calculateSearchRelevance(result.Content, query),
-			"character": result.CharacterName,
+			"id":         result.ChatID,
+			"title":      result.SessionTitle,
+			"excerpt":    excerpt,
+			"type":       "chat_session",
+			"relevance":  calculateSearchRelevance(result.Dialogue, query),
+			"character":  result.CharacterName,
 			"created_at": result.CreatedAt,
 		}
 	}
@@ -449,33 +447,23 @@ func searchInCharacters(ctx context.Context, db *bun.DB, query string) ([]gin.H,
 	// Convert to response format
 	characterResults := make([]gin.H, len(characters))
 	for i, char := range characters {
-		description := ""
-		if char.Metadata.Description != nil {
-			description = *char.Metadata.Description
-		}
+		description := "基本角色描述"
 		excerpt := description
 		if len(excerpt) > 100 {
 			excerpt = excerpt[:100] + "..."
 		}
 
 		characterResults[i] = gin.H{
-			"id":        char.ID,
-			"name":      char.Name,
-			"excerpt":   excerpt,
-			"type":      "character",
-			"relevance": calculateSearchRelevance(char.Name+" "+description, query),
+			"id":         char.ID,
+			"name":       char.Name,
+			"excerpt":    excerpt,
+			"type":       "character",
+			"relevance":  calculateSearchRelevance(char.Name+" "+description, query),
 			"avatar_url": char.Metadata.AvatarURL,
 		}
 	}
 
 	return characterResults, len(characters), nil
-}
-
-// searchInMemories searches in memory content
-func searchInMemories(ctx context.Context, db *bun.DB, userID, query string) ([]gin.H, int, error) {
-	// For now, return empty results as memory search is complex
-	// This would require implementing memory storage tables first
-	return []gin.H{}, 0, nil
 }
 
 // generateSearchSuggestions creates related search suggestions
@@ -485,14 +473,14 @@ func generateSearchSuggestions(query string) []string {
 
 	queryLower := strings.ToLower(query)
 	commonSuggestions := map[string][]string{
-		"愛":   {"愛情", "戀愛", "愛好"},
-		"工作":  {"職場", "事業", "工作環境"},
-		"生活":  {"日常生活", "生活方式", "生活習慣"},
-		"音樂":  {"喜歡的音樂", "音樂偏好", "歌曲"},
-		"電影":  {"電影類型", "最愛電影", "觀影習慣"},
-		"旅行":  {"旅遊地點", "旅行經驗", "度假"},
-		"食物":  {"美食", "料理", "餐廳"},
-		"運動":  {"健身", "體育活動", "運動習慣"},
+		"愛":  {"愛情", "戀愛", "愛好"},
+		"工作": {"職場", "事業", "工作環境"},
+		"生活": {"日常生活", "生活方式", "生活習慣"},
+		"音樂": {"喜歡的音樂", "音樂偏好", "歌曲"},
+		"電影": {"電影類型", "最愛電影", "觀影習慣"},
+		"旅行": {"旅遊地點", "旅行經驗", "度假"},
+		"食物": {"美食", "料理", "餐廳"},
+		"運動": {"健身", "體育活動", "運動習慣"},
 	}
 
 	for keyword, related := range commonSuggestions {

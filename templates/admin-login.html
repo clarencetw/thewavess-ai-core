@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{if .Title}}{{.Title}} - Thewavess AI{{else}}Thewavess AI{{end}}</title>
+    
+    <!-- Essential CDN Resources -->
+    <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/axios/1.11.0/axios.min.js"></script>
+    
+    <!-- Local CSS and JS -->
+    <link href="/public/styles.css" rel="stylesheet">
+    <script src="/public/app.js"></script>
+</head>
+<body class="{{if .BodyClass}}{{.BodyClass}}{{else}}bg-gray-50 min-h-screen{{end}}">
+    <div class="max-w-md w-full mx-4">
+        <!-- Logo/Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-2xl font-bold text-gray-900 mb-2">
+                <i class="fas fa-shield-alt text-blue-600 mr-2"></i>
+                Thewavess AI
+            </h1>
+            <p class="text-gray-600">管理員後台</p>
+        </div>
+
+        <!-- Login Form -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-8">
+            <h2 class="text-xl font-semibold text-gray-900 mb-6 text-center">管理員登入</h2>
+            
+            <!-- Error Alert -->
+            <div id="errorAlert" class="hidden mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                <div class="flex">
+                    <i class="fas fa-exclamation-circle text-red-500 mr-2"></i>
+                    <span id="errorAlertMessage" class="text-red-700 text-sm"></span>
+                </div>
+            </div>
+
+            <form id="loginForm">
+                <!-- Username -->
+                <div class="mb-4">
+                    <label for="username" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-user mr-1"></i>用戶名
+                    </label>
+                    <input type="text" id="username" name="username" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="請輸入管理員用戶名">
+                </div>
+
+                <!-- Password -->
+                <div class="mb-6">
+                    <label for="password" class="block text-sm font-medium text-gray-700 mb-2">
+                        <i class="fas fa-lock mr-1"></i>密碼
+                    </label>
+                    <input type="password" id="password" name="password" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                           placeholder="請輸入密碼">
+                </div>
+
+                <!-- Login Button -->
+                <button type="submit" id="loginBtn"
+                        class="w-full py-3 px-4 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 transition-colors">
+                    <span id="loginBtnText">
+                        <i class="fas fa-sign-in-alt mr-2"></i>登入
+                    </span>
+                    <span id="loginLoading" class="hidden">
+                        <i class="fas fa-spinner animate-spin mr-2"></i>登入中...
+                    </span>
+                </button>
+            </form>
+
+            <!-- Footer Info -->
+            <div class="mt-6 text-center text-sm text-gray-500">
+                <p>請使用管理員帳號登入</p>
+                <p class="mt-1 text-xs text-gray-500">如需帳號請聯繫系統管理員</p>
+            </div>
+        </div>
+
+        <!-- Quick Links -->
+        <div class="mt-8 text-center">
+            <a href="/" class="text-blue-600 hover:text-blue-700 text-sm">
+                <i class="fas fa-arrow-left mr-1"></i>返回首頁
+            </a>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginForm = document.getElementById('loginForm');
+
+            // Check authentication status and redirect if authenticated
+            if (API.isAuthenticated()) {
+                console.log('🔐 已有登入狀態，驗證token有效性...');
+                
+                // Test token validity by calling stats API
+                API.admin.getStats()
+                    .then(response => {
+                        if (response.success) {
+                            console.log('✅ 管理員Token驗證成功，重導向到儀表板');
+                            window.location.href = '/admin/dashboard';
+                        } else {
+                            console.log('❌ Token驗證失敗，清除本地認證狀態');
+                            API.clearAuth();
+                        }
+                    })
+                    .catch(error => {
+                        console.log('❌ Token已失效，清除本地認證狀態');
+                        API.clearAuth();
+                    });
+            }
+
+            // Handle login form submission
+            loginForm.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                
+                // Hide error message
+                Utils.hideById('errorAlert');
+                
+                // Show loading state
+                const loginBtn = document.getElementById('loginBtn');
+                const loginBtnText = document.getElementById('loginBtnText');
+                const loginLoading = document.getElementById('loginLoading');
+                
+                loginBtn.disabled = true;
+                Utils.hide(loginBtnText);
+                Utils.show(loginLoading);
+
+                const formData = new FormData(loginForm);
+                const result = await API.auth.login(
+                    formData.get('username'),
+                    formData.get('password')
+                );
+
+                if (result.success) {
+                    console.log('🎉 登入成功，跳轉到儀表板');
+                    window.location.href = '/admin/dashboard';
+                } else {
+                    console.error('❌ 登入失敗:', result.message);
+                    // Show error message
+                    const errorAlert = document.getElementById('errorAlert');
+                    const errorMessage = document.getElementById('errorAlertMessage');
+                    if (errorAlert && errorMessage) {
+                        errorMessage.textContent = result.message || '登入失敗';
+                        Utils.show(errorAlert);
+                    }
+                }
+                
+                // Reset button state
+                loginBtn.disabled = false;
+                Utils.show(loginBtnText);
+                Utils.hide(loginLoading);
+            });
+        });
+    </script>
+</body>
+</html>

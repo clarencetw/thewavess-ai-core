@@ -1,9 +1,5 @@
 # 🤖 Thewavess AI Core
 
-專為成人用戶設計的 AI 聊天後端服務。此版本的 README 已對齊實際程式碼與端點，API 與開發進度請以 [API_PROGRESS.md](./API_PROGRESS.md) 與 Swagger 為準。
-
-徽章：Go 1.23+ | Swagger 可用 | Docker 支援
-
 —
 
 ## 重要說明
@@ -11,7 +7,7 @@
 - 端點、狀態與可用性以下列來源為準：
   - API 進度與可用性：[API_PROGRESS.md](./API_PROGRESS.md)
   - 即時 API 參考：/swagger/index.html（自動生成）
-  - 測試腳本：[test_api.sh](./test_api.sh)
+  - 統一測試工具：[tests/test-all.sh](./tests/test-all.sh)
 - 本 README 移除舊版的功能宣稱與過時端點清單，僅保留經驗證的快速使用資訊。
 
 —
@@ -20,14 +16,18 @@
 
 環境需求：
 - Go 1.23+
-- PostgreSQL（可選；未連線時以精簡模式啟動）
+- PostgreSQL（必需；用於數據存儲）
 - OpenAI API Key（必填）；Grok/TTS API Key（可選）
 
 步驟：
 ```bash
 make install
-cp .env.example .env  # 至少設定 OPENAI_API_KEY
-make dev              # 生成 Swagger 並啟動服務
+cp .env.example .env     # 至少設定 OPENAI_API_KEY
+make fresh-start         # 完整設置：清理+安裝+資料庫+fixtures
+make dev                 # 生成 Swagger 並啟動服務
+
+# 可選：驗證系統運行狀態
+./tests/test-all.sh      # 執行完整測試套件 (24個測試項目，100%通過率)
 ```
 
 預設端點：
@@ -60,16 +60,16 @@ curl -H "Authorization: Bearer <TOKEN>" \
 建立聊天會話並發送訊息：
 ```bash
 # 建立會話（以實際角色 ID 為準）
-curl -sS -X POST http://localhost:8080/api/v1/chat/session \
+curl -sS -X POST http://localhost:8080/api/v1/chats \
   -H 'Authorization: Bearer <TOKEN>' \
   -H 'Content-Type: application/json' \
-  -d '{"character_id":"char_001","title":"測試對話"}'
+  -d '{"character_id":"character_01","title":"測試對話"}'
 
 # 發送訊息
-curl -sS -X POST http://localhost:8080/api/v1/chat/message \
+curl -sS -X POST http://localhost:8080/api/v1/chats/<CHAT_ID>/messages \
   -H 'Authorization: Bearer <TOKEN>' \
   -H 'Content-Type: application/json' \
-  -d '{"session_id":"<SESSION_ID>","message":"你好！"}'
+  -d '{"message":"你好！"}'
 ```
 
 更多端點與狀態說明請見 [API_PROGRESS.md](./API_PROGRESS.md) 或 Swagger。
@@ -80,7 +80,7 @@ curl -sS -X POST http://localhost:8080/api/v1/chat/message \
 
 ```
 handlers/   HTTP handlers（auth、user、chat、character、monitor 等）
-services/   核心服務（chat、nsfw、memory、tts、openai/grok 客戶端）
+services/   核心服務（chat、nsfw、emotion、tts、openai/grok 客戶端）
 routes/     路由註冊（routes.go）
 models/     資料模型
 database/   Bun 遷移與工具（cmd/bun）
@@ -94,37 +94,15 @@ bin/        編譯輸出
 
 ## 常用指令
 
-開發與執行：
+基本指令：
 ```bash
-make install   # 安裝依賴與 swag
-make dev       # 生成 Swagger 並啟動
-make run       # 僅啟動服務
-make build     # 編譯到 bin/thewavess-ai-core
+make install      # 安裝依賴與 swag  
+make dev          # 生成 Swagger 並啟動
+make fresh-start  # 完整重建（推薦首次使用）
+make quick-setup  # 快速設置（資料庫+fixtures）
 ```
 
-文件與測試：
-```bash
-make docs         # 生成 Swagger
-make test         # go test -v ./...
-make test-api     # 後台啟動並執行 test_api.sh
-```
-
-資料庫（PostgreSQL + Bun）：
-```bash
-make db-setup         # 初始化遷移表 + 遷移
-make migrate          # 執行遷移
-make migrate-status   # 查看狀態
-make migrate-down     # 回滾一次
-make fixtures         # 載入 fixtures 資料
-make fresh-start      # 完整重建（清理+安裝+資料庫+fixtures）
-make quick-setup      # 快速設置（資料庫+fixtures）
-```
-
-Docker：
-```bash
-make docker-build
-make docker-run
-```
+> 📋 完整指令說明請參考 [DEVELOPMENT.md](./DEVELOPMENT.md)
 
 —
 
@@ -150,23 +128,16 @@ make docker-run
 
 ### 系統指南
 - 角色系統：[CHARACTER_GUIDE.md](./CHARACTER_GUIDE.md)
-- 情感系統：[EMOTION_GUIDE.md](./EMOTION_GUIDE.md)
-- 記憶系統：[MEMORY_GUIDE.md](./MEMORY_GUIDE.md)
+- 關係系統：[RELATIONSHIP_GUIDE.md](./RELATIONSHIP_GUIDE.md)
 - 好感度系統：[AFFECTION_GUIDE.md](./AFFECTION_GUIDE.md)
-- NSFW 政策：[NSFW_GUIDE.md](./NSFW_GUIDE.md)
+- 聊天模式：[CHAT_MODES.md](./CHAT_MODES.md)
+- NSFW 設計指南：[NSFW_GUIDE.md](./NSFW_GUIDE.md)
 
 ### 操作指南
-- CLI 遷移指南：[CLI_MIGRATION_GUIDE.md](./CLI_MIGRATION_GUIDE.md)
 - 部署指引：[DEPLOYMENT.md](./DEPLOYMENT.md)
 - 監控指南：[MONITORING_GUIDE.md](./MONITORING_GUIDE.md)
 
 ### 開發工具
 - AI 代理配置：[AGENTS.md](./AGENTS.md)
 - Claude 使用指南：[CLAUDE.md](./CLAUDE.md)
-- 聊天流程圖：[docs/CHAT_MESSAGE_FLOW.md](./docs/CHAT_MESSAGE_FLOW.md)
-
-—
-
-## 授權與貢獻
-
-此專案採專有授權。歡迎以 Issue/PR 形式回報問題與建議；提交變更請遵循 Makefile 指令與 go fmt 風格，並附上必要測試。
+- 測試系統說明：[tests/README.md](./tests/README.md)

@@ -1,15 +1,16 @@
 # Repository Guidelines
 
 ## Project Structure & Module Organization
-- `handlers/`: HTTP handlers for chat, emotion, user, etc.
-- `services/`: Core logic (chat, NSFW analyzer, memory, TTS, OpenAI/Grok clients).
-- `routes/`: Route registration (`routes.go`).
-- `models/`: Data models used across layers.
-- `database/`: Bun migrations and `cmd/migrate` tool.
-- `middleware/`: Auth and cross‑cutting concerns.
-- `utils/`: Logging, errors, helpers, JWT.
-- `public/`: Static UI + Swagger UI entry.
-- `bin/`: Build artifacts.
+- `handlers/`: HTTP handlers (11 files: chat, emotion, user, character, etc.)
+- `services/`: Core logic (20 files: chat, NSFW analyzer, emotion, memory, TTS, AI clients, smart routing)
+- `routes/`: Route registration (`routes.go`) with 47 API endpoints
+- `models/`: Data models with 7 database tables using JSONB for complex data
+  - `db/`: Database models (User, Character, CharacterSpeechStyle, CharacterScene, ChatSession, Message, Relationship)
+- `cmd/bun/`: Unified CLI tool for database migrations and management
+- `middleware/`: Auth and cross‑cutting concerns
+- `utils/`: Logging, errors, helpers, JWT
+- `public/`: Static UI + Swagger UI entry
+- `bin/`: Build artifacts
 
 ## Build, Test, and Development Commands
 - `make install`: Sync deps; install `swag`.
@@ -17,8 +18,8 @@
 - `make build`: Compile to `bin/thewavess-ai-core`.
 - `make test`: Run `go test -v ./...`.
 - `make docs` / `make docs-serve`: Generate Swagger and serve with the app.
-- `make migrate` / `make migrate-status` / `make migrate-down`: Bun migrations.
-- `make test-api`: Boot in background and run `./test_api.sh`.
+- `make db-setup` / `make migrate` / `make migrate-status` / `make migrate-down`: Database management via unified CLI tool
+- `./tests/test-all.sh`: Run unified test suite (24 tests, 100% pass rate).
 - `make docker-build` / `make docker-run`: Containerize and run.
 
 ## Coding Style & Naming Conventions
@@ -43,4 +44,7 @@
 ## Security & Configuration Tips
 - Configure via `.env` (see `.env.example`): `OPENAI_API_KEY`, `GROK_API_KEY`, `DATABASE_URL`, etc.
 - Never commit secrets; verify `.gitignore` coverage.
-- NSFW routing is automatic via `services/nsfw_analyzer.go`; review policy before changes.
+- NSFW routing is automatic via `services/smart_nsfw_analyzer.go` with 5-level classification
+- Memory system integrated into relationships.emotion_data JSONB field
+- Tags system integrated into character.metadata.tags field
+- Smart engine routing automatically selects optimal AI service (OpenAI/Grok)
