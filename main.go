@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/gin-contrib/cors"
@@ -146,8 +147,13 @@ func main() {
 	// Initialize Gin router
 	router := gin.Default()
 
-	// Load HTML templates
-	router.LoadHTMLGlob("templates/*")
+	// Load HTML templates (if templates directory exists)
+	if templates, err := filepath.Glob("templates/*"); err == nil && len(templates) > 0 {
+		router.LoadHTMLGlob("templates/*")
+		utils.Logger.WithField("template_count", len(templates)).Info("HTML templates loaded successfully")
+	} else {
+		utils.Logger.Warn("No HTML templates found or templates directory does not exist")
+	}
 
 	// Add middleware
 	router.Use(cors.New(configureCORS()))

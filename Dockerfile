@@ -52,6 +52,9 @@ COPY --from=builder /app/docs ./docs
 # Copy public directory for web interface  
 COPY --from=builder /app/public ./public
 
+# Copy templates directory for HTML rendering
+COPY --from=builder /app/templates ./templates
+
 # Set correct ownership
 RUN chown -R appuser:appgroup /app
 
