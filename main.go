@@ -12,7 +12,7 @@ import (
 	ginSwagger "github.com/swaggo/gin-swagger"
 
 	"github.com/clarencetw/thewavess-ai-core/database"
-	_ "github.com/clarencetw/thewavess-ai-core/docs"
+	"github.com/clarencetw/thewavess-ai-core/docs"
 	"github.com/clarencetw/thewavess-ai-core/handlers/pages"
 	"github.com/clarencetw/thewavess-ai-core/middleware"
 	"github.com/clarencetw/thewavess-ai-core/routes"
@@ -41,11 +41,12 @@ var (
 
 // @host      localhost:8080
 // @BasePath  /api/v1
+// @schemes   http https
 //
 // Note: This API supports multiple environments:
 // - Local development: http://localhost:8080
 // - Development server: https://thewavess-ai-core.clarence.ltd
-// Change the host in Swagger UI as needed.
+// The host can be dynamically set based on environment.
 
 // @securityDefinitions.apikey BearerAuth
 // @in header
@@ -160,6 +161,9 @@ func main() {
 	// Static files (minimal CSS only)
 	router.Static("/public", "./public")
 
+	// Configure Swagger host dynamically based on environment
+	configureSwaggerHost()
+
 	// Swagger documentation
 	router.GET("/swagger/*any", ginSwagger.WrapHandler(swaggerFiles.Handler))
 
@@ -194,6 +198,29 @@ func main() {
 	if err := http.ListenAndServe(":8080", router); err != nil {
 		utils.Logger.WithError(err).Fatal("Failed to start server")
 	}
+}
+
+// configureSwaggerHost configures Swagger host dynamically based on environment
+func configureSwaggerHost() {
+	// Get API host from environment variable, default to localhost:8080
+	apiHost := utils.GetEnvWithDefault("API_HOST", "localhost:8080")
+	
+	// Detect if running in production/development based on host
+	var schemes []string
+	if strings.Contains(apiHost, "localhost") || strings.Contains(apiHost, "127.0.0.1") {
+		schemes = []string{"http"}
+	} else {
+		schemes = []string{"https", "http"}
+	}
+	
+	// Update Swagger info dynamically
+	docs.SwaggerInfo.Host = apiHost
+	docs.SwaggerInfo.Schemes = schemes
+	
+	utils.Logger.WithFields(map[string]interface{}{
+		"swagger_host": apiHost,
+		"schemes":      schemes,
+	}).Info("Swagger configuration updated")
 }
 
 // healthCheck godoc
