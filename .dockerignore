@@ -1,0 +1,44 @@
+# Docker ignore file
+# Exclude data directories from Docker build context
+
+# Database data volumes
+data/
+data/*
+data/postgres/data
+data/redis
+
+# Development files
+.env
+.env.local
+.env.development
+.env.production
+
+# Git files
+.git
+.gitignore
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+server.log
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+bin/
+dist/
+build/
+
+# Testing
+coverage.txt
+coverage.out
+
+# Node.js (if any frontend assets)
+node_modules/
