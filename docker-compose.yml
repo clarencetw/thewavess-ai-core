@@ -9,16 +9,18 @@ services:
         GIT_COMMIT: ${GIT_COMMIT:-unknown}
     ports:
       - "8080:8080"
+    env_file:
+      - .env
     environment:
       - GIN_MODE=release
       - GO_ENV=development
       - PORT=8080
       # Database Configuration
-      - DB_USER=thewavess
-      - DB_PASSWORD=password
-      - DB_HOST=postgres
+      - DB_USER=${DB_USER:-thewavess}
+      - DB_PASSWORD=${DB_PASSWORD:-password}
+      - DB_HOST=postgres  # Docker service name
       - DB_PORT=5432
-      - DB_NAME=thewavess_ai_core
+      - DB_NAME=${DB_NAME:-thewavess_ai_core}
       - DB_SSLMODE=disable
       # Redis Configuration  
       - REDIS_URL=redis://redis:6379/0
@@ -42,6 +44,8 @@ services:
       - CORS_EXPOSED_HEADERS=${CORS_EXPOSED_HEADERS:-}
       # TTS (Optional)
       - TTS_API_KEY=${TTS_API_KEY:-}
+      # Swagger API Host Configuration
+      - API_HOST=${API_HOST:-localhost:8080}
     depends_on:
       - postgres
       - redis
