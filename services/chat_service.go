@@ -8,7 +8,6 @@ import (
     "time"
     "sync"
 
-    "github.com/clarencetw/thewavess-ai-core/models"
     "github.com/clarencetw/thewavess-ai-core/models/db"
     "github.com/clarencetw/thewavess-ai-core/utils"
     "github.com/sirupsen/logrus"
@@ -622,7 +621,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 		return nil, fmt.Errorf("unknown AI engine: %s", engine)
 	}
 
-	// 首先嘗試 JSON 解析
+	// 首先嘗試 JSON 解析，失敗時優雅降級為純文本
 	if jsonResponse, err := s.parseJSONResponse(responseText, context, analysis.Intensity); err == nil {
 		utils.Logger.WithFields(map[string]interface{}{
 			"engine":           engine,
@@ -631,8 +630,23 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 		}).Info("成功解析 AI JSON 響應")
 		return jsonResponse, nil
 	} else {
-		utils.Logger.WithError(err).Error("JSON 解析失敗")
-		return nil, fmt.Errorf("failed to parse AI response as JSON: %w", err)
+		// 優雅降級：使用純文本作為回應內容
+		utils.Logger.WithFields(map[string]interface{}{
+			"engine":    engine,
+			"error":     err.Error(),
+			"fallback":  "pure_text",
+		}).Warn("JSON 解析失敗，降級為純文本回應")
+		
+		return &CharacterResponseData{
+			Content:       responseText,
+			JSONProcessed: false,
+			EmotionDelta:  &EmotionDelta{AffectionChange: 0},
+			Mood:          "neutral",
+			Relationship:  "unchanged",
+			IntimacyLevel: "unchanged",
+			Reasoning:     "AI response used as plain text due to JSON parsing failure",
+			Metadata:      map[string]interface{}{"fallback_reason": err.Error()},
+		}, nil
 	}
 }
 
@@ -650,10 +664,15 @@ func (s *ChatService) parseJSONResponse(responseText string, context *Conversati
         return nil, fmt.Errorf("unable to find valid JSON structure in response: %w", extractErr)
     }
 
-    if err := json.Unmarshal([]byte(extractedJSON), &jsonResp); err != nil {
+    // 清理 JSON 中的格式問題（移除數字前的 + 號）
+    cleanedJSON := strings.ReplaceAll(extractedJSON, ":  +", ": ")
+    cleanedJSON = strings.ReplaceAll(cleanedJSON, ": +", ": ")
+
+    if err := json.Unmarshal([]byte(cleanedJSON), &jsonResp); err != nil {
         utils.Logger.WithFields(map[string]interface{}{
             "original_text":  responseText,
             "extracted_json": extractedJSON,
+            "cleaned_json":   cleanedJSON,
             "parse_error":    err.Error(),
         }).Error("Failed to parse JSON response from AI")
         return nil, fmt.Errorf("JSON parsing failed: %w", err)
@@ -686,30 +705,6 @@ func (s *ChatService) parseJSONResponse(responseText string, context *Conversati
 	return response, nil
 }
 
-// SaveFallbackAssistantMessage 將 fallback 文字回應保存到資料庫（AI 失敗保底）
-func (s *ChatService) SaveFallbackAssistantMessage(ctx context.Context, request *ProcessMessageRequest, messageID string, content string) (int, error) {
-    defaultAffection := 50
-
-    // 超級簡化：直接保存 fallback 訊息，不需要複雜結構
-    message := &models.Message{
-        ID:                 messageID,
-        ChatID:             request.ChatID,
-        Role:               "assistant",
-        Dialogue:           content,
-        NSFWLevel:          1,         // fallback 固定為安全等級
-        AIEngine:           "fallback",
-        ResponseTimeMs:     0,         // fallback 回應時間固定為 0
-        CreatedAt:          time.Now(),
-    }
-
-    _, err := s.db.NewInsert().Model(message).Exec(ctx)
-    if err != nil {
-        utils.Logger.WithError(err).Error("保存 fallback 訊息失敗")
-        return defaultAffection, err
-    }
-
-    return defaultAffection, nil
-}
 
 // 已移除：cleanGrokResponse / extractJSONFromText
 // 統一改用 utils.ExtractJSONFromText 以提高精確度與一致性

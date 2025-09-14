@@ -328,7 +328,7 @@ func (s *CharacterService) GetCharacterStats(ctx context.Context, id string) (ma
 		if chatCount > 0 {
 			messageCount, err = s.store.db.NewSelect().
 				Model((*db.MessageDB)(nil)).
-				Join("JOIN chats ON chats.id = messages.chat_id").
+				Join("JOIN chats ON chats.id = message_db.chat_id").
 				Where("chats.character_id = ?", id).
 				Count(ctx)
 			if err != nil {

@@ -14,6 +14,7 @@ import (
 	"github.com/clarencetw/thewavess-ai-core/services"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/gin-gonic/gin"
+	"github.com/uptrace/bun"
 )
 
 // CreateChatSession godoc
@@ -104,68 +105,44 @@ func CreateChatSession(c *gin.Context) {
 	// 重要：必須同時創建關係記錄，否則關係端點會返回404錯誤
 	// 這確保了多會話架構中每個對話都有獨立的關係狀態
 	ctx := context.Background()
-	tx, err := GetDB().BeginTx(ctx, nil)
-	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to begin transaction")
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "DATABASE_ERROR",
-				Message: "創建聊天會話失敗",
-			},
-		})
-		return
-	}
-	defer tx.Rollback()
+	
+	// 使用 RunInTx 進行事務處理 - Bun ORM 最佳實踐
+	err = GetDB().RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
+		// 插入聊天記錄
+		_, err := tx.NewInsert().Model(&chatDB).Exec(ctx)
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to create chat session")
+			return err
+		}
 
-	// 插入聊天記錄
-	_, err = tx.NewInsert().Model(&chatDB).Exec(ctx)
-	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to create chat session")
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "DATABASE_ERROR",
-				Message: "創建聊天會話失敗",
-			},
-		})
-		return
-	}
+		// 初始化關係記錄 - 為多會話架構設置默認值
+		// 注意：ChatID 必須是指針類型 (*string)，因為數據庫模型定義為可選字段
+		relationshipDB := db.RelationshipDB{
+			ID:                 utils.GenerateRelationshipID(),
+			UserID:             userID.(string),
+			CharacterID:        req.CharacterID,
+			ChatID:             &chatID,
+			Affection:          50, // 默認好感度
+			Mood:               "neutral",
+			Relationship:       "stranger",
+			IntimacyLevel:      "casual",
+			TotalInteractions:  0,
+			LastInteraction:    time.Now(),
+			CreatedAt:          time.Now(),
+			UpdatedAt:          time.Now(),
+		}
 
-	// 初始化關係記錄 - 為多會話架構設置默認值
-	// 注意：ChatID 必須是指針類型 (*string)，因為數據庫模型定義為可選字段
-	relationshipDB := db.RelationshipDB{
-		ID:                 utils.GenerateRelationshipID(),
-		UserID:             userID.(string),
-		CharacterID:        req.CharacterID,
-		ChatID:             &chatID,
-		Affection:          50, // 默認好感度
-		Mood:               "neutral",
-		Relationship:       "stranger",
-		IntimacyLevel:      "casual",
-		TotalInteractions:  0,
-		LastInteraction:    time.Now(),
-		CreatedAt:          time.Now(),
-		UpdatedAt:          time.Now(),
-	}
+		_, err = tx.NewInsert().Model(&relationshipDB).Exec(ctx)
+		if err != nil {
+			utils.Logger.WithError(err).Error("Failed to create relationship record")
+			return err
+		}
 
-	_, err = tx.NewInsert().Model(&relationshipDB).Exec(ctx)
+		return nil
+	})
+	
 	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to create relationship record")
-		c.JSON(http.StatusInternalServerError, models.APIResponse{
-			Success: false,
-			Error: &models.APIError{
-				Code:    "DATABASE_ERROR",
-				Message: "創建關係記錄失敗",
-			},
-		})
-		return
-	}
-
-	// 提交事務
-	err = tx.Commit()
-	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to commit transaction")
+		utils.Logger.WithError(err).Error("Failed to create chat and relationship")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
@@ -509,42 +486,20 @@ func SendMessage(c *gin.Context) {
 	// 處理女性向AI對話
     chatResponse, err := chatService.ProcessMessage(context.Background(), processRequest)
     if err != nil {
-        // 判斷錯誤類型，記錄詳細資訊
-        errorType := "unknown_error"
-        if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
-            errorType = "auth_error"
-        } else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "network") {
-            errorType = "network_error"
-        } else if strings.Contains(err.Error(), "rate") || strings.Contains(err.Error(), "quota") {
-            errorType = "quota_error"
-        }
-        
         utils.Logger.WithFields(map[string]interface{}{
-            "error_type": errorType,
-            "user_id":    userID,
+            "user_id":      userID,
             "character_id": chat.CharacterID,
-            "chat_id":    chatID,
+            "chat_id":      chatID,
         }).WithError(err).Error("女性向AI對話處理失敗")
         
-        // 構建保底回應（避免 nil 導致 500）
-        fallbackContent := generateSimpleFallback(req.Message)
-        messageID := utils.GenerateMessageID()
-
-        // 使用簡化的 fallback 保存，避免重複 NSFW 分析
-        affection, saveErr := chatService.SaveFallbackAssistantMessage(context.Background(), processRequest, messageID, fallbackContent)
-        if saveErr != nil {
-            utils.Logger.WithError(saveErr).Error("保存 fallback 回應到資料庫失敗")
-        }
-
-        chatResponse = &services.ChatResponse{
-            ChatID:       chatID,
-            MessageID:    messageID,
-            Content:      fallbackContent,
-            Affection:    affection,
-            AIEngine:     "fallback",
-            NSFWLevel:    1, // fallback 預設為安全等級
-            ResponseTime: 0,
-        }
+        c.JSON(http.StatusInternalServerError, models.APIResponse{
+            Success: false,
+            Error: &models.APIError{
+                Code:    "AI_GENERATION_FAILED",
+                Message: "AI 回應生成失敗",
+            },
+        })
+        return
     }
     
     // 確保回應有效性
@@ -942,7 +897,7 @@ func ExportChatSession(c *gin.Context) {
 	err := database.GetApp().DB().NewSelect().
 		Model(&chatDB).
 		Relation("Character").
-		Where("cs.id = ? AND cs.user_id = ?", sessionID, userID).
+		Where("chat_db.id = ? AND chat_db.user_id = ?", sessionID, userID).
 		Scan(context.Background(), &chatDB)
 	if err != nil {
 		c.JSON(http.StatusNotFound, models.APIResponse{
