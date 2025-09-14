@@ -86,9 +86,10 @@ Required variables in `.env`:
 - Use Bun ORM model definitions: `bunDB.NewCreateTable().Model((*Model)(nil)).IfNotExists().Exec(ctx)`
 
 ### NSFW Content Classification
-5-level system with automated keyword detection:
-- **Levels 1-4**: OpenAI GPT-4o (including sexual descriptions)
+5-level AI-powered intelligent classification system:
+- **Levels 1-4**: OpenAI GPT-4o with GPT-5-nano classification
 - **Level 5**: Grok API (explicit content)
+- **Classification Method**: Pure AI analysis via GPT-5-nano ($0.05/1M tokens)
 - **Age Restriction**: 18+ enforced for adult content
 
 ## Commit Guidelines

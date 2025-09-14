@@ -64,7 +64,7 @@ func NewGrokClient() *GrokClient {
 
 	apiKey := utils.GetEnvWithDefault("GROK_API_KEY", "")
 	if apiKey == "" {
-		utils.Logger.Warn("GROK_API_KEY not set, using mock responses")
+		utils.Logger.Fatal("GROK_API_KEY is required but not set in environment")
 	}
 
 	// 獲取 API URL，支援 Azure 或其他自定義端點
@@ -103,11 +103,6 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		"api_configured": c.apiKey != "",
 	}).Info("Grok API request started")
 
-	// 檢查 API Key - 如果未配置，使用模擬響應
-	if c.apiKey == "" {
-		utils.Logger.WithField("service", "grok").Warn("Grok API key not configured, using mock response")
-		return c.generateMockResponse(request), nil
-	}
 
 	// 開發模式下詳細記錄 prompt 內容
 	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
@@ -404,111 +399,3 @@ func temperatureForLevel(level int) float64 {
 	}
 }
 
-// generateMockResponse 生成模擬響應（用於 API key 未配置或測試場景）
-func (c *GrokClient) generateMockResponse(request *GrokRequest) *GrokResponse {
-	// 分析完整對話上下文生成符合 NSFW 場景的智能回應
-	var mockContent string
-	userMessage := ""
-	systemPrompt := ""
-	
-	if len(request.Messages) > 0 {
-		// 獲取system prompt（通常是第一條消息）
-		if request.Messages[0].Role == "system" {
-			systemPrompt = strings.ToLower(request.Messages[0].Content)
-		}
-		
-		// 獲取最後的用戶消息
-		for i := len(request.Messages) - 1; i >= 0; i-- {
-			if request.Messages[i].Role == "user" {
-				userMessage = strings.ToLower(request.Messages[i].Content)
-				break
-			}
-		}
-		
-		// 分析NSFW等級
-		isLevel5 := strings.Contains(systemPrompt, "level 5")
-		isHighNSFW := strings.Contains(systemPrompt, "level 4") || isLevel5
-
-		// NSFW 場景的優雅回應
-		if strings.Contains(userMessage, "親密") || strings.Contains(userMessage, "靠近") {
-			if isLevel5 {
-				mockContent = "讓我們的距離更近一些...感受彼此最真實的溫度。|||[深情地凝視著你，手輕撫過你的肌膚]"
-			} else {
-				mockContent = "輕撫著你的臉頰，感受你肌膚的溫度...我想要更貼近你的心。|||[慢慢靠近，眼神溫柔而專注]"
-			}
-		} else if strings.Contains(userMessage, "擁抱") || strings.Contains(userMessage, "懷抱") {
-			mockContent = "讓我將你擁入懷中...在這個只屬於我們的空間裡，時間彷彿都靜止了。|||[輕柔地將你攬入懷中，感受彼此的心跳]"
-		} else if strings.Contains(userMessage, "吻") || strings.Contains(userMessage, "親吻") {
-			if isLevel5 {
-				mockContent = "讓我們的唇瓣相遇...在這激情的時刻，什麼都不重要了。|||[激烈而深情地親吻著你]"
-			} else {
-				mockContent = "輕撫著你的唇...這一刻，全世界只剩下你和我。|||[溫柔地凝視你的雙眸，慢慢靠近]"
-			}
-		} else if strings.Contains(userMessage, "愛") || strings.Contains(userMessage, "喜歡") {
-			mockContent = "你知道你對我有多重要嗎...讓我用行動告訴你我的心意。|||[深情地望著你，手輕撫過你的髮絲]"
-		} else if strings.Contains(userMessage, "想要") || strings.Contains(userMessage, "渴望") {
-			if isHighNSFW {
-				mockContent = "我能感受到你的渴望...讓我們放下一切束縛，在這夜裡相擁。|||[聲音變得深沉而充滿誘惑]"
-			} else {
-				mockContent = "我也有同樣的渴望...在這溫柔的夜晚，讓我們彼此更加親近。|||[聲音變得低沉而溫柔]"
-			}
-		} else {
-			// 預設 NSFW 優雅回應
-			if isLevel5 {
-				mockContent = "在這個只屬於我們的夜晚...讓我們完全沉浸在彼此的愛意中。|||[營造更深層的親密氛圍]"
-			} else {
-				mockContent = "在這安靜的空間裡，只有我們兩個人...讓我好好照顧你。|||[營造溫馨而私密的氛圍]"
-			}
-		}
-	} else {
-		mockContent = "今晚我們有充分的時間...讓我慢慢瞭解你想要的一切。|||[溫和而誘人的微笑]"
-	}
-
-	mockResponse := &GrokResponse{
-		ID:      fmt.Sprintf("grok-mock-%d", time.Now().Unix()),
-		Object:  "chat.completion",
-		Created: time.Now().Unix(),
-		Model:   request.Model,
-		Choices: []struct {
-			Index   int `json:"index"`
-			Message struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"message"`
-			FinishReason string `json:"finish_reason"`
-		}{
-			{
-				Index: 0,
-				Message: struct {
-					Role    string `json:"role"`
-					Content string `json:"content"`
-				}{
-					Role:    "assistant",
-					Content: mockContent,
-				},
-				FinishReason: "stop",
-			},
-		},
-		Usage: struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-		}{
-			PromptTokens:     len(fmt.Sprintf("%v", request.Messages)) / 4, // 估算
-			CompletionTokens: len(mockContent) / 4,                         // 估算
-			TotalTokens:      (len(fmt.Sprintf("%v", request.Messages)) + len(mockContent)) / 4,
-		},
-	}
-
-	utils.Logger.WithFields(map[string]interface{}{
-		"service":           "grok",
-		"response_id":       mockResponse.ID,
-		"model":             mockResponse.Model,
-		"prompt_tokens":     mockResponse.Usage.PromptTokens,
-		"completion_tokens": mockResponse.Usage.CompletionTokens,
-		"total_tokens":      mockResponse.Usage.TotalTokens,
-		"is_mock":           true,
-	}).Info("Generated Grok mock response")
-
-	return mockResponse
-}

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/database"
@@ -506,25 +507,62 @@ func SendMessage(c *gin.Context) {
 	}
 
 	// 處理女性向AI對話
-	chatResponse, err := chatService.ProcessMessage(context.Background(), processRequest)
-	if err != nil {
-		utils.Logger.WithError(err).Error("女性向AI對話處理失敗")
-	}
-	// 構建保底回應（避免 nil 導致 500）
-	if chatResponse == nil {
-		chatResponse = &services.ChatResponse{
-			ChatID:       chatID,
-			MessageID:    utils.GenerateMessageID(),
-			Content:      "*皺眉思考*\n抱歉，我現在有些困惑...能再說一遍嗎？\n*房間裡的氣氛有些緊張*",
-			Affection:    50,
-			AIEngine:     "fallback",
-			NSFWLevel:    1,
-			ResponseTime: 0,
-		}
-	} else if chatResponse.Affection == 0 {
-		// 確保好感度存在
-		chatResponse.Affection = 50
-	}
+    chatResponse, err := chatService.ProcessMessage(context.Background(), processRequest)
+    if err != nil {
+        // 判斷錯誤類型，記錄詳細資訊
+        errorType := "unknown_error"
+        if strings.Contains(err.Error(), "401") || strings.Contains(err.Error(), "403") {
+            errorType = "auth_error"
+        } else if strings.Contains(err.Error(), "timeout") || strings.Contains(err.Error(), "network") {
+            errorType = "network_error"
+        } else if strings.Contains(err.Error(), "rate") || strings.Contains(err.Error(), "quota") {
+            errorType = "quota_error"
+        }
+        
+        utils.Logger.WithFields(map[string]interface{}{
+            "error_type": errorType,
+            "user_id":    userID,
+            "character_id": chat.CharacterID,
+            "chat_id":    chatID,
+        }).WithError(err).Error("女性向AI對話處理失敗")
+        
+        // 構建保底回應（避免 nil 導致 500）
+        fallbackContent := generateSimpleFallback(req.Message)
+        messageID := utils.GenerateMessageID()
+
+        // 使用簡化的 fallback 保存，避免重複 NSFW 分析
+        affection, saveErr := chatService.SaveFallbackAssistantMessage(context.Background(), processRequest, messageID, fallbackContent)
+        if saveErr != nil {
+            utils.Logger.WithError(saveErr).Error("保存 fallback 回應到資料庫失敗")
+        }
+
+        chatResponse = &services.ChatResponse{
+            ChatID:       chatID,
+            MessageID:    messageID,
+            Content:      fallbackContent,
+            Affection:    affection,
+            AIEngine:     "fallback",
+            NSFWLevel:    1, // fallback 預設為安全等級
+            ResponseTime: 0,
+        }
+    }
+    
+    // 確保回應有效性
+    if chatResponse == nil {
+        c.JSON(http.StatusInternalServerError, models.APIResponse{
+            Success: false,
+            Error: &models.APIError{
+                Code:    "AI_GENERATION_FAILED",
+                Message: "AI 回應生成失敗",
+            },
+        })
+        return
+    }
+    
+    // 確保好感度存在
+    if chatResponse.Affection == 0 {
+        chatResponse.Affection = 50
+    }
 
 	// ChatService 已經處理了 AI 消息插入和會話統計更新
 	// 這裡不需要重複操作
@@ -537,6 +575,7 @@ func SendMessage(c *gin.Context) {
 		"affection":     chatResponse.Affection,     // 直接返回好感度
 		"ai_engine":     chatResponse.AIEngine,
 		"nsfw_level":    chatResponse.NSFWLevel,
+		"confidence":    chatResponse.Confidence,    // NSFW 分級信心度
 		"response_time": chatResponse.ResponseTime.Milliseconds(),
 		"timestamp":     time.Now(),
 	}
@@ -1153,3 +1192,13 @@ func RegenerateResponse(c *gin.Context) {
 	})
 }
 
+// generateSimpleFallback 簡單保底回應生成
+func generateSimpleFallback(userMessage string) string {
+	if len(userMessage) > 50 {
+		return "*眨眨眼*\n你說了很多呢...能簡單一點嗎？"
+	}
+	if strings.Contains(userMessage, "?") || strings.Contains(userMessage, "？") {
+		return "*想了想*\n這個問題有點難，換個方式問我吧？"
+	}
+	return "*微笑*\n不好意思，能再說一遍嗎？"
+}

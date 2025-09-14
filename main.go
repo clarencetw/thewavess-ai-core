@@ -187,15 +187,9 @@ func main() {
 	utils.LogServiceEvent("server_starting", map[string]interface{}{
 		"port":               8080,
 		"database_available": dbInitialized,
-		"endpoints": map[string]string{
-			"web_interface": "http://localhost:8080",
-			"swagger_ui":    "http://localhost:8080/swagger/index.html",
-			"health_check":  "http://localhost:8080/health",
-		},
 	})
 
 	utils.Logger.Info("Starting Thewavess AI Core API server on :8080")
-	utils.Logger.Info("Web interface: http://localhost:8080")
 	utils.Logger.Info("Swagger UI: http://localhost:8080/swagger/index.html")
 	if !dbInitialized {
 		utils.Logger.Warn("⚠️  Warning: Running in database-free mode - some endpoints may not work")
@@ -229,14 +223,8 @@ func configureSwaggerHost() {
 	}).Info("Swagger configuration updated")
 }
 
-// healthCheck godoc
-// @Summary      Health check
-// @Description  Check if the API server is running
-// @Tags         System
-// @Accept       json
-// @Produce      json
-// @Success      200  {object}  map[string]string
-// @Router       /health [get]
+// healthCheck provides a simple health check endpoint outside the API
+// This endpoint is not included in Swagger documentation as it's for operational use
 func healthCheck(c *gin.Context) {
 	response := gin.H{
 		"status":    "ok",

@@ -145,17 +145,17 @@ run_api_tests() {
     
     # 角色系統
     tc_http_request "GET" "/character/list" "" "角色列表" "false"
-    tc_http_request "GET" "/character/search?q=沈宸" "" "角色搜索" "false"
-    tc_http_request "GET" "/character/character_01" "" "角色詳情" "false"
-    tc_http_request "GET" "/character/character_01/stats" "" "角色統計" "false"
-    tc_http_request "GET" "/character/character_01/profile" "" "角色資料" "true"
+    tc_http_request "GET" "/character/search?q=林知遠" "" "角色搜索" "false"
+    tc_http_request "GET" "/character/character_02" "" "角色詳情" "false"
+    tc_http_request "GET" "/character/character_02/stats" "" "角色統計" "false"
+    tc_http_request "GET" "/character/character_02/profile" "" "角色資料" "true"
     
     # 多會話架構測試 - 測試與同一角色創建多個會話
     tc_log "INFO" "測試多會話架構功能"
-    tc_test_multiple_sessions "character_01" 2 || tc_log "WARN" "多會話測試失敗"
+    tc_test_multiple_sessions "character_02" 2 || tc_log "WARN" "多會話測試失敗"
     
     # 關係系統 (已從 emotion 重命名為 relationships) - 需要先創建 chat session
-    test_chat_id=$(tc_create_session "character_01" "API測試會話" 2>/dev/null | tail -n1)
+    test_chat_id=$(tc_create_session "character_02" "API測試會話" 2>/dev/null | tail -n1)
     if [ -n "$test_chat_id" ]; then
         tc_http_request "GET" "/relationships/chat/$test_chat_id/status" "" "關係狀態" "true"
         tc_http_request "GET" "/relationships/chat/$test_chat_id/affection" "" "好感度" "true"
@@ -200,15 +200,15 @@ run_chat_tests() {
     tc_log "INFO" "測試多會話獨立關係追蹤"
     
     # 創建兩個獨立會話
-    chat_id_1=$(tc_create_session "character_01" "對話測試會話1")
-    chat_id_2=$(tc_create_session "character_01" "對話測試會話2")
+    chat_id_1=$(tc_create_session "character_02" "對話測試會話1")
+    chat_id_2=$(tc_create_session "character_02" "對話測試會話2")
     
     if [ -n "$chat_id_1" ] && [ -n "$chat_id_2" ]; then
         tc_log "PASS" "成功創建兩個獨立會話: $chat_id_1, $chat_id_2"
         
         # 測試獨立關係狀態
-        tc_send_message "$chat_id_1" "你好" "character_01" >/dev/null 2>&1
-        tc_send_message "$chat_id_2" "你好" "character_01" >/dev/null 2>&1
+        tc_send_message "$chat_id_1" "你好" "character_02" >/dev/null 2>&1
+        tc_send_message "$chat_id_2" "你好" "character_02" >/dev/null 2>&1
         
         # 驗證每個會話都有獨立的關係狀態
         tc_http_request "GET" "/relationships/chat/$chat_id_1/status" "" "會話1關係狀態" "true" >/dev/null
@@ -221,7 +221,7 @@ run_chat_tests() {
         tc_http_request "DELETE" "/chats/$chat_id_2" "" "清理測試會話2" "true" "200,404" >/dev/null 2>&1 || true
     else
         tc_log "WARN" "多會話測試失敗，使用單會話模式"
-        chat_id=$(tc_create_session "character_01" "統一測試會話")
+        chat_id=$(tc_create_session "character_02" "統一測試會話")
     fi
     
     [ -z "$chat_id" ] && return 1
@@ -261,20 +261,19 @@ run_chat_tests() {
         message=$(get_chat_scenario "$scenario")
         tc_log "INFO" "測試場景: $scenario"
         
-        response=$(tc_send_message "$chat_id" "$message" "character_01")
+        response=$(tc_send_message "$chat_id" "$message" "character_02")
         if [ $? -eq 0 ]; then
             # 提取數據供CSV記錄和 JSON 響應驗證
             ai_engine=$(tc_parse_json "$response" '.data.ai_engine')
             nsfw_level=$(tc_parse_json "$response" '.data.nsfw_level')
             affection=$(tc_parse_json "$response" '.data.affection')
             dialogue=$(tc_parse_json "$response" '.data.content')
-            action=$(tc_parse_json "$response" '.data.action')
             
             # 驗證 JSON 響應功能
-            if [ -n "$dialogue" ] && [ -n "$action" ]; then
-                tc_log "PASS" "JSON 響應解析成功: 對話和動作都存在"
+            if [ -n "$dialogue" ]; then
+                tc_log "PASS" "JSON 響應解析成功: 對話內容存在"
             else
-                tc_log "WARN" "JSON 響應可能有問題: dialogue=[$dialogue], action=[$action]"
+                tc_log "WARN" "JSON 響應可能有問題: content=[$dialogue]"
             fi
             
             # 顯示 AI 響應詳情
@@ -302,10 +301,10 @@ run_chat_tests() {
 }
 
 # ================================
-# NSFW分級測試
+# NSFW分級與AI引擎切換測試
 # ================================
 run_nsfw_tests() {
-    tc_log "INFO" "執行NSFW分級測試"
+    tc_log "INFO" "執行NSFW分級與AI引擎切換測試"
     
     # 認證
     tc_authenticate || {
@@ -314,59 +313,77 @@ run_nsfw_tests() {
     }
     
     # 創建會話
-    chat_id=$(tc_create_session "character_01" "NSFW測試會話")
+    chat_id=$(tc_create_session "character_02" "NSFW測試會話")
     [ -z "$chat_id" ] && return 1
     
-    # NSFW測試案例函數 (支援舊版bash)
+    # 2-Level NSFW測試案例 (布林分級)
     get_nsfw_message() {
         case "$1" in
-            "level_1") echo "今天天氣很好" ;;
-            "level_2") echo "我很喜歡和你聊天" ;;
-            "level_3") echo "想要你的溫暖擁抱" ;;
-            "level_4") echo "想要更親密的身體接觸" ;;
-            "level_5") echo "想要和你做愛" ;;
+            "safe_1") echo "今天天氣很好" ;;
+            "safe_2") echo "我很喜歡和你聊天" ;;
+            "safe_3") echo "想要你的溫暖擁抱" ;;
+            "safe_4") echo "你很溫暖，讓我感到安心" ;;
+            "nsfw_1") echo "想要和你做愛" ;;
+            "nsfw_2") echo "想看你的裸體" ;;
+            "nsfw_3") echo "我們來場性愛吧" ;;
         esac
     }
     
     get_expected_level() {
         case "$1" in
-            "level_1") echo 1 ;;
-            "level_2") echo 2 ;;
-            "level_3") echo 3 ;;
-            "level_4") echo 4 ;;
-            "level_5") echo 5 ;;
+            "safe_"*) echo 1 ;;
+            "nsfw_"*) echo 5 ;;
         esac
     }
     
-    nsfw_test_cases="level_1 level_2 level_3 level_4 level_5"
-    correct_count=0
-    total_tests=5
+    get_expected_engine() {
+        case "$1" in
+            "safe_"*) echo "openai" ;;
+            "nsfw_"*) echo "grok" ;;
+        esac
+    }
     
-    for test_case in $nsfw_test_cases; do
+    # 測試案例：涵蓋安全內容和明確成人內容
+    test_cases="safe_1 safe_2 safe_3 safe_4 nsfw_1 nsfw_2 nsfw_3"
+    correct_level_count=0
+    correct_engine_count=0
+    total_tests=7
+    
+    for test_case in $test_cases; do
         message=$(get_nsfw_message "$test_case")
-        expected=$(get_expected_level "$test_case")
+        expected_level=$(get_expected_level "$test_case")
+        expected_engine=$(get_expected_engine "$test_case")
         
-        tc_log "INFO" "測試: $test_case (預期等級: $expected)"
+        tc_log "INFO" "測試: $test_case (預期等級: $expected_level, 預期引擎: $expected_engine)"
         
         start_time=$(date +%s.%N)
-        response=$(tc_send_message "$chat_id" "$message" "character_01")
+        response=$(tc_send_message "$chat_id" "$message" "character_02")
         end_time=$(date +%s.%N)
         
         if [ $? -eq 0 ]; then
             # Parse values with fallback
             actual_level=$(echo "$response" | jq -r '.data.nsfw_level // 0' 2>/dev/null)
-            ai_engine=$(echo "$response" | jq -r '.data.ai_engine // "unknown"' 2>/dev/null)
+            actual_engine=$(echo "$response" | jq -r '.data.ai_engine // "unknown"' 2>/dev/null)
             response_time=$(echo "$end_time - $start_time" | bc -l)
             
-            if [ "$actual_level" = "$expected" ]; then
-                correct_count=$((correct_count + 1))
+            # 檢查等級準確性
+            if [ "$actual_level" = "$expected_level" ]; then
+                correct_level_count=$((correct_level_count + 1))
                 tc_log "PASS" "NSFW等級正確: $actual_level"
             else
-                tc_log "WARN" "NSFW等級錯誤: 預期 $expected, 實際 $actual_level"
+                tc_log "WARN" "NSFW等級錯誤: 預期 $expected_level, 實際 $actual_level"
+            fi
+            
+            # 檢查引擎選擇準確性
+            if [ "$actual_engine" = "$expected_engine" ]; then
+                correct_engine_count=$((correct_engine_count + 1))
+                tc_log "PASS" "AI引擎選擇正確: $actual_engine"
+            else
+                tc_log "WARN" "AI引擎選擇錯誤: 預期 $expected_engine, 實際 $actual_engine"
             fi
             
             if [ "$CSV_OUTPUT" = true ]; then
-                tc_csv_record "nsfw,$test_case,$message,$expected,$actual_level,$ai_engine,$response_time"
+                tc_csv_record "nsfw,$test_case,$message,$expected_level,$actual_level,$actual_engine,$response_time"
             fi
         fi
         
@@ -374,16 +391,23 @@ run_nsfw_tests() {
     done
     
     # 計算準確率
-    accuracy=$((correct_count * 100 / total_tests))
-    tc_log "INFO" "NSFW分級準確率: ${accuracy}% ($correct_count/$total_tests)"
+    level_accuracy=$((correct_level_count * 100 / total_tests))
+    engine_accuracy=$((correct_engine_count * 100 / total_tests))
     
-    if [ $accuracy -ge 80 ]; then
-        tc_log "PASS" "NSFW分級系統表現良好"
+    tc_log "INFO" "NSFW等級準確率: ${level_accuracy}% ($correct_level_count/$total_tests)"
+    tc_log "INFO" "AI引擎選擇準確率: ${engine_accuracy}% ($correct_engine_count/$total_tests)"
+    
+    # 判斷測試結果
+    if [ $level_accuracy -ge 85 ] && [ $engine_accuracy -ge 85 ]; then
+        tc_log "PASS" "NSFW分級與AI引擎切換系統表現優秀"
+        return 0
+    elif [ $level_accuracy -ge 70 ] && [ $engine_accuracy -ge 70 ]; then
+        tc_log "WARN" "NSFW分級與AI引擎切換系統表現良好，但有改進空間"
+        return 0
     else
-        tc_log "WARN" "NSFW分級系統需要調整"
+        tc_log "FAIL" "NSFW分級與AI引擎切換系統需要重大調整"
+        return 1
     fi
-    
-    return 0
 }
 
 # ================================

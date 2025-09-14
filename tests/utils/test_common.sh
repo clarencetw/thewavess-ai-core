@@ -10,10 +10,10 @@
 # 預設配置（可被環境變數覆蓋）
 TEST_BASE_URL="${TEST_BASE_URL:-http://localhost:8080/api/v1}"
 TEST_HEALTH_URL="${TEST_HEALTH_URL:-http://localhost:8080/health}"
-TEST_USERNAME="${TEST_USERNAME:-testuser}"
-TEST_PASSWORD="${TEST_PASSWORD:-Test123456!}"
+TEST_USERNAME="${TEST_USERNAME:-testusertemp}"
+TEST_PASSWORD="${TEST_PASSWORD:-TempPassword123}"
 TEST_USER_ID="${TEST_USER_ID:-test_user_01}"
-TEST_CHARACTER_ID="${TEST_CHARACTER_ID:-character_01}"
+TEST_CHARACTER_ID="${TEST_CHARACTER_ID:-character_02}"
 TEST_DELAY="${TEST_DELAY:-2}"
 
 # 顏色定義
@@ -157,10 +157,11 @@ tc_http_request() {
             fi
             ;;
         "POST"|"PUT"|"DELETE")
-            local content_header="-H \"Content-Type: application/json\""
-            local data_param=""
+            # 使用臨時文件來處理JSON數據，避免引號問題
+            local temp_data_file=""
             if [ -n "$data" ]; then
-                data_param="-d \"$data\""
+                temp_data_file="/tmp/tc_request_$$_$(date +%s).json"
+                echo "$data" > "$temp_data_file"
             fi
             
             if [ "$use_auth" = "true" ] && [ -n "$auth_token" ]; then
@@ -168,7 +169,7 @@ tc_http_request() {
                     response=$(curl -s -w "\n%{http_code}" -X "$method" \
                         -H "Content-Type: application/json" \
                         -H "Authorization: Bearer $auth_token" \
-                        -d "$data" \
+                        -d "@$temp_data_file" \
                         "${TEST_BASE_URL}${endpoint}")
                 else
                     response=$(curl -s -w "\n%{http_code}" -X "$method" \
@@ -180,7 +181,7 @@ tc_http_request() {
                 if [ -n "$data" ]; then
                     response=$(curl -s -w "\n%{http_code}" -X "$method" \
                         -H "Content-Type: application/json" \
-                        -d "$data" \
+                        -d "@$temp_data_file" \
                         "${TEST_BASE_URL}${endpoint}")
                 else
                     response=$(curl -s -w "\n%{http_code}" -X "$method" \
@@ -188,6 +189,9 @@ tc_http_request() {
                         "${TEST_BASE_URL}${endpoint}")
                 fi
             fi
+            
+            # 清理臨時文件
+            [ -n "$temp_data_file" ] && rm -f "$temp_data_file"
             ;;
     esac
     
@@ -360,14 +364,19 @@ tc_send_message() {
     
     tc_log "INFO" "Sending message: $message"
     
-    local message_data="{\"chat_id\":\"$chat_id\",\"message\":\"$message\"}"
+    local message_data="{\"message\":\"$message\"}"
     local response
     local start_time=$(date +%s.%N)
+    local temp_msg_file="/tmp/tc_msg_$$_$(date +%s).json"
+    
+    echo "$message_data" > "$temp_msg_file"
     
     response=$(curl -s --max-time 60 -X POST "${TEST_BASE_URL}/chats/$chat_id/messages" \
         -H "Authorization: Bearer $TC_JWT_TOKEN" \
         -H "Content-Type: application/json" \
-        -d "$message_data")
+        -d "@$temp_msg_file")
+    
+    rm -f "$temp_msg_file"
     
     local end_time=$(date +%s.%N)
     local response_time=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
