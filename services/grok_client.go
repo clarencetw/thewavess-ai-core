@@ -86,7 +86,6 @@ func NewGrokClient() *GrokClient {
 	}
 }
 
-
 // GenerateResponse 生成對話回應（NSFW 內容）
 func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest) (*GrokResponse, error) {
 	startTime := time.Now()
@@ -102,7 +101,6 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		"messages_count": len(request.Messages),
 		"api_configured": c.apiKey != "",
 	}).Info("Grok API request started")
-
 
 	// 開發模式下詳細記錄 prompt 內容
 	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
@@ -398,4 +396,3 @@ func temperatureForLevel(level int) float64 {
 		return getGrokTemperature() // fallback: GROK_TEMPERATURE or 0.7
 	}
 }
-

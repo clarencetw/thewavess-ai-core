@@ -38,7 +38,6 @@ type AdminLogsResponse struct {
 	Limit int                `json:"limit"`
 }
 
-
 var (
 	startTime         = time.Now()
 	totalRequests     int64
@@ -289,12 +288,12 @@ func GetAdminUserByID(c *gin.Context) {
 
 	ctx := context.Background()
 	var user db.UserDB
-	
+
 	err := services.GetDB().NewSelect().
 		Model(&user).
 		Where("id = ?", userID).
 		Scan(ctx)
-	
+
 	if err != nil {
 		utils.Logger.WithError(err).Error("獲取用戶詳情失敗")
 		c.JSON(http.StatusNotFound, models.APIResponse{
@@ -368,7 +367,7 @@ func UpdateAdminUserStatus(c *gin.Context) {
 	var req struct {
 		Status string `json:"status" binding:"required,oneof=active inactive suspended"`
 	}
-	
+
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, models.APIResponse{
 			Success: false,
@@ -382,13 +381,13 @@ func UpdateAdminUserStatus(c *gin.Context) {
 	}
 
 	ctx := context.Background()
-	
+
 	// 檢查用戶是否存在
 	exists, err := services.GetDB().NewSelect().
 		Model((*db.UserDB)(nil)).
 		Where("id = ?", userID).
 		Exists(ctx)
-	
+
 	if err != nil {
 		utils.Logger.WithError(err).Error("檢查用戶存在性失敗")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -401,7 +400,7 @@ func UpdateAdminUserStatus(c *gin.Context) {
 		})
 		return
 	}
-	
+
 	if !exists {
 		c.JSON(http.StatusNotFound, models.APIResponse{
 			Success: false,
@@ -421,7 +420,7 @@ func UpdateAdminUserStatus(c *gin.Context) {
 		Set("updated_at = ?", time.Now()).
 		Where("id = ?", userID).
 		Exec(ctx)
-	
+
 	if err != nil {
 		utils.Logger.WithError(err).Error("更新用戶狀態失敗")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -1210,11 +1209,11 @@ func AdminSearchChats(c *gin.Context) {
 	searchTime := time.Since(startTime)
 
 	utils.Logger.WithFields(map[string]interface{}{
-		"admin_id":     adminID,
-		"query":        query,
-		"user_filter":  userIDFilter,
-		"total_found":  totalCount,
-		"search_time":  searchTime.Milliseconds(),
+		"admin_id":    adminID,
+		"query":       query,
+		"user_filter": userIDFilter,
+		"total_found": totalCount,
+		"search_time": searchTime.Milliseconds(),
 	}).Info("管理員執行聊天記錄搜尋")
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -1227,12 +1226,12 @@ func AdminSearchChats(c *gin.Context) {
 			"total_pages":  totalPages,
 			"search_time":  fmt.Sprintf("%dms", searchTime.Milliseconds()),
 			"filters": gin.H{
-				"query":              query,
-				"user_id":            userIDFilter,
-				"character_id":       characterID,
-				"date_from":          dateFrom,
-				"date_to":            dateTo,
-				"include_user_info":  includeUserInfo,
+				"query":             query,
+				"user_id":           userIDFilter,
+				"character_id":      characterID,
+				"date_from":         dateFrom,
+				"date_to":           dateTo,
+				"include_user_info": includeUserInfo,
 			},
 		},
 	})
@@ -1278,7 +1277,7 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 			Model((*db.MessageDB)(nil)).
 			Column("DISTINCT chat_id").
 			Where("to_tsvector('simple', dialogue) @@ plainto_tsquery('simple', ?)", query)
-		
+
 		baseQuery = baseQuery.Where("c.id IN (?)", subQuery)
 	}
 
@@ -1330,7 +1329,7 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 				Column("id", "username", "display_name", "email").
 				Where("id = ?", result.UserID).
 				Scan(ctx)
-			
+
 			if err == nil {
 				chatData["user"] = gin.H{
 					"id":           user.ID,
@@ -1340,7 +1339,7 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 				}
 			} else {
 				chatData["user"] = gin.H{
-					"id": result.UserID,
+					"id":       result.UserID,
 					"username": "未知用戶",
 				}
 			}
@@ -1354,7 +1353,7 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 			Model((*db.MessageDB)(nil)).
 			Where("chat_id = ?", result.ID).
 			Count(ctx)
-		
+
 		chatData["message_count"] = messageCount
 
 		// 獲取最後一條消息預覽
@@ -1365,7 +1364,7 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 			Order("created_at DESC").
 			Limit(1).
 			Scan(ctx)
-		
+
 		if err == nil {
 			preview := lastMessage.Dialogue
 			if len(preview) > 100 {
@@ -1384,7 +1383,7 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 			Model(&relationship).
 			Where("user_id = ? AND character_id = ? AND chat_id = ?", result.UserID, result.CharacterID, result.ID).
 			Scan(ctx)
-		
+
 		if err == nil {
 			// 直接使用 AI 設定的關係狀態，不進行轉換
 			chatData["relationship"] = gin.H{
@@ -1507,10 +1506,10 @@ func AdminGetChatHistory(c *gin.Context) {
 	searchTime := time.Since(startTime)
 
 	utils.Logger.WithFields(map[string]interface{}{
-		"admin_id":     adminID,
-		"chat_id":      chatID,
-		"total_found":  totalCount,
-		"search_time":  searchTime.Milliseconds(),
+		"admin_id":    adminID,
+		"chat_id":     chatID,
+		"total_found": totalCount,
+		"search_time": searchTime.Milliseconds(),
 	}).Info("管理員獲取聊天記錄成功")
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -1620,13 +1619,13 @@ func adminGetChatMessages(ctx context.Context, chatID string, page, limit int) (
 	messageResults := make([]gin.H, len(messages))
 	for i, msg := range messages {
 		messageResults[i] = gin.H{
-			"id":               msg.ID,
-			"role":             msg.Role,
-			"dialogue":         msg.Dialogue,
+			"id":                msg.ID,
+			"role":              msg.Role,
+			"dialogue":          msg.Dialogue,
 			"scene_description": msg.SceneDescription,
-			"action":           msg.Action,
-			"nsfw_level":       msg.NSFWLevel,
-			"created_at":       msg.CreatedAt,
+			"action":            msg.Action,
+			"nsfw_level":        msg.NSFWLevel,
+			"created_at":        msg.CreatedAt,
 		}
 	}
 
@@ -1711,7 +1710,7 @@ func UpdateCharacterStatus(c *gin.Context) {
 	if !request.IsActive {
 		action = "停用"
 	}
-	
+
 	utils.LogServiceEvent("admin_character_status_updated", map[string]interface{}{
 		"character_id": characterID,
 		"is_active":    request.IsActive,
@@ -1756,7 +1755,7 @@ func AdminGetCharacters(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
-				Code:    "UNAUTHORIZED", 
+				Code:    "UNAUTHORIZED",
 				Message: "未授權訪問",
 			},
 		})
@@ -1778,17 +1777,17 @@ func AdminGetCharacters(c *gin.Context) {
 		}
 	}
 
-	status := c.Query("status")           // active, inactive, all
-	createdBy := c.Query("created_by")    // 特定創建者篩選
-	charType := c.Query("type")           // system, user, all
+	status := c.Query("status")        // active, inactive, all
+	createdBy := c.Query("created_by") // 特定創建者篩選
+	charType := c.Query("type")        // system, user, all
 	includeDeleted := c.Query("include_deleted") == "true"
 
 	// 構建查詢
 	query := GetDB().NewSelect().
 		Model((*db.CharacterDB)(nil)).
-		Column("id", "name", "type", "locale", "is_active", "avatar_url", "tags", "popularity", 
-			   "user_description", "created_by", "updated_by", "is_public", "is_system",
-			   "created_at", "updated_at", "deleted_at")
+		Column("id", "name", "type", "locale", "is_active", "avatar_url", "tags", "popularity",
+			"user_description", "created_by", "updated_by", "is_public", "is_system",
+			"created_at", "updated_at", "deleted_at")
 
 	// 軟刪除篩選
 	if !includeDeleted {
@@ -2031,8 +2030,8 @@ func AdminGetCharacterByID(c *gin.Context) {
 	}
 
 	// 獲取更新者信息
-	if character.UpdatedBy != nil && *character.UpdatedBy != "" && 
-	   (character.CreatedBy == nil || *character.UpdatedBy != *character.CreatedBy) {
+	if character.UpdatedBy != nil && *character.UpdatedBy != "" &&
+		(character.CreatedBy == nil || *character.UpdatedBy != *character.CreatedBy) {
 		var updater db.UserDB
 		err := GetDB().NewSelect().
 			Model(&updater).
@@ -2063,7 +2062,7 @@ func AdminGetCharacterByID(c *gin.Context) {
 		Count(ctx)
 
 	charResponse["usage_stats"] = gin.H{
-		"chat_sessions": chatCount,
+		"chat_sessions":  chatCount,
 		"total_messages": messageCount,
 	}
 
@@ -2536,4 +2535,3 @@ func AdminPermanentDeleteCharacter(c *gin.Context) {
 		},
 	})
 }
-

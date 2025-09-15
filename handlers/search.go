@@ -129,7 +129,6 @@ func SearchChats(c *gin.Context) {
 	})
 }
 
-
 // searchChatMessages performs the actual database search for chat messages
 func searchChatMessages(ctx context.Context, userID, query, characterID, dateFrom, dateTo string, page, limit int) ([]gin.H, int, gin.H, error) {
 	db := GetDB()
@@ -147,7 +146,7 @@ func searchChatMessages(ctx context.Context, userID, query, characterID, dateFro
 		Join("JOIN chats cs ON cs.id = m.chat_id").
 		Join("JOIN characters c ON c.id = cs.character_id").
 		Where("cs.status != ?", "deleted")
-	
+
 	// 限制為特定用戶的記錄
 	baseQuery = baseQuery.Where("cs.user_id = ?", userID)
 

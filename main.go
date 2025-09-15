@@ -64,7 +64,7 @@ func setupWebRoutes(router *gin.Engine) {
 	{
 		// 登入頁面
 		adminPages.GET("/login", pages.AdminLoginPageHandler)
-		
+
 		// 管理頁面（純HTML結構，數據通過AJAX載入）
 		adminPages.GET("/dashboard", pages.AdminDashboardPageHandler)
 		adminPages.GET("/users", pages.AdminUsersPageHandler)
@@ -109,7 +109,7 @@ func configureCORS() cors.Config {
 func main() {
 	// 設置構建資訊為環境變數，供handlers使用
 	os.Setenv("APP_VERSION", Version)
-	os.Setenv("BUILD_TIME", BuildTime) 
+	os.Setenv("BUILD_TIME", BuildTime)
 	os.Setenv("GIT_COMMIT", GitCommit)
 
 	// Initialize logger first
@@ -204,7 +204,7 @@ func main() {
 func configureSwaggerHost() {
 	// Get API host from environment variable, default to localhost:8080
 	apiHost := utils.GetEnvWithDefault("API_HOST", "localhost:8080")
-	
+
 	// Detect if running in production/development based on host
 	var schemes []string
 	if strings.Contains(apiHost, "localhost") || strings.Contains(apiHost, "127.0.0.1") {
@@ -212,11 +212,11 @@ func configureSwaggerHost() {
 	} else {
 		schemes = []string{"https", "http"}
 	}
-	
+
 	// Update Swagger info dynamically
 	docs.SwaggerInfo.Host = apiHost
 	docs.SwaggerInfo.Schemes = schemes
-	
+
 	utils.Logger.WithFields(map[string]interface{}{
 		"swagger_host": apiHost,
 		"schemes":      schemes,

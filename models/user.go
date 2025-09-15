@@ -114,7 +114,6 @@ type LogoutRequest struct {
 	Token string `json:"token,omitempty"`
 }
 
-
 // UserFromDB 從資料庫模型轉換為領域模型
 func UserFromDB(userDB *db.UserDB) *User {
 	if userDB == nil {

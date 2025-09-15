@@ -159,7 +159,6 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 		}
 	}
 
-
 	// 轉換消息格式
 	messages := make([]openai.ChatCompletionMessage, len(request.Messages))
 	for i, msg := range request.Messages {
@@ -177,7 +176,7 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 		Temperature: c.temperature,
 		User:        request.User,
 	}
-	
+
 	// 調用 OpenAI API
 	resp, err := c.client.CreateChatCompletion(ctx, chatRequest)
 
@@ -271,7 +270,6 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 
 	return response, nil
 }
-
 
 // BuildCharacterPrompt 構建角色提示詞（使用統一模板）
 func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) []OpenAIMessage {

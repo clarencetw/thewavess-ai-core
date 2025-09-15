@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/sirupsen/logrus"
 )
@@ -186,34 +187,40 @@ func GetLoggerWithFields(fields logrus.Fields) *logrus.Entry {
 }
 
 // LogAPIRequest 記錄 API 請求
-func LogAPIRequest(method, path, userID, sessionID string, statusCode int, duration int64) {
-	Logger.WithFields(logrus.Fields{
-		"type":        "api_request",
-		"method":      method,
-		"path":        path,
+func LogAPIRequest(method, path, userID string, statusCode int, duration time.Duration, err error) {
+	entry := Logger.WithFields(logrus.Fields{
+		"event_type":  "api_request",
+		"http_method": method,
+		"http_path":   path,
 		"user_id":     userID,
-		"chat_id":     sessionID,
 		"status_code": statusCode,
-		"duration_ms": duration,
-	}).Info("API request processed")
+		"duration_ms": duration.Milliseconds(),
+		"success":     err == nil,
+	})
+
+	if err != nil {
+		entry.WithError(err).Error("API request failed")
+	} else {
+		entry.Info("API request completed")
+	}
 }
 
-// LogChatMessage 記錄對話消息
-func LogChatMessage(sessionID, userID, characterID, engine string, responseTime int64, success bool) {
+// LogChatMessage 記錄聊天消息
+func LogChatMessage(chatID, userID, characterID, aiEngine string, responseTime time.Duration, success bool, err error) {
 	entry := Logger.WithFields(logrus.Fields{
-		"type":          "chat_message",
-		"chat_id":       sessionID,
+		"event_type":    "chat_message",
+		"chat_id":       chatID,
 		"user_id":       userID,
 		"character_id":  characterID,
-		"ai_engine":     engine,
-		"response_time": responseTime,
+		"ai_engine":     aiEngine,
+		"response_time": responseTime.Milliseconds(),
 		"success":       success,
 	})
 
-	if success {
-		entry.Info("Chat message processed successfully")
+	if err != nil {
+		entry.WithError(err).Error("Chat message processing failed")
 	} else {
-		entry.Error("Chat message processing failed")
+		entry.Info("Chat message processed successfully")
 	}
 }
 
@@ -239,67 +246,93 @@ func LogServiceEvent(event string, fields logrus.Fields) {
 }
 
 // LogSecurityEvent 記錄安全相關事件
-func LogSecurityEvent(eventType, userID, details string, fields logrus.Fields) {
-	if fields == nil {
-		fields = logrus.Fields{}
+func LogSecurityEvent(eventType, userID, description string, severity string, metadata map[string]interface{}) {
+	fields := logrus.Fields{
+		"event_type":     "security",
+		"security_event": eventType,
+		"user_id":        userID,
+		"severity":       severity,
+		"timestamp":      time.Now().UTC(),
 	}
-	fields["event_type"] = eventType
-	fields["user_id"] = userID
-	fields["security_event"] = true
-	fields["timestamp"] = Now()
-	
-	Logger.WithFields(fields).Warn("安全事件: " + details)
+
+	// 合併額外元數據
+	for k, v := range metadata {
+		fields[k] = v
+	}
+
+	entry := Logger.WithFields(fields)
+
+	switch severity {
+	case "critical":
+		entry.Error("Critical security event: " + description)
+	case "high":
+		entry.Warn("High severity security event: " + description)
+	case "medium":
+		entry.Warn("Medium severity security event: " + description)
+	default:
+		entry.Info("Security event: " + description)
+	}
 }
 
-// LogAuditEvent 記錄稽核事件（管理員操作等）
-func LogAuditEvent(action, actor, target string, fields logrus.Fields) {
-	if fields == nil {
-		fields = logrus.Fields{}
+// LogPerformanceMetric 記錄性能指標
+func LogPerformanceMetric(operation string, duration time.Duration, metadata map[string]interface{}) {
+	fields := logrus.Fields{
+		"event_type":  "performance",
+		"operation":   operation,
+		"duration_ms": duration.Milliseconds(),
+		"duration_ns": duration.Nanoseconds(),
 	}
-	fields["event_type"] = "audit"
-	fields["action"] = action
-	fields["actor"] = actor
-	fields["target"] = target
-	fields["audit_event"] = true
-	fields["timestamp"] = Now()
-	
-	Logger.WithFields(fields).Info("稽核事件: " + action)
+
+	for k, v := range metadata {
+		fields[k] = v
+	}
+
+	entry := Logger.WithFields(fields)
+
+	// 根據執行時間判斷日誌級別
+	switch {
+	case duration > 10*time.Second:
+		entry.Error("Very slow operation detected")
+	case duration > 5*time.Second:
+		entry.Warn("Slow operation detected")
+	case duration > 1*time.Second:
+		entry.Info("Performance metric recorded")
+	default:
+		entry.Debug("Performance metric recorded")
+	}
 }
 
-// LogPerformanceEvent 記錄效能事件
-func LogPerformanceEvent(operation string, duration int64, fields logrus.Fields) {
-	if fields == nil {
-		fields = logrus.Fields{}
+// LogBusinessEvent 記錄業務事件
+func LogBusinessEvent(eventType, description string, metadata map[string]interface{}) {
+	fields := logrus.Fields{
+		"event_type":     "business",
+		"business_event": eventType,
+		"timestamp":      time.Now().UTC(),
 	}
-	fields["event_type"] = "performance"
-	fields["operation"] = operation
-	fields["duration_ms"] = duration
-	
-	logLevel := logrus.InfoLevel
-	if duration > 5000 { // 超過5秒視為慢操作
-		logLevel = logrus.WarnLevel
-		fields["slow_operation"] = true
+
+	for k, v := range metadata {
+		fields[k] = v
 	}
-	
-	Logger.WithFields(fields).Log(logLevel, "效能事件記錄")
+
+	Logger.WithFields(fields).Info(description)
 }
 
 // LogAdminAction 記錄管理員操作
 func LogAdminAction(adminID, adminEmail, action, target, clientIP, userAgent string, success bool, details string) {
 	fields := logrus.Fields{
-		"event_type":   "admin_action",
-		"admin_id":     adminID,
-		"admin_email":  adminEmail,
-		"action":       action,
-		"target":       target,
-		"client_ip":    clientIP,
-		"user_agent":   userAgent,
-		"success":      success,
-		"details":      details,
-		"audit_event":  true,
-		"timestamp":    Now(),
+		"event_type":  "admin_action",
+		"admin_id":    adminID,
+		"admin_email": adminEmail,
+		"action":      action,
+		"target":      target,
+		"client_ip":   clientIP,
+		"user_agent":  userAgent,
+		"success":     success,
+		"details":     details,
+		"audit_event": true,
+		"timestamp":   Now(),
 	}
-	
+
 	if success {
 		Logger.WithFields(fields).Info("管理員操作成功")
 	} else {
@@ -310,23 +343,61 @@ func LogAdminAction(adminID, adminEmail, action, target, clientIP, userAgent str
 // LogUserAuthEvent 記錄用戶認證事件
 func LogUserAuthEvent(eventType, username, email, clientIP, userAgent string, success bool, reason string) {
 	fields := logrus.Fields{
-		"event_type":    eventType,
-		"username":      username,
-		"email":         email,
-		"client_ip":     clientIP,
-		"user_agent":    userAgent,
-		"success":       success,
-		"auth_event":    true,
-		"timestamp":     Now(),
+		"event_type": eventType,
+		"username":   username,
+		"email":      email,
+		"client_ip":  clientIP,
+		"user_agent": userAgent,
+		"success":    success,
+		"auth_event": true,
+		"timestamp":  Now(),
 	}
-	
+
 	if reason != "" {
 		fields["reason"] = reason
 	}
-	
+
 	if success {
 		Logger.WithFields(fields).Info("用戶認證成功")
 	} else {
 		Logger.WithFields(fields).Warn("用戶認證失敗")
 	}
+}
+
+// ===== 向後兼容的包裝函數 =====
+
+// WithContext 創建帶上下文的日誌條目
+func WithContext(ctx map[string]interface{}) *logrus.Entry {
+	return Logger.WithFields(logrus.Fields(ctx))
+}
+
+// WithError 創建帶錯誤的日誌條目
+func WithError(err error) *logrus.Entry {
+	return Logger.WithError(err)
+}
+
+// WithUser 創建帶用戶信息的日誌條目
+func WithUser(userID, username string) *logrus.Entry {
+	return Logger.WithFields(logrus.Fields{
+		"user_id":  userID,
+		"username": username,
+	})
+}
+
+// WithRequest 創建帶請求信息的日誌條目
+func WithRequest(method, path, userAgent, clientIP string) *logrus.Entry {
+	return Logger.WithFields(logrus.Fields{
+		"http_method": method,
+		"http_path":   path,
+		"user_agent":  userAgent,
+		"client_ip":   clientIP,
+	})
+}
+
+// WithChat 創建帶聊天信息的日誌條目
+func WithChat(chatID, characterID string) *logrus.Entry {
+	return Logger.WithFields(logrus.Fields{
+		"chat_id":      chatID,
+		"character_id": characterID,
+	})
 }

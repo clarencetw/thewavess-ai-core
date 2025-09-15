@@ -107,6 +107,7 @@ func (v *ValidationHelper) getChineseFieldName(field string) string {
 		"Page":        "頁碼",
 		"PageSize":    "每頁數量",
 		"SortOrder":   "排序方式",
+		"Age":         "年齡",
 	}
 
 	if chinese, exists := fieldMap[field]; exists {

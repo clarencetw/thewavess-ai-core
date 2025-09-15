@@ -27,7 +27,7 @@ func init() {
 			"CREATE INDEX IF NOT EXISTS idx_characters_tags ON characters USING GIN(tags)",
 			// 用戶追蹤和軟刪除索引
 			"CREATE INDEX IF NOT EXISTS idx_characters_created_by ON characters(created_by)",
-			"CREATE INDEX IF NOT EXISTS idx_characters_updated_by ON characters(updated_by)", 
+			"CREATE INDEX IF NOT EXISTS idx_characters_updated_by ON characters(updated_by)",
 			"CREATE INDEX IF NOT EXISTS idx_characters_deleted_at ON characters(deleted_at)",
 			"CREATE INDEX IF NOT EXISTS idx_characters_is_public ON characters(is_public)",
 			"CREATE INDEX IF NOT EXISTS idx_characters_is_system ON characters(is_system)",

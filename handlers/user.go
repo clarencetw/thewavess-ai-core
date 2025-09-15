@@ -181,7 +181,7 @@ func LoginUser(c *gin.Context) {
 
 	if err != nil {
 		utils.Logger.WithError(err).WithField("username", req.Username).Error("User not found")
-		
+
 		// 記錄用戶不存在的登入失敗事件
 		clientIP := utils.GetClientIP(c)
 		userAgent := c.Request.Header.Get("User-Agent")
@@ -194,7 +194,7 @@ func LoginUser(c *gin.Context) {
 			false,
 			"用戶不存在或未啟用",
 		)
-		
+
 		c.JSON(http.StatusUnauthorized, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
@@ -212,7 +212,7 @@ func LoginUser(c *gin.Context) {
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password))
 	if err != nil {
 		utils.Logger.WithError(err).WithField("user_id", user.ID).Error("Password verification failed")
-		
+
 		// 記錄登入失敗事件
 		clientIP := utils.GetClientIP(c)
 		userAgent := c.Request.Header.Get("User-Agent")
@@ -225,7 +225,7 @@ func LoginUser(c *gin.Context) {
 			false,
 			"密碼驗證失敗",
 		)
-		
+
 		c.JSON(http.StatusUnauthorized, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{

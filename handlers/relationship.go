@@ -269,7 +269,6 @@ func GetAffectionLevel(c *gin.Context) {
 		return
 	}
 
-
 	// 計算等級和進度
 	levelName, levelTier := getAffectionLevelInfo(relationship.Affection)
 	nextLevelThreshold := getNextLevelThreshold(levelTier)
@@ -387,7 +386,7 @@ func GetRelationshipHistory(c *gin.Context) {
 		Model(&currentRelationship).
 		Where("user_id = ? AND character_id = ? AND chat_id = ?", userIDStr, chatInfo.CharacterID, chatID).
 		Scan(c)
-	
+
 	if err != nil {
 		utils.Logger.WithError(err).Error("查詢當前關係狀態失敗")
 		// 返回默認值

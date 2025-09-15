@@ -81,7 +81,6 @@ func CreateChatSession(c *gin.Context) {
 		return
 	}
 
-
 	// 創建新的聊天會話
 	chatID := utils.GenerateChatID()
 	var chat models.Chat
@@ -105,7 +104,7 @@ func CreateChatSession(c *gin.Context) {
 	// 重要：必須同時創建關係記錄，否則關係端點會返回404錯誤
 	// 這確保了多會話架構中每個對話都有獨立的關係狀態
 	ctx := context.Background()
-	
+
 	// 使用 RunInTx 進行事務處理 - Bun ORM 最佳實踐
 	err = GetDB().RunInTx(ctx, nil, func(ctx context.Context, tx bun.Tx) error {
 		// 插入聊天記錄
@@ -118,18 +117,18 @@ func CreateChatSession(c *gin.Context) {
 		// 初始化關係記錄 - 為多會話架構設置默認值
 		// 注意：ChatID 必須是指針類型 (*string)，因為數據庫模型定義為可選字段
 		relationshipDB := db.RelationshipDB{
-			ID:                 utils.GenerateRelationshipID(),
-			UserID:             userID.(string),
-			CharacterID:        req.CharacterID,
-			ChatID:             &chatID,
-			Affection:          50, // 默認好感度
-			Mood:               "neutral",
-			Relationship:       "stranger",
-			IntimacyLevel:      "casual",
-			TotalInteractions:  0,
-			LastInteraction:    time.Now(),
-			CreatedAt:          time.Now(),
-			UpdatedAt:          time.Now(),
+			ID:                utils.GenerateRelationshipID(),
+			UserID:            userID.(string),
+			CharacterID:       req.CharacterID,
+			ChatID:            &chatID,
+			Affection:         50, // 默認好感度
+			Mood:              "neutral",
+			Relationship:      "stranger",
+			IntimacyLevel:     "casual",
+			TotalInteractions: 0,
+			LastInteraction:   time.Now(),
+			CreatedAt:         time.Now(),
+			UpdatedAt:         time.Now(),
 		}
 
 		_, err = tx.NewInsert().Model(&relationshipDB).Exec(ctx)
@@ -140,7 +139,7 @@ func CreateChatSession(c *gin.Context) {
 
 		return nil
 	})
-	
+
 	if err != nil {
 		utils.Logger.WithError(err).Error("Failed to create chat and relationship")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -194,7 +193,7 @@ func CreateChatSession(c *gin.Context) {
 			IsRegenerated:  false,
 			CreatedAt:      time.Now(),
 		}
-		
+
 		// 更新會話計數和時間
 		response.MessageCount = 1
 		now := time.Now()
@@ -484,40 +483,40 @@ func SendMessage(c *gin.Context) {
 	}
 
 	// 處理女性向AI對話
-    chatResponse, err := chatService.ProcessMessage(context.Background(), processRequest)
-    if err != nil {
-        utils.Logger.WithFields(map[string]interface{}{
-            "user_id":      userID,
-            "character_id": chat.CharacterID,
-            "chat_id":      chatID,
-        }).WithError(err).Error("女性向AI對話處理失敗")
-        
-        c.JSON(http.StatusInternalServerError, models.APIResponse{
-            Success: false,
-            Error: &models.APIError{
-                Code:    "AI_GENERATION_FAILED",
-                Message: "AI 回應生成失敗",
-            },
-        })
-        return
-    }
-    
-    // 確保回應有效性
-    if chatResponse == nil {
-        c.JSON(http.StatusInternalServerError, models.APIResponse{
-            Success: false,
-            Error: &models.APIError{
-                Code:    "AI_GENERATION_FAILED",
-                Message: "AI 回應生成失敗",
-            },
-        })
-        return
-    }
-    
-    // 確保好感度存在
-    if chatResponse.Affection == 0 {
-        chatResponse.Affection = 50
-    }
+	chatResponse, err := chatService.ProcessMessage(context.Background(), processRequest)
+	if err != nil {
+		utils.Logger.WithFields(map[string]interface{}{
+			"user_id":      userID,
+			"character_id": chat.CharacterID,
+			"chat_id":      chatID,
+		}).WithError(err).Error("女性向AI對話處理失敗")
+
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "AI_GENERATION_FAILED",
+				Message: "AI 回應生成失敗",
+			},
+		})
+		return
+	}
+
+	// 確保回應有效性
+	if chatResponse == nil {
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "AI_GENERATION_FAILED",
+				Message: "AI 回應生成失敗",
+			},
+		})
+		return
+	}
+
+	// 確保好感度存在
+	if chatResponse.Affection == 0 {
+		chatResponse.Affection = 50
+	}
 
 	// ChatService 已經處理了 AI 消息插入和會話統計更新
 	// 這裡不需要重複操作
@@ -526,11 +525,11 @@ func SendMessage(c *gin.Context) {
 	response := map[string]interface{}{
 		"chat_id":       chatResponse.ChatID,
 		"message_id":    chatResponse.MessageID,
-		"content":       chatResponse.Content,       // 統一的內容格式
-		"affection":     chatResponse.Affection,     // 直接返回好感度
+		"content":       chatResponse.Content,   // 統一的內容格式
+		"affection":     chatResponse.Affection, // 直接返回好感度
 		"ai_engine":     chatResponse.AIEngine,
 		"nsfw_level":    chatResponse.NSFWLevel,
-		"confidence":    chatResponse.Confidence,    // NSFW 分級信心度
+		"confidence":    chatResponse.Confidence, // NSFW 分級信心度
 		"response_time": chatResponse.ResponseTime.Milliseconds(),
 		"timestamp":     time.Now(),
 	}

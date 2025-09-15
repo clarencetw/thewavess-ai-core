@@ -182,7 +182,6 @@ func RecoverMiddleware() gin.HandlerFunc {
 	}
 }
 
-
 // GetCurrentTimestamp 獲取當前時間戳
 func GetCurrentTimestamp() int64 {
 	return time.Now().UnixNano()

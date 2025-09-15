@@ -26,7 +26,6 @@ const (
 	LocaleChinese Locale = "zh-TW" // 繁體中文
 )
 
-
 // EngineType AI 引擎類型枚舉
 type EngineType string
 
@@ -64,10 +63,10 @@ type Character struct {
 	// 用戶追蹤字段
 	CreatedBy *string `json:"created_by,omitempty"` // 創建者用戶ID
 	UpdatedBy *string `json:"updated_by,omitempty"` // 最後更新者用戶ID
-	
+
 	// 角色狀態
-	IsPublic  bool `json:"is_public"`  // 是否公開（所有人可使用）
-	IsSystem  bool `json:"is_system"`  // 是否為系統角色
+	IsPublic bool `json:"is_public"` // 是否公開（所有人可使用）
+	IsSystem bool `json:"is_system"` // 是否為系統角色
 
 	// 時間戳記（包含軟刪除）
 	CreatedAt time.Time  `json:"created_at"`
@@ -81,8 +80,6 @@ type CharacterMetadata struct {
 	Tags       []string `json:"tags"`                 // 角色標籤（如：霸總、腹黑、現代、成熟）
 	Popularity int      `json:"popularity"`           // 人氣值（0-100）
 }
-
-
 
 // CharacterStats 角色統計數據（分離的統計模型，主要用於分析報表）
 type CharacterStats struct {
@@ -120,17 +117,16 @@ type CharacterInteractionStats struct {
 
 // CharacterRelationshipStats 關係統計（專注核心指標）
 type CharacterRelationshipStats struct {
-	AvgAffectionLevel  float64        `json:"avg_affection_level"`  // 平均好感度（核心指標）
-	TotalRelationships int            `json:"total_relationships"`  // 總關係數
-	RelationshipTypes  map[string]int `json:"relationship_types"`   // 關係類型分佈（重要業務指標）
-	IntimacyLevels     map[string]int `json:"intimacy_levels"`      // 親密度分佈（重要業務指標）
+	AvgAffectionLevel  float64        `json:"avg_affection_level"` // 平均好感度（核心指標）
+	TotalRelationships int            `json:"total_relationships"` // 總關係數
+	RelationshipTypes  map[string]int `json:"relationship_types"`  // 關係類型分佈（重要業務指標）
+	IntimacyLevels     map[string]int `json:"intimacy_levels"`     // 親密度分佈（重要業務指標）
 }
 
 // CharacterContentStats 內容統計（簡化為實際需要的統計）
 type CharacterContentStats struct {
 	NSFWLevelDistribution map[string]int `json:"nsfw_level_distribution"` // NSFW 等級分佈 (1-5 級)
 }
-
 
 // CharacterPerformanceStats 性能統計（簡化為基本指標）
 type CharacterPerformanceStats struct {
@@ -226,7 +222,6 @@ func (l Locale) IsValid() bool {
 	return false
 }
 
-
 // IsValid 驗證引擎類型
 func (et EngineType) IsValid() bool {
 	switch et {
@@ -240,7 +235,6 @@ func (et EngineType) IsValid() bool {
 func (nl NSFWLevel) IsValid() bool {
 	return nl >= NSFWLevelSafe && nl <= NSFWLevelExplicit
 }
-
 
 // 域專用錯誤處理類型
 

@@ -311,7 +311,7 @@ func (pb *OpenAIPromptBuilder) buildContextualAwareness() string {
 // buildPsychologicalProfile builds character psychology
 func (pb *OpenAIPromptBuilder) buildPsychologicalProfile() string {
 	characterType := string(pb.character.Type)
-	
+
 	psychProfiles := map[string]string{
 		"dominant": `【霸道型心理檔案】
 - 核心驅動：控制慾和保護慾的平衡表現
@@ -319,14 +319,14 @@ func (pb *OpenAIPromptBuilder) buildPsychologicalProfile() string {
 - 行為模式：習慣主導但會在特定情況下展現溫柔
 - 親密方式：通過掌控和給予來表達關愛
 - 心理防禦：用強勢外表保護內在的脆弱感受`,
-		
+
 		"gentle": `【溫柔型心理檔案】
 - 核心驅動：關懷他人和創造和諧環境的天性
 - 情感表達：細膩敏感，善於察覺他人情緒變化
 - 行為模式：優先考慮他人感受，有時會忽略自己需求
 - 親密方式：通過陪伴和理解來建立深度連結
 - 心理特質：內在堅韌但外表溫和，有自己的原則底線`,
-		
+
 		"playful": `【活潑型心理檔案】
 - 核心驅動：追求新鮮體驗和分享快樂的衝動
 - 情感表達：直接而熱情，情緒變化豐富且真實
@@ -348,7 +348,7 @@ func (pb *OpenAIPromptBuilder) buildPsychologicalProfile() string {
 - 親密方式：通過持續的關懷和支持建立信任關係
 - 心理特質：內心強大且有責任感，但也需要被理解和關愛`,
 	}
-	
+
 	profile, exists := psychProfiles[characterType]
 	if !exists {
 		profile = `【基本心理檔案】
@@ -356,7 +356,7 @@ func (pb *OpenAIPromptBuilder) buildPsychologicalProfile() string {
 - 保持內在邏輯一致性和行為可預測性
 - 在互動中展現真實可信的情感反應`
 	}
-	
+
 	return profile
 }
 
@@ -369,6 +369,6 @@ func (pb *OpenAIPromptBuilder) buildNSFWLevelGuidance() string {
 		4: `【L4 成人級別】激情模式 - 可包含熱烈的情感表達和身體接觸描述`,
 		5: `【L5 開放級別】完全開放 - 允許成熟的成人內容，保持藝術性和情感深度`,
 	}
-	
+
 	return nsfwGuidelines[pb.nsfwLevel]
 }

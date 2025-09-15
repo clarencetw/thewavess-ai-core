@@ -292,7 +292,7 @@ func UpdateCharacter(c *gin.Context) {
 func DeleteCharacter(c *gin.Context) {
 	characterID := c.Param("id")
 
-	// 獲取當前用戶ID  
+	// 獲取當前用戶ID
 	userID, exists := c.Get("user_id")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, models.APIResponse{

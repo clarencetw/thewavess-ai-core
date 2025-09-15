@@ -204,4 +204,3 @@ func AdminCharactersPageHandler(c *gin.Context) {
 	}
 	c.HTML(http.StatusOK, "admin-characters.html", data)
 }
-

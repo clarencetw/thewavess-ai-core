@@ -119,28 +119,27 @@ func SetupRoutes(router *gin.RouterGroup) {
 		adminAuth.POST("/login", handlers.AdminLogin)
 	}
 
-
 	// 管理員API路由（需要管理員認證）- 保留必要的AJAX API
 	adminAPI := router.Group("/admin")
 	adminAPI.Use(middleware.AdminMiddleware())
 	{
 		// 統計資料API（AJAX用）
 		adminAPI.GET("/stats", handlers.GetAdminStats)
-		
+
 		// 系統日誌API（AJAX用）
 		adminAPI.GET("/logs", handlers.GetAdminLogs)
-		
+
 		// 用戶管理API（AJAX用）
 		adminAPI.GET("/users", handlers.GetAdminUsers)
 		adminAPI.GET("/users/:id", handlers.GetAdminUserByID)
 		adminAPI.PUT("/users/:id", handlers.UpdateAdminUser)
 		adminAPI.PUT("/users/:id/password", handlers.UpdateAdminUserPassword)
 		adminAPI.PUT("/users/:id/status", handlers.UpdateAdminUserStatus)
-		
+
 		// 聊天記錄API（AJAX用）
 		adminAPI.GET("/chats", handlers.AdminSearchChats)
 		adminAPI.GET("/chats/:chat_id/history", handlers.AdminGetChatHistory)
-		
+
 		// 角色管理API（AJAX用）
 		adminAPI.PUT("/character/:id/status", handlers.UpdateCharacterStatus)
 		adminAPI.GET("/characters", handlers.AdminGetCharacters)

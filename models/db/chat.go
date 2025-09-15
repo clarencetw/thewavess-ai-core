@@ -21,8 +21,8 @@ type ChatDB struct {
 	TotalCharacters int        `bun:"total_characters,default:0" json:"total_characters"`
 	LastMessageAt   *time.Time `bun:"last_message_at" json:"last_message_at"`
 	// 時間戳
-	CreatedAt       time.Time  `bun:"created_at,notnull,default:now()" json:"created_at"`
-	UpdatedAt       time.Time  `bun:"updated_at,notnull,default:now()" json:"updated_at"`
+	CreatedAt time.Time `bun:"created_at,notnull,default:now()" json:"created_at"`
+	UpdatedAt time.Time `bun:"updated_at,notnull,default:now()" json:"updated_at"`
 
 	// Relations
 	User      *UserDB      `bun:"rel:belongs-to,join:user_id=id"`

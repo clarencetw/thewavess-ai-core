@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	dbmodel "github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/handlers"
+	dbmodel "github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/gin-gonic/gin"
 )
 
@@ -36,7 +36,7 @@ func getSystemStats(ctx context.Context) (gin.H, error) {
 	// 基本系統資訊
 	systemInfo := gin.H{
 		"Uptime":    "Unknown",
-		"Version":   "1.0.0", 
+		"Version":   "1.0.0",
 		"GoVersion": "1.23",
 	}
 
@@ -48,10 +48,10 @@ func getSystemStats(ctx context.Context) (gin.H, error) {
 			"Blocked": blockedUsers,
 		},
 		"Chats": gin.H{
-			"TotalSessions":  totalChats,
-			"TotalMessages":  totalMessages,
-			"TodaySessions":  todayChats,
-			"TodayMessages":  todayMessages,
+			"TotalSessions": totalChats,
+			"TotalMessages": totalMessages,
+			"TodaySessions": todayChats,
+			"TodayMessages": todayMessages,
 		},
 		"Characters": gin.H{
 			"Total":  totalCharacters,
@@ -144,7 +144,7 @@ func getChatSessions(ctx context.Context, query, userIDFilter, characterID, date
 
 	// Build the base query with filters
 	baseQuery := db.NewSelect().Model((*dbmodel.ChatDB)(nil))
-	
+
 	// Apply filters
 	if query != "" {
 		baseQuery = baseQuery.Where("title ILIKE ?", "%"+query+"%")
@@ -354,4 +354,3 @@ func getCharacterStatsDefault() gin.H {
 		},
 	}
 }
-

@@ -11,7 +11,6 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-
 // CharacterService 角色業務邏輯服務
 type CharacterService struct {
 	store *CharacterStore
@@ -124,7 +123,6 @@ func (s *CharacterService) ListCharacters(ctx context.Context, query *models.Cha
 
 	return characters, pagination, nil
 }
-
 
 // SearchCharacters 搜尋角色
 func (s *CharacterService) SearchCharacters(ctx context.Context, keyword string, limit int) ([]*models.Character, error) {
@@ -347,7 +345,7 @@ func (s *CharacterService) GetCharacterStats(ctx context.Context, id string) (ma
 			ColumnExpr("AVG(affection) AS avg_affection, COUNT(*) AS total_relations").
 			Where("character_id = ?", id).
 			Scan(ctx, &relationshipStats)
-		
+
 		if err == nil {
 			if relationshipStats.AvgAffection != nil {
 				avgAffection = *relationshipStats.AvgAffection
@@ -370,7 +368,7 @@ func (s *CharacterService) GetCharacterStats(ctx context.Context, id string) (ma
 				relationshipTypes[rt.Relationship] = rt.Count
 			}
 
-			// 統計親密度分佈（重要業務指標）  
+			// 統計親密度分佈（重要業務指標）
 			var intimacyResults []struct {
 				IntimacyLevel string `bun:"intimacy_level"`
 				Count         int    `bun:"count"`
@@ -392,10 +390,10 @@ func (s *CharacterService) GetCharacterStats(ctx context.Context, id string) (ma
 	stats := map[string]interface{}{
 		"character_id": character.ID,
 		"basic_info": map[string]interface{}{
-			"name":        character.Name,
-			"type":        string(character.Type),
-			"is_active":   character.IsActive,
-			"created_at":  character.CreatedAt,
+			"name":       character.Name,
+			"type":       string(character.Type),
+			"is_active":  character.IsActive,
+			"created_at": character.CreatedAt,
 		},
 		"interaction_stats": map[string]interface{}{
 			"total_conversations": chatCount,
@@ -404,13 +402,13 @@ func (s *CharacterService) GetCharacterStats(ctx context.Context, id string) (ma
 			"last_interaction":    character.UpdatedAt,
 		},
 		"relationship_stats": map[string]interface{}{
-			"avg_affection_level": avgAffection,      // 核心指標：平均好感度
+			"avg_affection_level": avgAffection,       // 核心指標：平均好感度
 			"total_relationships": totalRelationships, // 核心指標：關係總數
 			"relationship_types":  relationshipTypes,  // 重要業務指標：關係類型分佈
 			"intimacy_levels":     intimacyLevels,     // 重要業務指標：親密度分佈
 		},
 		"performance_stats": map[string]interface{}{
-			"avg_response_time_ms": 0, // TODO: 實際計算回應時間
+			"avg_response_time_ms": 0,   // TODO: 實際計算回應時間
 			"success_rate":         1.0, // TODO: 實際計算成功率
 		},
 		"generated_at": utils.Now(),
@@ -418,7 +416,6 @@ func (s *CharacterService) GetCharacterStats(ctx context.Context, id string) (ma
 
 	return stats, nil
 }
-
 
 // 內部輔助方法
 

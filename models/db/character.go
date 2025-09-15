@@ -26,11 +26,11 @@ type CharacterDB struct {
 	// 用戶追蹤字段
 	CreatedBy *string `bun:"created_by" json:"created_by"`
 	UpdatedBy *string `bun:"updated_by" json:"updated_by"`
-	
+
 	// 角色狀態
-	IsPublic  bool `bun:"is_public,default:true" json:"is_public"`
-	IsSystem  bool `bun:"is_system,default:false" json:"is_system"`
-	
+	IsPublic bool `bun:"is_public,default:true" json:"is_public"`
+	IsSystem bool `bun:"is_system,default:false" json:"is_system"`
+
 	// 時間戳 (包含軟刪除)
 	CreatedAt time.Time  `bun:"created_at,default:now()" json:"created_at"`
 	UpdatedAt time.Time  `bun:"updated_at,default:now()" json:"updated_at"`
