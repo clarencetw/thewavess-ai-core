@@ -271,20 +271,26 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	return response, nil
 }
 
-// BuildCharacterPrompt 構建角色提示詞（使用統一模板）
+// BuildCharacterPrompt 構建角色提示詞
 func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) []OpenAIMessage {
 
-	// 使用OpenAI專屬的prompt構建器
+	// 獲取角色資料
 	characterService := GetCharacterService()
-	promptBuilder := NewOpenAIPromptBuilder(characterService)
 	ctx := context.Background()
-	systemPrompt := promptBuilder.
-		WithCharacter(ctx, characterID).
-		WithContext(conversationContext).
-		WithNSFWLevel(nsfwLevel).
-		WithUserMessage(userMessage).
-		WithChatMode(chatMode).
-		Build(ctx)
+	dbCharacter, err := characterService.GetCharacterDB(ctx, characterID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Failed to get character for prompt building")
+		return nil
+	}
+
+	// 使用OpenAI專屬的prompt構建器
+	promptBuilder := NewOpenAIPromptBuilder(characterService)
+	promptBuilder.WithCharacter(dbCharacter)
+	promptBuilder.WithContext(conversationContext)
+	promptBuilder.WithNSFWLevel(nsfwLevel)
+	promptBuilder.WithUserMessage(userMessage)
+	promptBuilder.WithChatMode(chatMode)
+	systemPrompt := promptBuilder.Build()
 
 	messages := []OpenAIMessage{
 		{

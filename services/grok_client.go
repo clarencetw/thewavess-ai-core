@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	db "github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
@@ -297,13 +298,34 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage string, conversati
 	characterService := GetCharacterService()
 	promptBuilder := NewGrokPromptBuilder(characterService)
 	ctx := context.Background()
-	systemPrompt := promptBuilder.
-		WithCharacter(ctx, characterID).
-		WithContext(conversationContext).
-		WithNSFWLevel(nsfwLevel).
-		WithUserMessage(userMessage).
-		WithChatMode(chatMode).
-		Build(ctx)
+
+	// 獲取 character 物件
+	character, err := characterService.GetCharacter(ctx, characterID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("獲取角色失敗")
+		// 使用基本 prompt 作為 fallback
+		systemPrompt := "請以創意的方式回應用戶。"
+		return []GrokMessage{
+			{Role: "system", Content: systemPrompt},
+			{Role: "user", Content: userMessage},
+		}
+	}
+
+	// 轉換為 db.CharacterDB 類型
+	dbCharacter := &db.CharacterDB{
+		ID:   character.ID,
+		Name: character.GetName(),
+		Type: string(character.Type),
+		Tags: character.Metadata.Tags,
+		UserDescription: character.UserDescription,
+	}
+
+	promptBuilder.WithCharacter(dbCharacter)
+	promptBuilder.WithContext(conversationContext)
+	promptBuilder.WithNSFWLevel(nsfwLevel)
+	promptBuilder.WithUserMessage(userMessage)
+	promptBuilder.WithChatMode(chatMode)
+	systemPrompt := promptBuilder.Build()
 
 	messages := []GrokMessage{
 		{

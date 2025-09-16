@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -26,6 +27,7 @@ type ChatService struct {
 	db             *bun.DB
 	openaiClient   *OpenAIClient
 	grokClient     *GrokClient
+	mistralClient  *MistralClient
 	config         *ChatConfig
 	nsfwClassifier *NSFWClassifier
 	// 簡單的 NSFW 遲滯（會話內短期內直接走 Grok）
@@ -47,6 +49,12 @@ type ChatConfig struct {
 		MaxTokens   int     `json:"max_tokens"`
 		Temperature float64 `json:"temperature"`
 	} `json:"grok"`
+
+	Mistral struct {
+		Model       string  `json:"model"`
+		MaxTokens   int     `json:"max_tokens"`
+		Temperature float64 `json:"temperature"`
+	} `json:"mistral"`
 
 	NSFW struct {
 		DetectionThreshold float64 `json:"detection_threshold"`
@@ -85,11 +93,11 @@ type NSFWAnalysis struct {
 
 // ContentAnalysis 內容分析結果
 type ContentAnalysis struct {
-	IsNSFW        bool     `json:"is_nsfw"`
-	Intensity     int      `json:"intensity"`  // 1-5 級
-	Categories    []string `json:"categories"` // romantic, suggestive, explicit
-	ShouldUseGrok bool     `json:"should_use_grok"`
-	Confidence    float64  `json:"confidence"`
+    IsNSFW        bool     `json:"is_nsfw"`
+    Intensity     int      `json:"intensity"`  // 1-5 級
+    Categories    []string `json:"categories"` // romantic, suggestive, explicit
+    ShouldUseGrok bool     `json:"should_use_grok"`
+    Confidence    float64  `json:"confidence"`
 }
 
 // AIJSONResponse AI JSON 響應結構 - AI 直接輸出的 JSON 格式
@@ -154,12 +162,14 @@ func NewChatService() *ChatService {
 
 	openaiClient := NewOpenAIClient()
 	grokClient := NewGrokClient()
+	mistralClient := NewMistralClient()
 	nsfwClassifier := NewNSFWClassifier()
 
 	service := &ChatService{
 		db:             GetDB(),
 		openaiClient:   openaiClient,
 		grokClient:     grokClient,
+		mistralClient:  mistralClient,
 		config:         config,
 		nsfwClassifier: nsfwClassifier,
 		nsfwSticky:     make(map[string]time.Time),
@@ -272,8 +282,8 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	}
 	utils.Logger.WithField("nsfw_level", analysis.Intensity).Info("NSFW分析完成，返回等級")
 
-	// 命中 NSFW 時，對該會話施加短期遲滯，後續直接走 Grok
-	if analysis.IsNSFW {
+	// 命中極端 NSFW (L5) 時，對該會話施加短期遲滯，後續直接走 Grok
+	if analysis.Intensity >= 5 {
 		s.markNSFWSticky(request.ChatID)
 	}
 
@@ -364,14 +374,25 @@ func (s *ChatService) analyzeContent(message string) (*ContentAnalysis, error) {
 		return nil, fmt.Errorf("NSFW classification failed: %w", err)
 	}
 
-	// 基於分級結果
-	analysis := &ContentAnalysis{
-		IsNSFW:        result.Level >= 5,
-		Intensity:     result.Level,
-		Categories:    []string{"keyword_gate"},
-		ShouldUseGrok: result.Level >= 5,
-		Confidence:    result.Confidence,
-	}
+    // 基於智能分級結果
+    // 附帶 reason 與非法標記於 Categories，後續可用於阻擋
+    categories := []string{"intelligent_keyword_analysis"}
+    if result.Reason != "" {
+        categories = append(categories, result.Reason)
+        // 標記非法（台灣法律不處理）：未成年/獸交/性暴力/亂倫
+        switch result.Reason {
+        case "illegal_underage", "illegal_underage_en", "bestiality", "sexual_violence_or_incest", "incest_family_roles", "incest_step_roles_en", "rape":
+            categories = append(categories, "illegal_content")
+        }
+    }
+
+    analysis := &ContentAnalysis{
+        IsNSFW:        result.Level >= 3, // L3以上認為是NSFW
+        Intensity:     result.Level,
+        Categories:    categories,
+        ShouldUseGrok: result.Level >= 4, // L4以上使用Grok（若為非法，稍後會阻擋）
+        Confidence:    result.Confidence,
+    }
 
 	// 記錄分析結果
 	utils.Logger.WithFields(logrus.Fields{
@@ -380,7 +401,7 @@ func (s *ChatService) analyzeContent(message string) (*ContentAnalysis, error) {
 		"is_nsfw":         analysis.IsNSFW,
 		"confidence":      result.Confidence,
 		"should_use_grok": analysis.ShouldUseGrok,
-		"analysis_method": "keyword_gate",
+		"analysis_method": "intelligent_keyword_weighted",
 		"reason":          result.Reason,
 	}).Info("NSFW 內容分析完成")
 
@@ -473,7 +494,7 @@ func (s *ChatService) getRecentMemories(chatID, userID, characterID string, limi
 	return []ChatMessage{}
 }
 
-// selectAIEngine 以極簡布林門選擇 AI 引擎（OpenAI 預設，明確 NSFW → Grok）
+// selectAIEngine 智能選擇 AI 引擎（基於精確的 L1-L5 分級）
 func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *ConversationContext, _ map[string]interface{}) string {
 	// 0. 角色標籤預分流（含 nsfw 標籤直接 Grok）
 	if conv != nil {
@@ -485,37 +506,61 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 					utils.Logger.WithFields(map[string]interface{}{
 						"character_id": conv.CharacterID,
 						"reason":       "character_tag",
-					}).Info("選擇 Grok 引擎：角色標籤預分流")
+						"tag":          t,
+					}).Info("選擇 Grok 引擎：角色標籤")
 					return "grok"
 				}
 			}
 		}
 	}
 
-	// 1. 會話遲滯：近期命中 NSFW 的會話短期內直接 Grok
+	// 1. 檢查 NSFW 遲滯（若該會話最近有 NSFW 觸發，直接走 Grok）
 	if conv != nil && s.isNSFWSticky(conv.ChatID) {
 		utils.Logger.WithFields(map[string]interface{}{
 			"chat_id": conv.ChatID,
-			"reason":  "nsfw_sticky",
-		}).Info("選擇 Grok 引擎：NSFW 遲滯生效")
+			"reason":  "nsfw_sticky_session",
+		}).Info("選擇 Grok 引擎：NSFW 遲滯期")
 		return "grok"
 	}
 
-	// 2. 布林 NSFW 決策：只要是 NSFW 就 Grok，否則 OpenAI
-	if analysis.IsNSFW || analysis.ShouldUseGrok {
-		utils.Logger.WithFields(map[string]interface{}{
-			"nsfw":       analysis.IsNSFW,
-			"categories": analysis.Categories,
-			"confidence": analysis.Confidence,
-			"reason":     "nsfw_boolean_gate",
-		}).Info("選擇 Grok 引擎：露骨內容")
-		return "grok"
+	// 2. 基於精確的 NSFW 分級選擇引擎
+	if analysis != nil {
+		level := analysis.Intensity
+
+		switch {
+		case level >= 4:
+			// L4-L5: 明確露骨內容 → Grok
+			utils.Logger.WithFields(map[string]interface{}{
+				"nsfw_level": level,
+				"reason":     "explicit_nsfw_content",
+				"category":   "high_intensity",
+			}).Info("選擇 Grok 引擎：高強度 NSFW 內容")
+			return "grok"
+
+		case level >= 2:
+			// L2-L3: 中等 NSFW → OpenAI (簡化雙引擎架構)
+			utils.Logger.WithFields(map[string]interface{}{
+				"nsfw_level": level,
+				"reason":     "moderate_nsfw_openai",
+				"category":   "dual_engine_architecture",
+			}).Info("選擇 OpenAI 引擎：中等強度 NSFW 內容 (雙引擎模式)")
+			return "openai"
+
+		default:
+			// L1: 安全內容 → OpenAI
+			utils.Logger.WithFields(map[string]interface{}{
+				"nsfw_level": level,
+				"reason":     "safe_content",
+				"category":   "general_conversation",
+			}).Info("選擇 OpenAI 引擎：安全內容")
+			return "openai"
+		}
 	}
 
-	// 預設使用 OpenAI（安全/非露骨）
+	// 3. 預設使用 OpenAI
 	utils.Logger.WithFields(map[string]interface{}{
-		"nsfw":       analysis.IsNSFW,
-		"categories": analysis.Categories,
+		"nsfw_level": 1,
+		"reason":     "default_choice",
 	}).Info("選擇 OpenAI 引擎：預設")
 	return "openai"
 }
@@ -539,6 +584,64 @@ func (s *ChatService) isNSFWSticky(chatID string) bool {
 	until, ok := s.nsfwSticky[chatID]
 	s.nsfwStickyMu.RUnlock()
 	return ok && time.Now().Before(until)
+}
+
+// 檢查是否為 OpenAI 內容拒絕錯誤
+func (s *ChatService) isOpenAIContentRejection(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	errorMessage := strings.ToLower(err.Error())
+
+	// OpenAI 內容拒絕錯誤關鍵詞（中英文）
+	rejectionKeywords := []string{
+		// 英文關鍵詞
+		"content policy",
+		"content filter",
+		"safety system",
+		"content violation",
+		"inappropriate content",
+		"policy violation",
+		"refused to generate",
+		"cannot fulfill",
+		"violates",
+		"inappropriate",
+		"explicit content",
+		"sexual content",
+		"harmful content",
+		"safety guidelines",
+		"content guidelines",
+
+		// 中文關鍵詞
+		"內容政策",
+		"內容過濾",
+		"安全系統",
+		"內容違規",
+		"不當內容",
+		"政策違規",
+		"拒絕生成",
+		"無法完成",
+		"違反",
+		"不適當",
+		"明確內容",
+		"色情內容",
+		"有害內容",
+		"安全準則",
+		"內容準則",
+		"不符合",
+		"不適合",
+		"敏感內容",
+		"限制內容",
+	}
+
+	for _, keyword := range rejectionKeywords {
+		if strings.Contains(errorMessage, keyword) {
+			return true
+		}
+	}
+
+	return false
 }
 
 // startNSFWStickyCleanup 定期清理過期的 NSFW 黏滯狀態，防止記憶體洩漏
@@ -587,11 +690,41 @@ type CharacterResponseData struct {
 
 // generatePersonalizedResponse 生成個性化女性向回應
 func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, userMessage string, context *ConversationContext, analysis *ContentAnalysis) (*CharacterResponseData, error) {
+    // 台灣法律不合法內容：不處理（直接拒絕）
+    for _, cat := range analysis.Categories {
+        if cat == "illegal_content" {
+            return &CharacterResponseData{
+                Content:       "抱歉，該請求涉及依法禁止的內容，無法提供回應。請更換其他話題。",
+                JSONProcessed: true,
+                EmotionDelta:  &EmotionDelta{AffectionChange: 0},
+                Mood:          "concerned",
+                Relationship:  "unchanged",
+                IntimacyLevel: "unchanged",
+                Reasoning:     "blocked_due_to_illegal_content",
+                Metadata:      map[string]interface{}{"policy": "taiwan_illegal_content_blocked"},
+            }, nil
+        }
+    }
 
-	// 根據引擎構建專屬prompt（OpenAI 固定 L1、Grok 固定 L5）
-	nsfwLevelForPrompt := 1
-	if engine == "grok" {
-		nsfwLevelForPrompt = 5
+	// 根據引擎和實際分析結果確定 NSFW 等級
+	nsfwLevelForPrompt := analysis.Intensity
+	switch engine {
+	case "openai":
+		// OpenAI 限制為 L1 安全內容
+		nsfwLevelForPrompt = 1
+	case "mistral":
+		// Mistral 支援 L2-L3，但限制最大為 L3
+		if nsfwLevelForPrompt > 3 {
+			nsfwLevelForPrompt = 3
+		}
+		if nsfwLevelForPrompt < 2 {
+			nsfwLevelForPrompt = 2 // Mistral 最小 L2
+		}
+	case "grok":
+		// Grok 支援 L4-L5，但限制最小為 L4
+		if nsfwLevelForPrompt < 4 {
+			nsfwLevelForPrompt = 4
+		}
 	}
 	prompt := s.buildEngineSpecificPrompt(engine, context.CharacterID, userMessage, context, nsfwLevelForPrompt, context.ChatMode)
 
@@ -599,11 +732,52 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 	var err error
 
 	if engine == "openai" {
-		// 使用 OpenAI (Level 1-4)
+		// 使用 OpenAI (Level 1)
 		responseText, err = s.generateOpenAIResponse(ctx, prompt, context, userMessage)
 		if err != nil {
-			utils.Logger.WithError(err).Error("OpenAI 回應生成失敗")
-			return nil, fmt.Errorf("failed OpenAI API call: %w", err)
+			// 檢查是否為 OpenAI 內容拒絕錯誤，自動切換到 Mistral 或 Grok
+			if s.isOpenAIContentRejection(err) {
+				utils.Logger.WithFields(logrus.Fields{
+					"original_engine": "openai",
+					"reason":          "openai_content_rejection",
+					"chat_id":         context.ChatID,
+				}).Info("OpenAI 拒絕內容，自動切換到備用引擎")
+
+				// 標記會話為 NSFW sticky
+				s.markNSFWSticky(context.ChatID)
+
+				// 直接使用 Grok 處理內容拒絕情況 (雙引擎架構)
+				grokPrompt := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
+				responseText, err = s.generateGrokResponse(ctx, grokPrompt, context, userMessage)
+				if err != nil {
+					utils.Logger.WithError(err).Error("Grok 後備回應生成失敗")
+					return nil, fmt.Errorf("failed fallback Grok API call: %w", err)
+				}
+				engine = "grok_fallback"
+			} else {
+				utils.Logger.WithError(err).Error("OpenAI 回應生成失敗")
+				return nil, fmt.Errorf("failed OpenAI API call: %w", err)
+			}
+		}
+	} else if engine == "mistral" {
+		// 使用 Mistral (Level 2-3) - 保留實作但實際上不會被呼叫
+		responseText, err = s.generateMistralResponse(ctx, prompt, context, userMessage)
+		if err != nil {
+			// Mistral 失敗時切換到 Grok
+			utils.Logger.WithFields(logrus.Fields{
+				"original_engine": "mistral",
+				"fallback_engine": "grok",
+				"reason":          "mistral_api_error",
+				"chat_id":         context.ChatID,
+			}).Info("Mistral 失敗，自動切換到 Grok")
+
+			grokPrompt := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
+			responseText, err = s.generateGrokResponse(ctx, grokPrompt, context, userMessage)
+			if err != nil {
+				utils.Logger.WithError(err).Error("Grok 後備回應生成失敗")
+				return nil, fmt.Errorf("failed fallback Grok API call: %w", err)
+			}
+			engine = "grok_fallback"
 		}
 	} else if engine == "grok" {
 		// 使用 Grok (Level 5)
@@ -645,9 +819,132 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 	}
 }
 
+// parseMixedFormatResponse 處理混合格式的 AI 回應 (對話內容 + --- + 元數據)
+func (s *ChatService) parseMixedFormatResponse(responseText string) *CharacterResponseData {
+	// 檢查是否包含分隔線
+	if !strings.Contains(responseText, "---") {
+		return nil
+	}
+
+	parts := strings.SplitN(responseText, "---", 2)
+	if len(parts) != 2 {
+		return nil
+	}
+
+	content := strings.TrimSpace(parts[0])
+	metadataText := strings.TrimSpace(parts[1])
+
+	// 嘗試解析元數據
+	result := &CharacterResponseData{
+		Content:       content,
+		JSONProcessed: true,
+		EmotionDelta:  &EmotionDelta{AffectionChange: 0},
+		Mood:          "neutral",
+		Relationship:  "unchanged",
+		IntimacyLevel: "friendly",
+		Reasoning:     "",
+		Metadata:      map[string]interface{}{"parsed_from": "mixed_format"},
+	}
+
+	// 解析 emotion_delta
+	if emotionMatch := strings.Index(metadataText, "emotion_delta:"); emotionMatch != -1 {
+		emotionEnd := s.findEndOfObject(metadataText, emotionMatch)
+		if emotionEnd > emotionMatch {
+			emotionText := metadataText[emotionMatch+len("emotion_delta:"):]
+			emotionText = strings.TrimSpace(emotionText)
+			if strings.HasPrefix(emotionText, "{") {
+				objectEnd := s.findEndOfObject(emotionText, 0)
+				if objectEnd > 0 {
+					emotionJSON := emotionText[:objectEnd+1]
+					// 清理格式問題
+					emotionJSON = strings.ReplaceAll(emotionJSON, ": +", ": ")
+					var emotionDelta EmotionDelta
+					if err := json.Unmarshal([]byte(emotionJSON), &emotionDelta); err == nil {
+						result.EmotionDelta = &emotionDelta
+					}
+				}
+			}
+		}
+	}
+
+	// 解析其他字段
+	if mood := s.extractSimpleField(metadataText, "mood"); mood != "" {
+		result.Mood = mood
+	}
+	if relationship := s.extractSimpleField(metadataText, "relationship"); relationship != "" {
+		result.Relationship = relationship
+	}
+	if intimacy := s.extractSimpleField(metadataText, "intimacy_level"); intimacy != "" {
+		result.IntimacyLevel = intimacy
+	}
+	if personality := s.extractSimpleField(metadataText, "personality_consistency"); personality != "" {
+		result.Reasoning = personality
+	}
+
+	return result
+}
+
+// findEndOfObject 尋找 JSON 對象的結束位置
+func (s *ChatService) findEndOfObject(text string, start int) int {
+	braceCount := 0
+	inString := false
+	escaped := false
+
+	for i := start; i < len(text); i++ {
+		char := text[i]
+
+		if inString {
+			if escaped {
+				escaped = false
+			} else if char == '\\' {
+				escaped = true
+			} else if char == '"' {
+				inString = false
+			}
+		} else {
+			switch char {
+			case '"':
+				inString = true
+			case '{':
+				braceCount++
+			case '}':
+				braceCount--
+				if braceCount == 0 {
+					return i
+				}
+			}
+		}
+	}
+	return -1
+}
+
+// extractSimpleField 從元數據文本中提取簡單字段值
+func (s *ChatService) extractSimpleField(text, fieldName string) string {
+	pattern := fieldName + `:\s*"([^"]+)"`
+	re, err := regexp.Compile(pattern)
+	if err != nil {
+		return ""
+	}
+	matches := re.FindStringSubmatch(text)
+	if len(matches) > 1 {
+		return matches[1]
+	}
+	return ""
+}
+
 // parseJSONResponse 解析 AI 的 JSON 響應
 func (s *ChatService) parseJSONResponse(responseText string, context *ConversationContext, nsfwLevel int) (*CharacterResponseData, error) {
 	var jsonResp AIJSONResponse
+
+	// 首先嘗試處理混合格式 (對話內容 + --- + 元數據)
+	if mixedResult := s.parseMixedFormatResponse(responseText); mixedResult != nil {
+		utils.Logger.WithFields(map[string]interface{}{
+			"original_length": len(responseText),
+			"parse_method":    "mixed_format",
+			"affection_change": mixedResult.EmotionDelta.AffectionChange,
+		}).Info("Successfully parsed mixed format AI response")
+		return mixedResult, nil
+	}
 
 	// 從回應文字中嚴格提取 JSON 區段並解析
 	extractedJSON, extractErr := utils.ExtractJSONFromText(responseText)
@@ -659,19 +956,21 @@ func (s *ChatService) parseJSONResponse(responseText string, context *Conversati
 		return nil, fmt.Errorf("unable to find valid JSON structure in response: %w", extractErr)
 	}
 
-	// 清理 JSON 中的格式問題（移除數字前的 + 號）
-	cleanedJSON := strings.ReplaceAll(extractedJSON, ":  +", ": ")
-	cleanedJSON = strings.ReplaceAll(cleanedJSON, ": +", ": ")
+    // 清理 JSON 中的格式問題（移除數字前的 + 號）
+    cleanedJSON := strings.ReplaceAll(extractedJSON, ":  +", ": ")
+    cleanedJSON = strings.ReplaceAll(cleanedJSON, ": +", ": ")
+    // 針對模型常見的未轉義換行，僅在字串內轉為 \n
+    cleanedJSON = utils.SanitizeLooseJSONForNewlines(cleanedJSON)
 
-	if err := json.Unmarshal([]byte(cleanedJSON), &jsonResp); err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"original_text":  responseText,
-			"extracted_json": extractedJSON,
-			"cleaned_json":   cleanedJSON,
-			"parse_error":    err.Error(),
-		}).Error("Failed to parse JSON response from AI")
-		return nil, fmt.Errorf("JSON parsing failed: %w", err)
-	}
+    if err := json.Unmarshal([]byte(cleanedJSON), &jsonResp); err != nil {
+        utils.Logger.WithFields(map[string]interface{}{
+            "original_text":  responseText,
+            "extracted_json": extractedJSON,
+            "cleaned_json":   cleanedJSON,
+            "parse_error":    err.Error(),
+        }).Error("Failed to parse JSON response from AI")
+        return nil, fmt.Errorf("JSON parsing failed: %w", err)
+    }
 
 	// 驗證必要字段
 	if jsonResp.Content == "" {
@@ -704,32 +1003,55 @@ func (s *ChatService) parseJSONResponse(responseText string, context *Conversati
 // 統一改用 utils.ExtractJSONFromText 以提高精確度與一致性
 
 // buildEngineSpecificPrompt 根據 AI 引擎構建專屬 prompt
-// OpenAI: 情感細膩，Grok: 大膽創意
+// OpenAI: 情感細膩，Mistral: 進階 NSFW 處理，Grok: 大膽創意
 func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) string {
 	// 記憶上下文完全通過 conversationContext.RecentMessages 提供
 	characterService := GetCharacterService()
 	ctx := context.Background()
 
+	// 獲取角色信息以便轉換
+	character, err := characterService.GetCharacter(ctx, characterID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("獲取角色失敗，使用預設 prompt")
+		return fmt.Sprintf("System: You are a helpful AI assistant.\nUser: %s", userMessage)
+	}
+
+	// 轉換為 db.CharacterDB 類型
+	dbCharacter := &db.CharacterDB{
+		ID:   character.ID,
+		Name: character.GetName(),
+		Type: string(character.Type),
+		Tags: character.Metadata.Tags,
+		UserDescription: character.UserDescription,
+	}
+
 	if engine == "grok" {
-		// 使用Grok專屬prompt構建器
+		// 使用 Grok 專用 prompt 構建器 (適用於最高級 NSFW)
 		promptBuilder := NewGrokPromptBuilder(characterService)
-		return promptBuilder.
-			WithCharacter(ctx, characterID).
-			WithContext(conversationContext).
-			WithNSFWLevel(nsfwLevel).
-			WithUserMessage(userMessage).
-			WithChatMode(chatMode).
-			Build(ctx)
+		promptBuilder.WithCharacter(dbCharacter)
+		promptBuilder.WithContext(conversationContext)
+		promptBuilder.WithNSFWLevel(nsfwLevel)
+		promptBuilder.WithUserMessage(userMessage)
+		promptBuilder.WithChatMode(chatMode)
+		return promptBuilder.Build()
+	} else if engine == "mistral" {
+		// 使用 Mistral 專用 prompt 構建器 (適用於 L2-L3 中等內容)
+		promptBuilder := NewMistralPromptBuilder(characterService)
+		promptBuilder.WithCharacter(dbCharacter)
+		promptBuilder.WithContext(conversationContext)
+		promptBuilder.WithNSFWLevel(nsfwLevel)
+		promptBuilder.WithUserMessage(userMessage)
+		promptBuilder.WithChatMode(chatMode)
+		return promptBuilder.Build()
 	} else {
-		// 使用OpenAI專屬prompt構建器
+		// 使用 OpenAI 專用安全 prompt 構建器
 		promptBuilder := NewOpenAIPromptBuilder(characterService)
-		return promptBuilder.
-			WithCharacter(ctx, characterID).
-			WithContext(conversationContext).
-			WithNSFWLevel(nsfwLevel).
-			WithUserMessage(userMessage).
-			WithChatMode(chatMode).
-			Build(ctx)
+		promptBuilder.WithCharacter(dbCharacter)
+		promptBuilder.WithContext(conversationContext)
+		promptBuilder.WithNSFWLevel(nsfwLevel)
+		promptBuilder.WithUserMessage(userMessage)
+		promptBuilder.WithChatMode(chatMode)
+		return promptBuilder.Build()
 	}
 }
 
@@ -885,6 +1207,45 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, prompt string,
 	// 如果沒有回應內容，返回錯誤
 	utils.Logger.Warn("OpenAI API 返回空回應")
 	return "", fmt.Errorf("empty response from OpenAI API")
+}
+
+// generateMistralResponse 生成Mistral回應
+func (s *ChatService) generateMistralResponse(ctx context.Context, prompt string, context *ConversationContext, currentUserMessage string) (string, error) {
+	if s.mistralClient == nil {
+		return "", fmt.Errorf("Mistral client not initialized")
+	}
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"chat_id":      context.ChatID,
+		"character_id": context.CharacterID,
+		"user_id":      context.UserID,
+	}).Info("調用 Mistral API")
+
+	// 調用 Mistral API
+	response, err := s.mistralClient.GenerateResponse(ctx, prompt, currentUserMessage, context.UserID)
+	if err != nil {
+		utils.Logger.WithError(err).Error("Mistral API 調用失敗")
+		return "", fmt.Errorf("failed Mistral API call: %w", err)
+	}
+
+	// 檢查回應內容
+	if response == nil || response.Content == "" {
+		utils.Logger.Warn("Mistral API 返回空回應")
+		return "", fmt.Errorf("empty response from Mistral API")
+	}
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"chat_id":      context.ChatID,
+		"response_len": len(response.Content),
+		"tokens_used":  func() int {
+			if response.Usage != nil {
+				return response.Usage.TotalTokens
+			}
+			return 0
+		}(),
+	}).Info("Mistral API 響應成功")
+
+	return response.Content, nil
 }
 
 // updateAffection 好感度更新

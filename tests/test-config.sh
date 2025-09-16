@@ -6,7 +6,6 @@
 # 載入共用工具庫
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "$SCRIPT_DIR/utils/test_common.sh"
-source "$SCRIPT_DIR/utils/test_logger.sh"
 
 # 初始化完成提示
 echo -e "${TC_CYAN}📋 Thewavess AI 測試工具已載入${TC_NC}"

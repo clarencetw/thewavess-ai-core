@@ -5,50 +5,34 @@
 
 set -e
 
-# 設定測試參數
-BASE_URL="${BASE_URL:-http://localhost:8080/api/v1}"
-USERNAME="${USERNAME:-testusertemp}"
-PASSWORD="${PASSWORD:-TempPassword123}"
-CHARACTER_ID="${CHARACTER_ID:-character_02}"
+# 載入測試工具庫
+source "$(dirname "$0")/utils/test_common.sh"
 
-# 顏色輸出
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# 初始化測試環境
+tc_init_logging "chat_api_validation"
 
-echo -e "${BLUE}=== Chat API Response Validation Tool ===${NC}"
-echo "Base URL: $BASE_URL"
-echo ""
+tc_log "INFO" "🧪 Chat API Response Validation Tool"
+tc_log "INFO" "Base URL: $TEST_BASE_URL"
 
 # 1. 登入並取得 token
-echo -e "${YELLOW}[1/6] 用戶登入...${NC}"
-LOGIN_RESPONSE=$(curl -s -X POST "$BASE_URL/auth/login" \
-  -H "Content-Type: application/json" \
-  -d "{\"username\": \"$USERNAME\", \"password\": \"$PASSWORD\"}")
-
-TOKEN=$(echo "$LOGIN_RESPONSE" | jq -r '.data.token // empty')
-if [ -z "$TOKEN" ] || [ "$TOKEN" = "null" ]; then
-    echo -e "${RED}❌ 登入失敗${NC}"
-    echo "$LOGIN_RESPONSE" | jq .
+tc_log "INFO" "[1/6] 用戶登入..."
+if ! tc_authenticate; then
+    tc_log "FAIL" "用戶驗證失敗"
     exit 1
 fi
-echo -e "${GREEN}✅ 登入成功${NC}"
+tc_log "PASS" "登入成功"
 
 # 2. 創建測試會話
-echo -e "${YELLOW}[2/6] 創建測試會話...${NC}"
-CREATE_RESPONSE=$(curl -s -X POST "$BASE_URL/chats" \
-  -H "Content-Type: application/json" \
-  -H "Authorization: Bearer $TOKEN" \
-  -d "{\"character_id\": \"$CHARACTER_ID\", \"title\": \"API驗證測試\"}")
+tc_log "INFO" "[2/6] 創建測試會話..."
+CREATE_RESPONSE=$(tc_http_request "POST" "/chats" "{\"character_id\": \"$TEST_CHARACTER_ID\", \"title\": \"API驗證測試\"}" "Create Test Chat")
 
 CHAT_ID=$(echo "$CREATE_RESPONSE" | jq -r '.data.id // empty')
 if [ -z "$CHAT_ID" ] || [ "$CHAT_ID" = "null" ]; then
-    echo -e "${RED}❌ 創建會話失敗${NC}"
+    tc_log "FAIL" "創建會話失敗"
     echo "$CREATE_RESPONSE" | jq .
     exit 1
 fi
+tc_log "PASS" "會話創建成功 (ID: $CHAT_ID)"
 
 # 驗證創建會話回應資料
 echo "驗證創建會話回應資料..."
