@@ -174,7 +174,7 @@ func CreateChatSession(c *gin.Context) {
 	response := chat.ToResponse()
 
 	// 生成歡迎消息作為第一條消息
-	chatService := services.NewChatService()
+	chatService := services.GetChatService()
 	welcomeMessage, err := chatService.GenerateWelcomeMessage(ctx, userID.(string), req.CharacterID, chatID)
 	if err != nil {
 		utils.Logger.WithError(err).Error("Failed to generate welcome message")
@@ -470,7 +470,7 @@ func SendMessage(c *gin.Context) {
 	}
 
 	// 整合女性向AI聊天服務
-	chatService := services.NewChatService()
+	chatService := services.GetChatService()
 
 	// 構建處理請求
 	processRequest := &services.ProcessMessageRequest{
@@ -1098,7 +1098,7 @@ func RegenerateResponse(c *gin.Context) {
 	}
 
 	// 使用聊天服務重新生成回應
-	chatService := services.NewChatService()
+	chatService := services.GetChatService()
 
 	// 構建正確的ProcessMessageRequest
 	processReq := &services.ProcessMessageRequest{

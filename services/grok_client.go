@@ -19,7 +19,6 @@ type GrokClient struct {
 	apiKey     string
 	baseURL    string
 	httpClient *http.Client
-	isAzure    bool
 }
 
 // GrokRequest Grok 請求結構（類似 OpenAI 格式）
@@ -68,19 +67,12 @@ func NewGrokClient() *GrokClient {
 		utils.Logger.Fatal("GROK_API_KEY is required but not set in environment")
 	}
 
-	// 獲取 API URL，支援 Azure 或其他自定義端點
+	// 獲取 API URL
 	baseURL := utils.GetEnvWithDefault("GROK_API_URL", "https://api.x.ai/v1")
-	isAzure := false
-
-	// 檢查是否為 Azure AI Foundry
-	if strings.Contains(baseURL, "azure.com") {
-		isAzure = true
-	}
 
 	return &GrokClient{
 		apiKey:  apiKey,
 		baseURL: baseURL,
-		isAzure: isAzure,
 		httpClient: &http.Client{
 			Timeout: 60 * time.Second, // 增加到60秒
 		},
@@ -145,13 +137,7 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	}
 
 	// 創建 HTTP 請求
-	var url string
-	if c.isAzure {
-		// Azure AI Foundry 使用與 OpenAI 相同的端點結構
-		url = c.baseURL + "/models/chat/completions?api-version=2024-05-01-preview"
-	} else {
-		url = c.baseURL + "/chat/completions"
-	}
+	url := c.baseURL + "/chat/completions"
 	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestBody))
 	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{
@@ -165,13 +151,7 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	// 設置請求標頭
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("User-Agent", "thewavess-ai-core/1.0")
-
-	// Azure 需要不同的認證方式
-	if c.isAzure {
-		httpReq.Header.Set("api-key", c.apiKey)
-	} else {
-		httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
-	}
+	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
 
 	// 發送 HTTP 請求，帶重試機制
 	utils.Logger.WithFields(map[string]interface{}{
@@ -335,23 +315,27 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage string, conversati
 	}
 
 	// 添加對話歷史
-	if conversationContext != nil {
-		for i, msg := range conversationContext.RecentMessages {
-			if i >= 3 { // NSFW 場景保留較少歷史
-				break
-			}
-			messages = append(messages, GrokMessage{
-				Role:    msg.Role,
-				Content: msg.Content,
-			})
-		}
-	}
+    if conversationContext != nil {
+        // 僅保留最近2則歷史（舊 -> 新）
+        count := len(conversationContext.RecentMessages)
+        if count > 2 { count = 2 }
+        for i := count - 1; i >= 0; i-- {
+            msg := conversationContext.RecentMessages[i]
+            messages = append(messages, GrokMessage{Role: msg.Role, Content: msg.Content})
+        }
+    }
 
-	// 添加當前用戶消息
-	messages = append(messages, GrokMessage{
-		Role:    "user",
-		Content: userMessage,
-	})
+    // 添加當前用戶消息（避免與歷史最後一則重複）
+    shouldAppendUser := true
+    if conversationContext != nil && len(conversationContext.RecentMessages) > 0 {
+        latest := conversationContext.RecentMessages[0]
+        if latest.Role == "user" && strings.TrimSpace(latest.Content) == strings.TrimSpace(userMessage) {
+            shouldAppendUser = false
+        }
+    }
+    if shouldAppendUser {
+        messages = append(messages, GrokMessage{Role: "user", Content: userMessage})
+    }
 
 	return messages
 }

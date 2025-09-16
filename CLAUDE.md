@@ -77,7 +77,7 @@ make test-integration                  # Integration tests
 
 ### AI Integration Patterns
 - **Dual Engine Architecture**: OpenAI (L1-L3 safe→moderate) + Grok (L4-L5 explicit content)
-- **Intelligent Routing**: 18-rule weighted classifier with sticky sessions (3min) to prevent engine switching
+- **Intelligent Routing**: Enhanced keyword classifier with flexible pattern matching, sticky sessions (5min) to prevent engine switching
 - **Prompt Inheritance**: `BasePromptBuilder` provides shared functionality, engine-specific builders extend for specialized needs
 - **Fallback Mechanisms**: OpenAI content rejection → automatic Grok fallback, Mistral errors → Grok fallback
 - **Context Management**: 6 recent messages @ 120 chars each, chat/novel mode support
@@ -97,7 +97,7 @@ The system uses a sophisticated 18-rule weighted keyword classifier:
 
 ### Intelligent Features
 - **Context Suppression**: Medical/art/education contexts auto-downgrade levels
-- **Sticky Sessions**: 3-minute engine consistency after NSFW trigger
+- **Sticky Sessions**: 5-minute engine consistency after L4+ trigger (improved from 3min)
 - **Illegal Content Blocking**: Taiwan law compliance (underage, violence, non-consent)
 - **Fallback Chain**: OpenAI rejection → Grok, ensures service availability
 

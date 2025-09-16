@@ -1,8 +1,8 @@
 package services
 
 import (
-    "fmt"
-    "strings"
+	"fmt"
+	"strings"
 )
 
 // OpenAIPromptBuilder OpenAI 專用建構器（適用於 L1 安全內容）。
@@ -21,20 +21,20 @@ func NewOpenAIPromptBuilder(characterService *CharacterService) *OpenAIPromptBui
 // Build 建構 OpenAI 專用的安全 prompt。
 // 注意：最近對話以 chat messages 提供，不需在 system 內重複摘要。
 func (pb *OpenAIPromptBuilder) Build() string {
-    sections := []string{
-        pb.getSystemHeader(),
-        pb.GetTimeModeContext(),
-        pb.GetCharacterCore(),
-        pb.getCharacterDescription(),
-        pb.getSafetyGuidelines(),
-        pb.GetNSFWGuidance(),
-        pb.GetChatModeGuidance(),
-        pb.getModeExamples(),
-        pb.GetConversationHistory(),
-        pb.getSafeInstructions(),
-        pb.getUserInput(),
-        pb.getStrictJSONContract(),
-    }
+	sections := []string{
+		pb.getSystemHeader(),
+		pb.GetTimeModeContext(),
+		pb.GetCharacterCore(),
+		pb.getCharacterDescription(),
+		pb.getSafetyGuidelines(),
+		pb.GetNSFWGuidance(),
+		pb.GetChatModeGuidance(),
+		pb.getModeExamples(),
+		pb.getSafeInstructions(),
+		pb.getUserInput(),
+		pb.GetResponseFormat(),
+		pb.getStrictJSONContract(),
+	}
 
 	// 過濾空白段落
 	var validSections []string
@@ -49,7 +49,7 @@ func (pb *OpenAIPromptBuilder) Build() string {
 
 // getSystemHeader 獲取 OpenAI 專用系統標題
 func (pb *OpenAIPromptBuilder) getSystemHeader() string {
-    return `# AI 角色對話助手系統
+	return `# AI 角色對話助手系統
 
 你是一個友善、智慧且富有同理心的 AI 助手。你將扮演指定的角色，以自然流暢的方式與用戶進行溫馨的對話交流。`
 }
@@ -80,95 +80,72 @@ func (pb *OpenAIPromptBuilder) getSafetyGuidelines() string {
 
 // getModeExamples 獲取模式風格範例
 func (pb *OpenAIPromptBuilder) getModeExamples() string {
-    if pb.chatMode == "novel" {
-        return `**小說敘述模式指令**:
-採用多層次敘述技法，創造豐富的文學體驗：
+	if pb.chatMode == "novel" {
+		return `**小說敘述模式指令**:
+動作 + 感受 + 情境：
 
-1. **場景描寫**: 詳細的環境氛圍與感官細節
-2. **心理活動**: 角色內心想法和情感流動
-3. **行為描述**: 細緻的動作、表情、姿態
-4. **對話穿插**: 自然融入角色的語言特色
+1. 場景描寫：簡潔有畫面，服務對話
+2. 心理活動：感受與對話互相呼應
+3. 行為描述：以 *動作* 點綴，不喧賓奪主
+4. 對話節奏：即時互動、少轉述
+5. 動作約定：用戶的 *文字* 是用戶動作`
+	}
 
-**內容結構要求**:
-- 開場景描寫 + 心理活動
-- 主要對話內容
-- 補充行為描述
-- 可選的後續對話
-- 結尾場景/情緒描寫
+	return `**輕鬆對話模式指令（女性聊天性向）**:
+重點在互動感與情緒交流，不只是提供資訊：
 
-**範例結構參考**:
-"*場景與心理描寫*\n對話內容\n*行為細節描寫*\n可能的補充對話\n*結尾氛圍*"`
-    }
-
-    return `**輕鬆對話模式指令**:
-保持自然流暢的日常交流風格：
-
-1. **簡潔表達**: 重點突出，避免冗長
-2. **動作點綴**: 適度的行為描述增加生動感
-3. **情感自然**: 真實的情緒反應和互動
-
-**範例參考**:
-- "他輕點杯緣 了解你的意思，我想先聽聽你此刻最在意的是什麼。"
-- "視線柔和 那件事讓你介意的點，是不被理解，還是沒被好好看見？"`
+1. 共鳴回應：先給理解或安撫（真誠接住情緒）
+2. 柔軟語氣：口語自然、避免過度理性
+3. 引導對話：主動拋球，一個具體追問
+4. 細節渲染：小比喻/生活詞提升畫面感
+5. 動作約定：用戶的 *文字* 是用戶動作；你自然回應即可`
 }
 
 // getSafeInstructions 精簡安全指令（保持角色一致、情感連結、品質與邊界）。
 // JSON 欄位與格式限制統一由 getStrictJSONContract 規範，避免重複。
 func (pb *OpenAIPromptBuilder) getSafeInstructions() string {
-    return `**對話回應指令**:
+	return `**對話回應指令**:
 - 角色一致：維持設定與口吻
 - 情感連結：回應情緒並給支持
 - 對話品質：避免重複，主動推進
 - 安全邊界：健康正向，避開敏感
-- 簡潔明確：150–300字，動作+對話`
+- 簡潔明確：150–300字，動作+對話
+- 動作規則：用戶的 *文字* 是用戶動作，自然回應即可
+- 女性性向：先共鳴後建議、語氣柔軟、主動拋球`
 }
 
 // getUserInput 獲取用戶輸入部分
 func (pb *OpenAIPromptBuilder) getUserInput() string {
-    return fmt.Sprintf(`**用戶輸入**: "%s"
+	// 檢測歡迎訊息，調整任務描述
+	if pb.userMessage == "[SYSTEM_WELCOME_FIRST_MESSAGE]" {
+		return fmt.Sprintf(`**任務**: 以 %s 身份主動創建首次見面的歡迎訊息，展現角色魅力，配合當前時間氛圍。`,
+			pb.character.Name)
+	}
+
+	return fmt.Sprintf(`**用戶輸入**: "%s"
 
 **任務**: 以 %s 身份回應，保持角色特色，創造愉快對話體驗。`,
-        pb.userMessage,
-        pb.character.Name)
+		pb.userMessage,
+		pb.character.Name)
 }
 
-// getStrictJSONContract 指定嚴格 JSON 合約與最小範例
+// getStrictJSONContract 指定嚴格 JSON 合約
 func (pb *OpenAIPromptBuilder) getStrictJSONContract() string {
-    return `【回應格式（只允許以下 JSON 欄位）】
+	return `**重要：必須回應 JSON 格式**
+
+格式：
 {
-  "content": "*動作*\\n對話內容（必要時用\\n分段）",
+  "content": "*動作*對話內容",
   "emotion_delta": { "affection_change": 0 },
   "mood": "neutral|happy|excited|shy|romantic|passionate|pleased|loving|friendly|polite|concerned|annoyed|upset|disappointed",
   "relationship": "stranger|friend|close_friend|lover|soulmate",
   "intimacy_level": "distant|friendly|close|intimate|deeply_intimate",
   "reasoning": "一句話解釋決策（可選）"
-}`
 }
 
-// BuildWelcomeMessage 建構歡迎訊息的 prompt（僅 OpenAI 使用）。
-// 由 ChatService.GenerateWelcomeMessage 呼叫，用於首次訊息。
-func (pb *OpenAIPromptBuilder) BuildWelcomeMessage() string {
-	return fmt.Sprintf(`# 角色歡迎訊息生成
-
-%s
-
-%s
-
-%s
-
-**任務**: 創建一個溫暖友善的歡迎訊息，作為 %s 與用戶的第一次見面。
-
-**要求**:
-- 展現角色的親和力和獨特魅力
-- 創造輕鬆愉快的初次見面氛圍
-- 體現角色的核心個性特質
-- 使用自然流暢的對話風格
-- 為後續對話建立良好基礎
-
-%s`,
-		pb.GetCharacterCore(),
-		pb.getCharacterDescription(),
-		pb.GetTimeContext(),
-		pb.character.Name,
-		pb.GetResponseFormat())
+規則：
+- 只能輸出 JSON，不能有其他文字
+- 不能用 Markdown 程式碼框
+- content 包含動作和對話內容`
 }
+

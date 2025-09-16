@@ -14,8 +14,8 @@ import (
 
 // MistralClient Mistral AI API 客戶端
 type MistralClient struct {
-	client *mistral.MistralClient
-	config *MistralConfig
+    client *mistral.MistralClient
+    config *MistralConfig
 }
 
 // MistralConfig Mistral 配置
@@ -59,11 +59,6 @@ func NewMistralClient() *MistralClient {
 
 	client := mistral.NewMistralClientDefault(apiKey)
 
-	utils.Logger.WithFields(logrus.Fields{
-		"model":       config.Model,
-		"max_tokens":  config.MaxTokens,
-		"temperature": config.Temperature,
-	}).Info("Mistral AI 客戶端初始化完成")
 
 	return &MistralClient{
 		client: client,
@@ -79,16 +74,16 @@ func (mc *MistralClient) GenerateResponse(ctx context.Context, systemPrompt, use
 
 	startTime := time.Now()
 
-	utils.Logger.WithFields(logrus.Fields{
-		"service":          "mistral",
-		"model":            mc.config.Model,
-		"max_tokens":       mc.config.MaxTokens,
-		"temperature":      mc.config.Temperature,
-		"user":             userID,
-		"messages_count":   2,
-		"system_length":    len(systemPrompt),
-		"user_length":      len(userMessage),
-	}).Info("Mistral API request started")
+    utils.Logger.WithFields(logrus.Fields{
+        "service":          "mistral",
+        "model":            mc.config.Model,
+        "max_tokens":       mc.config.MaxTokens,
+        "temperature":      mc.config.Temperature,
+        "user":             userID,
+        "messages_count":   2,
+        "system_length":    len(systemPrompt),
+        "user_length":      len(userMessage),
+    }).Info("Mistral API request started")
 
 	// 開發模式下詳細記錄 prompt 內容
 	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
@@ -227,6 +222,7 @@ func (mc *MistralClient) GenerateResponse(ctx context.Context, systemPrompt, use
 
 	return mistralResponse, nil
 }
+
 
 // IsContentRejection 檢查是否為 Mistral 內容拒絕錯誤
 func (mc *MistralClient) IsContentRejection(err error) bool {

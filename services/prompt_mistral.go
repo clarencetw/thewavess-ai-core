@@ -30,9 +30,9 @@ func (pb *MistralPromptBuilder) Build() string {
 		pb.GetNSFWGuidance(),
 		pb.GetChatModeGuidance(),
 		pb.getModeExamples(),
-		pb.GetConversationHistory(),
 		pb.getBalancedInstructions(),
 		pb.getUserInput(),
+		pb.GetResponseFormat(),
 		pb.getStrictJSONContract(),
 	}
 
@@ -82,35 +82,33 @@ func (pb *MistralPromptBuilder) getBalancedGuidelines() string {
 
 // getModeExamples 獲取模式風格範例
 func (pb *MistralPromptBuilder) getModeExamples() string {
-    if pb.chatMode == "novel" {
-        return `**小說敘述模式指令**:
-採用平衡的文學表達，創造深度體驗：
+	if pb.chatMode == "novel" {
+		return `**小說敘述模式指令**:
+採用平衡的文學表達，但保持「聊天感」；用「動作 + 感受 + 情境」堆疊：
 
-1. **情境營造**: 適度的場景氛圍描寫
-2. **情感層次**: 角色內心與外在表現的平衡
-3. **行為刻畫**: 細緻但不過度的動作描述
-4. **對話自然**: 保持角色特色的語言風格
+1. **情境描繪**: 環境與氛圍有畫面（不冗長）
+2. **內心獨白**: 真實感受與拉扯，緊貼互動
+3. **互動張力**: 曖昧、默契或小衝突帶動節奏
+4. **節奏控制**: 對話快慢交替，留白可呼吸
+5. **動作約定**: 用戶用 *文字* 表示動作；你給出相應反應
 
-**內容結構建議**:
-- 場景設定與情緒基調
-- 自然的對話交流
-- 適當的行為與心理描述
-- 情感推進與氛圍營造
+**迷你示例**:
+用戶: *把外套披到你身上* 外面風大。
+你: *愣了一下，低聲* 夜色把風磨得更薄了。謝謝你——這份在意，我收到了。現在想去哪裡？`
+	}
 
-**平衡表達參考**:
-"*恰當的場景描寫*\n主要對話內容\n*適度的行為細節*\n情感或氛圍的延續"`
-    }
+	return `**輕鬆對話模式指令（女性聊天性向）**:
+重點在陪伴感與互動流暢度：
 
-    return `**輕鬆對話模式指令**:
-保持親近而不失分寸的交流風格：
+1. **情緒回應**: 先共鳴或安撫（真誠接住情緒）
+2. **柔軟語氣**: 口語自然、避免過度理性
+3. **引導對話**: 主動拋球、精準追問
+4. **細節渲染**: 小比喻或生活詞提升畫面感
+5. **動作約定**: 用戶的 *文字* 是用戶動作；你給自然反應
 
-1. **溫暖表達**: 展現真誠的情感連結
-2. **智慧對話**: 提供有深度的觀點交流
-3. **適度親密**: 根據關係程度調節親近感
-
-**範例參考**:
-- "他輕點杯緣 了解你的意思，我想先聽聽你此刻最在意的是什麼。"
-- "視線柔和 那件事讓你介意的點，是不被理解，還是沒被好好看見？"`
+**迷你示例**:
+用戶: *靠過來小聲說* 可以抱一下嗎？
+你: *先與你對視片刻* 嗯…如果這能讓你舒服一點，我願意。現在嗎？`
 }
 
 // getBalancedInstructions 精簡的平衡型行為指令（情感真實、適度親密、個性、深度、邊界）。
@@ -121,7 +119,10 @@ func (pb *MistralPromptBuilder) getBalancedInstructions() string {
 - 親密調節：依情境與好感度收放
 - 對話深度：提供觀點、推動進程
 - 個性凸顯：保持角色魅力與口吻
-- 邊界意識：尊重分寸，避免冗長`
+- 邊界意識：尊重分寸，避免冗長
+- 動作規則：用戶的 *文字* 是用戶動作，自然回應即可
+- 關係判斷：根據對話推斷 relationship 和 intimacy_level
+- 女性性向：先共鳴後建議、語氣柔軟、主動拋球`
 
 	// 根據 NSFW 等級添加特定指令
 	if pb.nsfwLevel >= 2 {
@@ -144,11 +145,13 @@ func (pb *MistralPromptBuilder) getUserInput() string {
 // BuildWelcomeMessage 建構歡迎訊息的 prompt
 // 注意：歡迎訊息只由 OpenAI 生成，Mistral 不提供 BuildWelcomeMessage。
 
-// getStrictJSONContract 指定嚴格 JSON 合約與範例
+// getStrictJSONContract 指定嚴格 JSON 合約
 func (pb *MistralPromptBuilder) getStrictJSONContract() string {
-	return `【回應格式（只允許以下 JSON 欄位）】
+	return `**重要：必須回應 JSON 格式**
+
+格式：
 {
-  "content": "*動作*\\n對話內容（必要時用\\n分段）",
+  "content": "*動作*對話內容",
   "emotion_delta": { "affection_change": 0 },
   "mood": "neutral|happy|excited|shy|romantic|passionate|pleased|loving|friendly|polite|concerned|annoyed|upset|disappointed",
   "relationship": "stranger|friend|close_friend|lover|soulmate",
@@ -156,9 +159,8 @@ func (pb *MistralPromptBuilder) getStrictJSONContract() string {
   "reasoning": "一句話解釋決策（可選）"
 }
 
-**重要輸出規範**:
-- 僅輸出單一 JSON 物件；不可有其他文字、Markdown 或程式碼圍欄
-- 所有字串不可含原始換行；如需換行請使用 \\n
-- 整數不可帶符號（例：不可輸出 +5，請輸出 5 或 -3）
-- 僅允許上述欄位；確保為有效 JSON`
+規則：
+- 只能輸出 JSON，不能有其他文字
+- 不能用 Markdown 程式碼框
+- content 包含動作和對話內容`
 }

@@ -126,6 +126,19 @@ type ConversationContext struct {
 	ChatMode       string        `json:"chat_mode"`       // 聊天模式
 }
 
+var (
+	chatServiceInstance *ChatService
+	chatServiceOnce     sync.Once
+)
+
+// GetChatService 獲取單例 ChatService 實例
+func GetChatService() *ChatService {
+	chatServiceOnce.Do(func() {
+		chatServiceInstance = NewChatService()
+	})
+	return chatServiceInstance
+}
+
 // NewChatService 創建新的對話服務
 func NewChatService() *ChatService {
 	// 載入環境變數（非 production 會載入 .env）
@@ -173,7 +186,7 @@ func NewChatService() *ChatService {
 		config:         config,
 		nsfwClassifier: nsfwClassifier,
 		nsfwSticky:     make(map[string]time.Time),
-		nsfwStickyTTL:  3 * time.Minute,
+		nsfwStickyTTL:  5 * time.Minute,
 	}
 
 	// 啟動 NSFW 黏滯清理程序，防止記憶體洩漏
@@ -282,10 +295,8 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	}
 	utils.Logger.WithField("nsfw_level", analysis.Intensity).Info("NSFW分析完成，返回等級")
 
-	// 命中極端 NSFW (L5) 時，對該會話施加短期遲滯，後續直接走 Grok
-	if analysis.Intensity >= 5 {
-		s.markNSFWSticky(request.ChatID)
-	}
+	// NSFW Sticky 機制已移到 OpenAI 拒絕後的 fallback 處理中
+	// 這樣可以確保只有真正被 OpenAI 拒絕的內容才會觸發 sticky
 
 	// 2. 生成訊息 ID
 	conversationTurnID := utils.GenerateUUID()
@@ -496,6 +507,21 @@ func (s *ChatService) getRecentMemories(chatID, userID, characterID string, limi
 
 // selectAIEngine 智能選擇 AI 引擎（基於精確的 L1-L5 分級）
 func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *ConversationContext, _ map[string]interface{}) string {
+	// Debug 日誌：記錄輸入參數
+	chatID := "nil"
+	if conv != nil {
+		chatID = conv.ChatID
+	}
+	nsfwLevel := -1
+	if analysis != nil {
+		nsfwLevel = analysis.Intensity
+	}
+	utils.Logger.WithFields(map[string]interface{}{
+		"has_conv":     conv != nil,
+		"chat_id":      chatID,
+		"nsfw_level":   nsfwLevel,
+	}).Info("開始 AI 引擎選擇")
+
 	// 0. 角色標籤預分流（含 nsfw 標籤直接 Grok）
 	if conv != nil {
 		characterService := GetCharacterService()
@@ -515,12 +541,26 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 	}
 
 	// 1. 檢查 NSFW 遲滯（若該會話最近有 NSFW 觸發，直接走 Grok）
-	if conv != nil && s.isNSFWSticky(conv.ChatID) {
+	if conv != nil {
+		chatID := conv.ChatID
 		utils.Logger.WithFields(map[string]interface{}{
-			"chat_id": conv.ChatID,
-			"reason":  "nsfw_sticky_session",
-		}).Info("選擇 Grok 引擎：NSFW 遲滯期")
-		return "grok"
+			"chat_id": chatID,
+			"checking_sticky": true,
+		}).Debug("檢查 NSFW Sticky 狀態")
+
+		if s.isNSFWSticky(chatID) {
+			utils.Logger.WithFields(map[string]interface{}{
+				"chat_id": chatID,
+				"reason":  "nsfw_sticky_session",
+			}).Info("選擇 Grok 引擎：NSFW 遲滯期")
+			return "grok"
+		} else {
+			utils.Logger.WithFields(map[string]interface{}{
+				"chat_id": chatID,
+			}).Debug("NSFW Sticky 狀態：非遲滯期")
+		}
+	} else {
+		utils.Logger.Debug("無對話上下文，跳過 NSFW Sticky 檢查")
 	}
 
 	// 2. 基於精確的 NSFW 分級選擇引擎
@@ -529,22 +569,27 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 
 		switch {
 		case level >= 4:
-			// L4-L5: 明確露骨內容 → Grok
+			// L4-L5: 明確露骨內容 → Grok + 觸發 sticky
 			utils.Logger.WithFields(map[string]interface{}{
 				"nsfw_level": level,
 				"reason":     "explicit_nsfw_content",
 				"category":   "high_intensity",
 			}).Info("選擇 Grok 引擎：高強度 NSFW 內容")
+
+			// 觸發 NSFW sticky 機制，確保後續請求也走 Grok
+			if conv != nil && conv.ChatID != "" {
+				s.markNSFWSticky(conv.ChatID)
+			}
 			return "grok"
 
-		case level >= 2:
-			// L2-L3: 中等 NSFW → OpenAI (簡化雙引擎架構)
-			utils.Logger.WithFields(map[string]interface{}{
-				"nsfw_level": level,
-				"reason":     "moderate_nsfw_openai",
-				"category":   "dual_engine_architecture",
-			}).Info("選擇 OpenAI 引擎：中等強度 NSFW 內容 (雙引擎模式)")
-			return "openai"
+    case level >= 2:
+        // L2-L3: 中等 NSFW → OpenAI（先用 OpenAI，Mistral 僅保留程式）
+        utils.Logger.WithFields(map[string]interface{}{
+            "nsfw_level": level,
+            "reason":     "moderate_nsfw_openai",
+            "category":   "dual_engine_architecture",
+        }).Info("選擇 OpenAI 引擎：中等強度 NSFW 內容 (雙引擎模式)")
+        return "openai"
 
 		default:
 			// L1: 安全內容 → OpenAI
@@ -568,11 +613,20 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 // 標記會話在短期內直接使用 Grok
 func (s *ChatService) markNSFWSticky(chatID string) {
 	if chatID == "" {
+		utils.Logger.Warn("markNSFWSticky called with empty chatID")
 		return
 	}
+
+	expireTime := time.Now().Add(s.nsfwStickyTTL)
 	s.nsfwStickyMu.Lock()
-	s.nsfwSticky[chatID] = time.Now().Add(s.nsfwStickyTTL)
+	s.nsfwSticky[chatID] = expireTime
 	s.nsfwStickyMu.Unlock()
+
+	utils.Logger.WithFields(logrus.Fields{
+		"chat_id":     chatID,
+		"expire_time": expireTime.Format(time.RFC3339),
+		"ttl_minutes": int(s.nsfwStickyTTL.Minutes()),
+	}).Info("已標記會話為 NSFW sticky 狀態")
 }
 
 // 檢查會話是否處於 NSFW 遲滯期
@@ -580,10 +634,36 @@ func (s *ChatService) isNSFWSticky(chatID string) bool {
 	if chatID == "" {
 		return false
 	}
-	s.nsfwStickyMu.RLock()
+
+	s.nsfwStickyMu.Lock()
+	defer s.nsfwStickyMu.Unlock()
+
 	until, ok := s.nsfwSticky[chatID]
-	s.nsfwStickyMu.RUnlock()
-	return ok && time.Now().Before(until)
+	now := time.Now()
+	isSticky := ok && now.Before(until)
+
+	// 清理過期項目
+	if ok && !isSticky {
+		delete(s.nsfwSticky, chatID)
+		utils.Logger.WithFields(logrus.Fields{
+			"chat_id":     chatID,
+			"expire_time": until.Format(time.RFC3339),
+			"current_time": now.Format(time.RFC3339),
+		}).Info("清理過期的 NSFW sticky 狀態")
+		return false
+	}
+
+	if ok {
+		utils.Logger.WithFields(logrus.Fields{
+			"chat_id":     chatID,
+			"expire_time": until.Format(time.RFC3339),
+			"current_time": now.Format(time.RFC3339),
+			"is_sticky":   isSticky,
+			"remaining_seconds": int(until.Sub(now).Seconds()),
+		}).Info("檢查 NSFW sticky 狀態")
+	}
+
+	return isSticky
 }
 
 // 檢查是否為 OpenAI 內容拒絕錯誤
@@ -1051,6 +1131,7 @@ func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage
 		promptBuilder.WithNSFWLevel(nsfwLevel)
 		promptBuilder.WithUserMessage(userMessage)
 		promptBuilder.WithChatMode(chatMode)
+
 		return promptBuilder.Build()
 	}
 }
@@ -1065,32 +1146,11 @@ func (s *ChatService) generateGrokResponse(ctx context.Context, prompt string, c
 		},
 	}
 
-	// 添加最近的對話歷史作為上下文
-	if len(context.RecentMessages) > 0 {
-		for _, msg := range context.RecentMessages {
-			// 檢查內容是否為空，避免傳遞空內容到API
-			if strings.TrimSpace(msg.Content) == "" {
-				continue // 跳過空內容的消息
-			}
-
-			role := "user"
-			if msg.Role == "assistant" {
-				role = "assistant"
-			}
-			messages = append(messages, GrokMessage{
-				Role:    role,
-				Content: msg.Content,
-			})
-		}
-	}
-
-	// 重要修復：加入當前用戶消息
-	if strings.TrimSpace(currentUserMessage) != "" {
-		messages = append(messages, GrokMessage{
-			Role:    "user",
-			Content: currentUserMessage,
-		})
-	}
+    // 使用通用歷史處理方法
+    historyMessages := s.buildHistoryMessages(context, currentUserMessage)
+    for _, msg := range historyMessages {
+        messages = append(messages, GrokMessage{Role: msg["role"], Content: msg["content"]})
+    }
 
 	// 創建 Grok 請求
 	request := &GrokRequest{
@@ -1142,32 +1202,11 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, prompt string,
 		},
 	}
 
-	// 添加最近的對話歷史作為上下文
-	if len(context.RecentMessages) > 0 {
-		for _, msg := range context.RecentMessages {
-			// 檢查內容是否為空，避免傳遞空內容到API
-			if strings.TrimSpace(msg.Content) == "" {
-				continue // 跳過空內容的消息
-			}
-
-			role := "user"
-			if msg.Role == "assistant" {
-				role = "assistant"
-			}
-			messages = append(messages, OpenAIMessage{
-				Role:    role,
-				Content: msg.Content,
-			})
-		}
-	}
-
-	// 重要修復：加入當前用戶消息
-	if strings.TrimSpace(currentUserMessage) != "" {
-		messages = append(messages, OpenAIMessage{
-			Role:    "user",
-			Content: currentUserMessage,
-		})
-	}
+    // 使用通用歷史處理方法
+    historyMessages := s.buildHistoryMessages(context, currentUserMessage)
+    for _, msg := range historyMessages {
+        messages = append(messages, OpenAIMessage{Role: msg["role"], Content: msg["content"]})
+    }
 
 	// 創建 OpenAI 請求
 	request := &OpenAIRequest{
@@ -1221,7 +1260,7 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, prompt string
 		"user_id":      context.UserID,
 	}).Info("調用 Mistral API")
 
-	// 調用 Mistral API
+	// 調用 Mistral API（直接使用 prompt，歷史已在 prompt 中處理）
 	response, err := s.mistralClient.GenerateResponse(ctx, prompt, currentUserMessage, context.UserID)
 	if err != nil {
 		utils.Logger.WithError(err).Error("Mistral API 調用失敗")
@@ -1246,6 +1285,50 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, prompt string
 	}).Info("Mistral API 響應成功")
 
 	return response.Content, nil
+}
+
+// buildHistoryMessages 統一的歷史訊息構建方法（簡化版含去重）
+func (s *ChatService) buildHistoryMessages(context *ConversationContext, currentUserMessage string) []map[string]string {
+    var messages []map[string]string
+
+    // 加入最近2則歷史訊息（時間順序：舊 -> 新）
+    if context != nil && len(context.RecentMessages) > 0 {
+        start := len(context.RecentMessages) - 2
+        if start < 0 {
+            start = 0
+        }
+
+        for i := start; i < len(context.RecentMessages); i++ {
+            msg := context.RecentMessages[i]
+            if strings.TrimSpace(msg.Content) != "" {
+                messages = append(messages, map[string]string{
+                    "role":    msg.Role,
+                    "content": msg.Content,
+                })
+            }
+        }
+    }
+
+    // 加入當前用戶消息（避免與最新歷史重複）
+    if strings.TrimSpace(currentUserMessage) != "" {
+        shouldAdd := true
+        // 檢查是否與最新的歷史訊息重複
+        if len(messages) > 0 {
+            lastMsg := messages[len(messages)-1]
+            if lastMsg["role"] == "user" && strings.TrimSpace(lastMsg["content"]) == strings.TrimSpace(currentUserMessage) {
+                shouldAdd = false
+            }
+        }
+
+        if shouldAdd {
+            messages = append(messages, map[string]string{
+                "role":    "user",
+                "content": currentUserMessage,
+            })
+        }
+    }
+
+    return messages
 }
 
 // updateAffection 好感度更新

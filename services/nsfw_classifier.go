@@ -105,7 +105,7 @@ func (c *NSFWClassifier) initRules() {
         {pattern: rx(`(?i)\b(?:penis|vagina|clitoris|nipples?|areolae?|genitals|pussy|cock|dick|boobs|tits|ass|butt(ocks)?|balls|testicles)\b`), weight: 6, category: "body", reason: "explicit_body_parts_en"},
 
 		// 裸體相關 (權重5 = L3)
-        {pattern: rx(`(?i)裸體|裸露|全裸|半裸|脫光|脫衣|脫褲|走光|露點|透視裝|比基尼`), weight: 5, category: "nudity", reason: "nudity_content"},
+        {pattern: rx(`(?i)裸體|裸露|全裸|半裸|脫光|脫衣|脫褲|脫掉.*褲|脫下.*褲|走光|露點|透視裝|比基尼`), weight: 5, category: "nudity", reason: "nudity_content"},
         {pattern: rx(`(?i)\b(?:nude|naked|topless|undress|strip|see[-\s]*through|cleavage)\b`), weight: 5, category: "nudity", reason: "nudity_content_en"},
 
 		// 色情場景/內容 (權重4 = L2-L3)

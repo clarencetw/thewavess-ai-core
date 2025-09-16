@@ -16,7 +16,6 @@ type OpenAIClient struct {
 	maxTokens   int
 	temperature float32
 	baseURL     string
-	isAzure     bool
 }
 
 // OpenAIRequest OpenAI 請求結構
@@ -70,34 +69,12 @@ func NewOpenAIClient() *OpenAIClient {
 	maxTokens := utils.GetEnvIntWithDefault("OPENAI_MAX_TOKENS", 1200)
 	temperature := utils.GetEnvFloatWithDefault("OPENAI_TEMPERATURE", 0.8)
 
-	// 獲取自定義 API URL，支援 Azure 或其他端點
+	// 獲取自定義 API URL
 	baseURL := utils.GetEnvWithDefault("OPENAI_API_URL", "https://api.openai.com/v1")
-	isAzure := false
-
-	// 檢查是否為 Azure OpenAI
-	if strings.Contains(baseURL, "azure.com") {
-		isAzure = true
-		// Azure OpenAI 需要特殊的 URL 和配置處理
-		// 保持原始 baseURL，讓 go-openai 庫處理具體的端點路徑
-	}
 
 	var client *openai.Client
-	if isAzure {
-		// Azure OpenAI 需要特殊配置 - 使用 DefaultAzureConfig
-		config := openai.DefaultAzureConfig(apiKey, baseURL)
-		// Azure 需要部署名稱，通常就是模型名稱
-		config.AzureModelMapperFunc = func(model string) string {
-			return model // 使用模型名稱作為部署名稱
-		}
-		client = openai.NewClientWithConfig(config)
-
-		utils.Logger.WithFields(map[string]interface{}{
-			"base_url":    baseURL,
-			"api_type":    "azure",
-			"api_version": config.APIVersion,
-		}).Info("Using Azure OpenAI API")
-	} else if baseURL != "https://api.openai.com/v1" {
-		// 其他自定義端點
+	if baseURL != "https://api.openai.com/v1" {
+		// 自定義端點
 		config := openai.DefaultConfig(apiKey)
 		config.BaseURL = baseURL
 		client = openai.NewClientWithConfig(config)
@@ -114,7 +91,6 @@ func NewOpenAIClient() *OpenAIClient {
 		maxTokens:   maxTokens,
 		temperature: float32(temperature),
 		baseURL:     baseURL,
-		isAzure:     isAzure,
 	}
 }
 
@@ -300,23 +276,27 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage string, con
 	}
 
 	// 添加對話歷史（最近幾條）
-	if conversationContext != nil {
-		for i, msg := range conversationContext.RecentMessages {
-			if i >= 5 { // 只保留最近5條消息
-				break
-			}
-			messages = append(messages, OpenAIMessage{
-				Role:    msg.Role,
-				Content: msg.Content,
-			})
-		}
-	}
+    if conversationContext != nil {
+        // 僅保留最近2則歷史（舊 -> 新）
+        count := len(conversationContext.RecentMessages)
+        if count > 2 { count = 2 }
+        for i := count - 1; i >= 0; i-- {
+            msg := conversationContext.RecentMessages[i]
+            messages = append(messages, OpenAIMessage{Role: msg.Role, Content: msg.Content})
+        }
+    }
 
-	// 添加當前用戶消息
-	messages = append(messages, OpenAIMessage{
-		Role:    "user",
-		Content: userMessage,
-	})
+    // 添加當前用戶消息（避免與歷史的最後一則用戶訊息重複）
+    shouldAppendUser := true
+    if conversationContext != nil && len(conversationContext.RecentMessages) > 0 {
+        latest := conversationContext.RecentMessages[0] // 最新在前
+        if latest.Role == "user" && strings.TrimSpace(latest.Content) == strings.TrimSpace(userMessage) {
+            shouldAppendUser = false
+        }
+    }
+    if shouldAppendUser {
+        messages = append(messages, OpenAIMessage{Role: "user", Content: userMessage})
+    }
 
 	return messages
 }

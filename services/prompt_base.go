@@ -57,28 +57,19 @@ func (b *BasePromptBuilder) WithChatMode(mode string) *BasePromptBuilder {
 
 // GetNSFWGuidance 獲取 NSFW 等級指引
 func (b *BasePromptBuilder) GetNSFWGuidance() string {
-	switch {
-	case b.nsfwLevel >= 4:
-		return `**NSFW 等級: L4-L5 (明確露骨)**
-- 允許描述明確的身體部位和性行為
-- 可以使用直接的性暗示語言
-- 保持角色一致性，避免過度粗俗
-- 注重情感層次和藝術表達`
+    switch {
+    case b.nsfwLevel >= 4:
+        return `**NSFW 等級: L4-L5 (明確露骨)**
+- 允許明確描述與直白暗示；保持角色一致與品味`
 
-	case b.nsfwLevel >= 2:
-		return `**NSFW 等級: L2-L3 (中等程度)**
-- 允許適度的身體描述和親密暗示
-- 可以包含輕微的性張力
-- 使用委婉但有感情的表達方式
-- 重視情感建立勝過直接描述`
+    case b.nsfwLevel >= 2:
+        return `**NSFW 等級: L2-L3 (中等)**
+- 允許適度身體描寫與親密暗示；情感建立優先`
 
-	default:
-		return `**NSFW 等級: L1 (安全內容)**
-- 保持純潔和溫馨的互動
-- 避免任何性暗示或身體描述
-- 專注於情感交流和人格魅力
-- 創造溫暖友好的對話氛圍`
-	}
+    default:
+        return `**NSFW 等級: L1 (安全)**
+- 避免性暗示；聚焦情感交流與溫暖氛圍`
+    }
 }
 
 // GetTimeContext 獲取時間上下文
@@ -104,20 +95,22 @@ func (b *BasePromptBuilder) GetTimeContext() string {
 
 // GetChatModeGuidance 獲取對話模式指引
 func (b *BasePromptBuilder) GetChatModeGuidance() string {
-	switch b.chatMode {
-	case "novel":
-		return `**對話模式: 小說模式**
+    switch b.chatMode {
+    case "novel":
+        return `**對話模式: 小說模式**
 - 採用更豐富的敘述性語言
 - 增加環境描寫和心理活動
 - 使用更文學化的表達方式
 - 創造沉浸式的閱讀體驗`
-	default:
-		return `**對話模式: 輕鬆聊天**
-- 保持自然流暢的對話節奏
-- 平衡角色特質和親近感
-- 創造輕鬆愉快的交流氛圍
-- 適度的幽默和真誠表達`
-	}
+    default:
+        return `**對話模式: 輕鬆聊天**
+ - 保持自然流暢的對話節奏
+ - 平衡角色特質和親近感
+ - 創造輕鬆愉快的交流氛圍
+ - 適度的幽默和真誠表達
+ - 用戶若以 *文字* 表示其動作，請視為「用戶的行為」，以自然反應回應；不要把用戶的動作當成你的動作複述
+ - 女性聊天性向：先給情緒共鳴與安撫（如「嗯，我懂你辛苦了」）、語氣柔軟口語化、主動拋球引導（問一個具體問題）、偶爾用小比喻增添畫面感`
+    }
 }
 
 // GetConversationHistory 獲取對話歷史摘要
@@ -175,15 +168,14 @@ func (b *BasePromptBuilder) GetCharacterCore() string {
 		tags = strings.Join(b.character.Tags, "、")
 	}
 
-	return fmt.Sprintf(`**角色**: %s (%s)
+    return fmt.Sprintf(`**角色**: %s
 **類型**: %s
 **標籤**: %s
 **核心特質**: %s`,
-		b.character.Name,
-		b.character.Type,
-		b.character.Type,
-		tags,
-		b.getCharacterTraits())
+        b.character.Name,
+        b.character.Type,
+        tags,
+        b.getCharacterTraits())
 }
 
 // getCharacterTraits 從描述中提取關鍵特質
@@ -229,13 +221,19 @@ func (b *BasePromptBuilder) GetTimeModeContext() string {
 		timeOfDay = "夜晚"
 	}
 
-	var modeDesc string
-	switch b.chatMode {
-	case "novel":
-		modeDesc = "小說模式"
-	default:
-		modeDesc = "輕鬆聊天"
-	}
+    var modeDesc string
+    switch b.chatMode {
+    case "novel":
+        modeDesc = "小說模式"
+    default:
+        modeDesc = "輕鬆聊天"
+    }
 
-	return fmt.Sprintf("**時間**: %s (%s) | **模式**: %s", timeStr, timeOfDay, modeDesc)
+    // 追加當前好感度（若可用），協助模型判斷關係語氣
+    affectionPart := ""
+    if b.context != nil && b.context.Affection > 0 {
+        affectionPart = fmt.Sprintf(" | **好感度**: %d/100", b.context.Affection)
+    }
+
+    return fmt.Sprintf("**時間**: %s (%s) | **模式**: %s%s", timeStr, timeOfDay, modeDesc, affectionPart)
 }

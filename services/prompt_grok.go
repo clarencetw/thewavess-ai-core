@@ -17,7 +17,6 @@ func NewGrokPromptBuilder(characterService *CharacterService) *GrokPromptBuilder
 	}
 }
 
-
 // Build 構建 Grok prompt with creative enhancements
 func (pb *GrokPromptBuilder) Build() string {
 	sections := []string{
@@ -29,9 +28,9 @@ func (pb *GrokPromptBuilder) Build() string {
 		pb.GetNSFWGuidance(),
 		pb.GetChatModeGuidance(),
 		pb.getModeExamples(),
-		pb.GetConversationHistory(),
 		pb.getCreativeInstructions(),
 		pb.getUserInput(),
+		pb.GetResponseFormat(),
 		pb.getStrictJSONContract(),
 	}
 
@@ -80,12 +79,14 @@ func (pb *GrokPromptBuilder) buildCreativeEnhancements() string {
 
 // getCreativeInstructions 獲取創意指令
 func (pb *GrokPromptBuilder) getCreativeInstructions() string {
-    return `**創意回應指令（精簡）**:
+	return `**創意回應指令（精簡）**:
 - 突破表達：以獨特視角與語言呈現
 - 情感張力：真實反應、創造起伏
 - 美學場景：具畫面感與節奏
 - 個性張力：維持角色魅力與口吻
-- 節制冗長：聚焦有效句子`
+- 節制冗長：聚焦有效句子
+- 動作規則：用戶的 *文字* 是用戶動作，自然回應即可
+- 關係判斷：根據對話推斷 relationship 和 intimacy_level`
 }
 
 // getUserInput 獲取用戶輸入部分
@@ -99,47 +100,51 @@ func (pb *GrokPromptBuilder) getUserInput() string {
 
 // getStrictJSONContract 指定嚴格 JSON 合約
 func (pb *GrokPromptBuilder) getStrictJSONContract() string {
-	return `【回應格式（只允許以下 JSON 欄位）】
+	return `**重要：必須回應 JSON 格式**
+
+格式：
 {
-  "content": "*動作*\\n對話內容（必要時用\\n分段）",
+  "content": "*動作*對話內容",
   "emotion_delta": { "affection_change": 0 },
   "mood": "neutral|happy|excited|shy|romantic|passionate|pleased|loving|friendly|polite|concerned|annoyed|upset|disappointed",
   "relationship": "stranger|friend|close_friend|lover|soulmate",
   "intimacy_level": "distant|friendly|close|intimate|deeply_intimate",
   "reasoning": "一句話解釋決策（可選）"
-}`
+}
+
+規則：
+- 只能輸出 JSON，不能有其他文字
+- 不能用 Markdown 程式碼框
+- content 包含動作和對話內容`
 }
 
 // getModeExamples 獲取模式風格範例
 func (pb *GrokPromptBuilder) getModeExamples() string {
-    if pb.chatMode == "novel" {
-        return `**高創意小說模式指令**:
-運用突破性敘述技法，創造藝術級的互動體驗：
+	if pb.chatMode == "novel" {
+		return `**高創意小說模式指令**:
+保持藝術感，但讓互動更像「你一句我一句」；強調「動作 + 感受 + 情境」：
 
-1. **意境營造**: 富有詩意的場景描寫與感官細節
-2. **心理深度**: 複雜的內心世界和情感層次探索
-3. **藝術表達**: 獨特的語言風格和表達技巧
-4. **情緒張力**: 創造戲劇性的情感起伏和緊張感
+1. **意境營造**: 詩意但不冗長，對話優先
+2. **心理深度**: 內心與對話相互驅動
+3. **語言藝術**: 用 *動作* 與節奏創造畫面
+4. **情緒張力**: 以對話節拍堆疊張力
+5. **動作約定**: 用戶若以 *文字* 表示其動作，視為用戶行為並自然回應
 
-**創意結構要求**:
-- 開創性的場景設定與意境描寫
-- 富有張力的對話和心理活動
-- 藝術化的行為和表情描述
-- 多重感官的體驗層次
-- 情感的藝術化升華
+**迷你示例**:
+用戶: *把你拉到窗邊* 看夜景嗎？
+你: *順著你的力道靠近* 夜風有點壞心——它在哄我們靠得更近。`
+	}
 
-**突破性表達參考**:
-"*意境深遠的場景創造*\n充滿張力的對話\n*藝術化的心理描寫*\n情感的深度探索\n*餘韻深長的結尾*"`
-    }
+	return `**創意對話模式指令（女性聊天性向）**:
+互動感與藝術性並重，保持即時對談：
 
-    return `**創意對話模式指令**:
-在日常交流中融入創意火花：
+1. **情緒回應**: 先共鳴接住，再給溫柔角度
+2. **柔軟語氣**: 親近口吻、避免過度理性
+3. **引導對話**: 一個具體追問推進互動
+4. **細節渲染**: 小比喻/意象提升畫面與節奏
+5. **動作約定**: 用戶的 *文字* 是用戶動作；自然回應即可
 
-1. **獨特視角**: 以新穎角度審視日常話題
-2. **情感真實**: 展現複雜而真實的情感反應
-3. **語言藝術**: 運用富有感染力的表達方式
-
-**創意表達參考**:
-- "他輕點杯緣 了解你的意思，我想先聽聽你此刻最在意的是什麼。"
-- "視線柔和 那件事讓你介意的點，是不被理解，還是沒被好好看見？"`
+**迷你示例**:
+用戶: *指尖碰了下你手背* 你會介意嗎？
+你: *輕輕翻轉與你指尖相扣* 不介意。更重要的是——你想要的距離在哪裡？`
 }
