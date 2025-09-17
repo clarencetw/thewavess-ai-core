@@ -70,8 +70,8 @@ main() {
     tc_log "INFO" "開始 Mistral 三層 AI 引擎架構測試"
 
     # 使用預設測試用戶登入
-    if ! tc_authenticate; then
-        tc_log "FAIL" "用戶驗證失敗，結束測試"
+    if ! tc_register_and_authenticate; then
+        tc_log "FAIL" "用戶註冊或認證失敗，結束測試"
         exit 1
     fi
 

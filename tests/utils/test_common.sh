@@ -10,7 +10,8 @@
 # 預設配置（可被環境變數覆蓋）
 TEST_BASE_URL="${TEST_BASE_URL:-http://localhost:8080/api/v1}"
 TEST_HEALTH_URL="${TEST_HEALTH_URL:-http://localhost:8080/health}"
-TEST_USERNAME="${TEST_USERNAME:-testusertemp}"
+# 生成唯一測試用戶名避免衝突
+TEST_USERNAME="${TEST_USERNAME:-testusertemp_$$_$(date +%s)}"
 TEST_PASSWORD="${TEST_PASSWORD:-TempPassword123}"
 TEST_USER_ID="${TEST_USER_ID:-test_user_01}"
 TEST_CHARACTER_ID="${TEST_CHARACTER_ID:-character_02}"
@@ -28,6 +29,7 @@ export TC_NC='\033[0m'
 # 全域變數
 TC_JWT_TOKEN=""
 TC_REFRESH_TOKEN=""
+TC_ADMIN_TOKEN=""
 TC_CHAT_ID=""
 TC_TEST_COUNT=0
 TC_PASS_COUNT=0
@@ -277,6 +279,56 @@ tc_logout() {
     fi
 }
 
+# 註冊和認證用戶（用於新的測試腳本）
+tc_register_and_authenticate() {
+    local username="${1:-$TEST_USERNAME}"
+    local password="${2:-$TEST_PASSWORD}"
+    local email="${3:-${username}@example.com}"
+
+    tc_log "INFO" "Registering and authenticating user: $username"
+
+    # 1. 先嘗試註冊用戶
+    local register_data="{\"username\":\"$username\",\"email\":\"$email\",\"password\":\"$password\",\"birth_date\":\"1995-01-01T00:00:00Z\",\"is_adult\":true}"
+    local register_response
+
+    register_response=$(curl -s -X POST "${TEST_BASE_URL}/auth/register" \
+        -H "Content-Type: application/json" \
+        -d "$register_data")
+
+    # 如果註冊失敗但是因為用戶已存在，那我們繼續嘗試登入
+    if echo "$register_response" | grep -q '"success":true'; then
+        tc_log "PASS" "User registered successfully: $username"
+    elif echo "$register_response" | grep -q "already exists\|already taken\|duplicate"; then
+        tc_log "INFO" "User already exists, proceeding to login: $username"
+    else
+        tc_log "WARN" "Registration failed, attempting login anyway"
+        tc_log "DEBUG" "Registration response: $register_response"
+    fi
+
+    # 2. 嘗試登入
+    tc_authenticate "$username" "$password"
+    return $?
+}
+
+# 清理測試用戶（如果是動態創建的）
+tc_cleanup_test_user() {
+    # 只清理動態創建的測試用戶，不清理預設的test_user_01
+    if [ -n "$TEST_USER_ID" ] && [ "$TEST_USER_ID" != "test_user_01" ] && [ -n "$TC_JWT_TOKEN" ]; then
+        tc_log "INFO" "Cleaning up test user: $TEST_USERNAME"
+        curl -s -X DELETE "${TEST_BASE_URL}/user/account" \
+            -H "Authorization: Bearer $TC_JWT_TOKEN" > /dev/null 2>&1 || true
+        tc_log "INFO" "Test user cleanup completed"
+    fi
+}
+
+# 通用清理函數
+tc_cleanup() {
+    tc_cleanup_test_user
+    TC_JWT_TOKEN=""
+    TC_REFRESH_TOKEN=""
+    TC_CHAT_ID=""
+}
+
 # ================================
 # 對話相關函數
 # ================================
@@ -423,10 +475,49 @@ tc_init_csv() {
     tc_log "INFO" "CSV report initialized: $TC_CSV_FILE"
 }
 
-# 記錄CSV數據
+# 記錄CSV數據（改進版本，處理特殊字符）
 tc_csv_record() {
     if [ -n "$TC_CSV_FILE" ]; then
-        echo "$@" >> "$TC_CSV_FILE"
+        local data="$@"
+        # 處理包含逗號、引號或換行的欄位
+        # 將整行按逗號分割並逐一處理
+        local result=""
+        local in_quotes=false
+        local current_field=""
+        local i
+
+        for (( i=0; i<${#data}; i++ )); do
+            local char="${data:$i:1}"
+
+            if [ "$char" = '"' ]; then
+                if [ "$in_quotes" = true ]; then
+                    in_quotes=false
+                else
+                    in_quotes=true
+                fi
+                current_field="${current_field}${char}"
+            elif [ "$char" = ',' ] && [ "$in_quotes" = false ]; then
+                # 欄位結束，檢查是否需要加引號
+                if [[ "$current_field" == *","* ]] || [[ "$current_field" == *'"'* ]] || [[ "$current_field" == *$'\n'* ]]; then
+                    # 轉義引號並用引號包裹
+                    current_field="${current_field//\"/\"\"}"
+                    current_field="\"${current_field}\""
+                fi
+                result="${result}${current_field},"
+                current_field=""
+            else
+                current_field="${current_field}${char}"
+            fi
+        done
+
+        # 處理最後一個欄位
+        if [[ "$current_field" == *","* ]] || [[ "$current_field" == *'"'* ]] || [[ "$current_field" == *$'\n'* ]]; then
+            current_field="${current_field//\"/\"\"}"
+            current_field="\"${current_field}\""
+        fi
+        result="${result}${current_field}"
+
+        echo "$result" >> "$TC_CSV_FILE"
     fi
 }
 
@@ -560,7 +651,7 @@ tc_create_test_user() {
 # 安全的刪除測試用戶函數（僅刪除 test_ 前綴的用戶）
 tc_delete_test_user() {
     local user_id="$1"
-    local admin_token="${2:-$ADMIN_JWT_TOKEN}"
+    local admin_token="${2:-$TC_ADMIN_TOKEN}"
     
     # 安全檢查：確保用戶ID包含 test_ 前綴
     if [[ ! "$user_id" =~ ^test_ ]]; then
@@ -597,7 +688,7 @@ tc_delete_test_user() {
 
 # 測試用戶清理函數（清理所有 test_ 前綴的用戶）
 tc_cleanup_test_users() {
-    local admin_token="${1:-$ADMIN_JWT_TOKEN}"
+    local admin_token="${1:-$TC_ADMIN_TOKEN}"
     
     if [ -z "$admin_token" ]; then
         tc_log "WARN" "沒有管理員權限，跳過測試用戶清理"
@@ -639,7 +730,7 @@ tc_cleanup_test_users() {
 
 # 測試管理員角色更新的數組序列化
 tc_test_admin_array_serialization() {
-    local admin_token="${1:-$ADMIN_JWT_TOKEN}"
+    local admin_token="${1:-$TC_ADMIN_TOKEN}"
     local character_id="${2:-character_01}"
     
     if [ -z "$admin_token" ]; then
@@ -798,7 +889,7 @@ tc_test_user_array_update() {
 
 # 綜合 PostgreSQL 數組序列化測試
 tc_test_postgresql_array_serialization() {
-    local admin_token="${1:-$ADMIN_JWT_TOKEN}"
+    local admin_token="${1:-$TC_ADMIN_TOKEN}"
     local user_token="${2:-$TC_JWT_TOKEN}"
     
     tc_log "INFO" "開始 PostgreSQL 數組序列化綜合測試"
@@ -851,11 +942,11 @@ tc_admin_authenticate() {
         -d "$login_data")
     
     if echo "$response" | grep -q '"success":true'; then
-        ADMIN_JWT_TOKEN=$(echo "$response" | jq -r '.data.access_token // ""' 2>/dev/null)
+        TC_ADMIN_TOKEN=$(echo "$response" | jq -r '.data.access_token // ""' 2>/dev/null)
         
-        if [ -n "$ADMIN_JWT_TOKEN" ] && [ "$ADMIN_JWT_TOKEN" != "null" ]; then
+        if [ -n "$TC_ADMIN_TOKEN" ] && [ "$TC_ADMIN_TOKEN" != "null" ]; then
             tc_log "PASS" "Admin authentication successful"
-            tc_log "INFO" "  Admin Token: ${ADMIN_JWT_TOKEN:0:30}..."
+            tc_log "INFO" "  Admin Token: ${TC_ADMIN_TOKEN:0:30}..."
             return 0
         fi
     fi
@@ -1027,7 +1118,7 @@ tc_test_character_soft_delete() {
 
 # 測試管理員角色恢復功能
 tc_test_character_restore() {
-    local admin_token="${1:-$ADMIN_JWT_TOKEN}"
+    local admin_token="${1:-$TC_ADMIN_TOKEN}"
     local user_token="${2:-$TC_JWT_TOKEN}"
     
     if [ -z "$admin_token" ] || [ -z "$user_token" ]; then
@@ -1110,7 +1201,7 @@ tc_test_character_restore() {
 
 # 測試管理員統計API的軟刪除過濾
 tc_test_admin_stats_soft_delete() {
-    local admin_token="${1:-$ADMIN_JWT_TOKEN}"
+    local admin_token="${1:-$TC_ADMIN_TOKEN}"
     
     if [ -z "$admin_token" ]; then
         tc_log "ERROR" "需要管理員認證來測試統計API軟刪除過濾"
@@ -1178,7 +1269,7 @@ tc_test_public_api_soft_delete() {
 
 # 綜合軟刪除測試
 tc_test_soft_delete_comprehensive() {
-    local admin_token="${1:-$ADMIN_JWT_TOKEN}"
+    local admin_token="${1:-$TC_ADMIN_TOKEN}"
     local user_token="${2:-$TC_JWT_TOKEN}"
     
     tc_log "INFO" "開始綜合軟刪除功能測試"

@@ -138,8 +138,8 @@ run_api_tests() {
     tc_log "INFO" "執行API功能測試"
     
     # 認證
-    tc_authenticate || {
-        tc_log "ERROR" "認證失敗"
+    tc_register_and_authenticate || {
+        tc_log "ERROR" "用戶註冊或認證失敗"
         return 1
     }
     
@@ -191,8 +191,8 @@ run_chat_tests() {
     tc_log "INFO" "執行對話功能測試"
     
     # 認證
-    tc_authenticate || {
-        tc_log "ERROR" "認證失敗"
+    tc_register_and_authenticate || {
+        tc_log "ERROR" "用戶註冊或認證失敗"
         return 1
     }
     
@@ -307,8 +307,8 @@ run_nsfw_tests() {
     tc_log "INFO" "執行NSFW分級與AI引擎切換測試"
     
     # 認證
-    tc_authenticate || {
-        tc_log "ERROR" "認證失敗"
+    tc_register_and_authenticate || {
+        tc_log "ERROR" "用戶註冊或認證失敗"
         return 1
     }
     
@@ -496,12 +496,12 @@ run_soft_delete_tests() {
         
         # 基礎認證
         tc_admin_authenticate || {
-            tc_log "ERROR" "管理員認證失敗"
+            tc_log "ERROR" "管理員用戶註冊或認證失敗"
             return 1
         }
         
-        tc_authenticate || {
-            tc_log "ERROR" "用戶認證失敗"
+        tc_register_and_authenticate || {
+            tc_log "ERROR" "用戶用戶註冊或認證失敗"
             return 1
         }
         

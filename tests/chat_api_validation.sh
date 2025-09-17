@@ -16,8 +16,8 @@ tc_log "INFO" "Base URL: $TEST_BASE_URL"
 
 # 1. 登入並取得 token
 tc_log "INFO" "[1/6] 用戶登入..."
-if ! tc_authenticate; then
-    tc_log "FAIL" "用戶驗證失敗"
+if ! tc_register_and_authenticate; then
+    tc_log "FAIL" "用戶註冊或認證失敗"
     exit 1
 fi
 tc_log "PASS" "登入成功"
