@@ -1,46 +1,43 @@
 # Repository Guidelines
 
-This guide orients contributors and automation agents to the codebase and workflow. Keep changes focused, well‑tested, and aligned with the patterns below.
-
 ## Project Structure & Module Organization
-- `handlers/`: HTTP handlers (chat, emotion, user, character, etc.).
-- `services/`: Core logic (chat, NSFW analyzer, emotion, memory, TTS, AI clients, smart routing).
-- `routes/`: Route registration (`routes.go`) exposing ~47 endpoints.
-- `models/db/`: Bun models (`User`, `Character`, `Message`, etc.); complex fields use JSONB.
-- `cmd/bun/`: CLI for migrations and DB management.
-- `middleware/`, `utils/`: Auth, logging, errors, helpers, JWT.
-- `public/`: Static UI + Swagger entry. `bin/`: build artifacts.
-- Tests live next to code as `*_test.go`; integration in `./tests/test-all.sh`.
+- `handlers/`: HTTP entry points (chat, emotion, user, character).
+- `services/`: Core logic for chat, routing, memory, NSFW checks, TTS, and AI clients.
+- `routes/routes.go`: Registers ~47 API endpoints.
+- `models/db/`: Bun ORM models; JSONB fields hold complex payloads.
+- `middleware/` and `utils/`: Auth, logging, error handling, helpers, JWT tools.
+- `cmd/bun/`: Migration CLI; run alongside Makefile targets.
+- `public/` and `bin/`: Static UI/Swagger assets and build artifacts.
+- Tests live next to implementation files as `*_test.go`; integration scripts sit in `tests/`.
 
 ## Build, Test, and Development Commands
-- `make install`: Sync Go deps and install `swag`.
-- `make run`: Start server (`main.go`).
-- `make build`: Compile to `bin/thewavess-ai-core`.
-- `make test`: Run unit tests (`go test -v ./...`).
-- `make docs` / `make docs-serve`: Generate Swagger and serve with the app.
-- DB: `make db-setup`, `make migrate`, `make migrate-status`, `make migrate-down`.
-- Docker: `make docker-build`, `make docker-run`.
+- `make install`: Sync Go modules and install Swagger tooling.
+- `make run`: Start the server from `main.go` with hot reload via Go.
+- `make build`: Produce `bin/thewavess-ai-core` binary.
+- `make test`: Execute `go test -v ./...` across modules.
+- `make docs` / `make docs-serve`: Generate Swagger specs and serve them with the app.
+- `make db-setup`, `make migrate`, `make migrate-status`, `make migrate-down`: Provision and manage the Bun-backed database.
 
 ## Coding Style & Naming Conventions
-- Go 1.23+; code must be `go fmt` clean.
-- Packages: lowercase, no underscores. Files use snake_case by feature (e.g., `smart_router.go`).
-- Names: Exported `UpperCamelCase`; locals `lowerCamelCase`.
-- JSON tags: snake_case (e.g., ``json:"should_use_grok"``).
-- Design: Small functions, clear boundaries; prefer constructors in `services/` for DI.
+- Target Go 1.23+; run `go fmt ./...` before committing.
+- Package names remain lowercase without underscores; file names use snake_case by feature.
+- Exported identifiers use UpperCamelCase; locals use lowerCamelCase.
+- JSON tags follow `snake_case`, e.g. ``json:"should_use_grok"``.
+- Prefer small functions with clear boundaries; create constructors in `services/` for DI.
 
 ## Testing Guidelines
-- Prefer table‑driven tests; mock external APIs and network calls.
-- Cover handlers (happy/error paths) and service logic.
-- Run fast suite with `make test`; full integration via `./tests/test-all.sh`.
-- Keep tests next to implementation files as `*_test.go`.
+- Write table-driven unit tests in `*_test.go` files next to the code.
+- Mock external APIs and network calls; avoid flaky integration tests.
+- Fast suite: `make test`; full integration: `./tests/test-all.sh`.
+- Structure assertions for both success and failure paths.
 
 ## Commit & Pull Request Guidelines
-- Commits follow Conventional Commits (e.g., `feat: add smart router`, `fix: tts timeout`).
-- PRs include purpose, scope, linked issues, screenshots (UI/Swagger), and migration notes.
-- Keep diffs focused; update docs/tests with code; call out API changes and rollout steps.
+- Use Conventional Commits, e.g. `feat: add smart router`, `fix: tts timeout`.
+- PRs should explain purpose, scope, and linked issues; add Swagger screenshots when endpoints change.
+- Include migration notes and rollout steps when schema or infra changes.
+- Keep diffs focused, update docs/tests alongside code, and call out API adjustments.
 
 ## Security & Configuration Tips
-- Configure via `.env` (see `.env.example`): `OPENAI_API_KEY`, `GROK_API_KEY`, `DATABASE_URL`, etc.
-- Never commit secrets; verify `.gitignore` coverage and avoid logging sensitive data.
-- NSFW routing, memory, and tags integrate via services/JSONB; smart routing selects OpenAI/Grok automatically.
-
+- Configure secrets via `.env` (see `.env.example` for `OPENAI_API_KEY`, `GROK_API_KEY`, `DATABASE_URL`, etc.).
+- Never commit credentials; confirm `.gitignore` coverage before pushing.
+- Avoid logging sensitive payloads; NSFW routing, memory, and tagging are driven through `services/` and JSONB fields.

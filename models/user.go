@@ -1,9 +1,11 @@
 package models
 
 import (
+	"strings"
 	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/models/db"
+	"github.com/clarencetw/thewavess-ai-core/pkg/gravatar"
 )
 
 // User 用戶領域模型
@@ -142,7 +144,11 @@ func UserFromDB(userDB *db.UserDB) *User {
 
 // ToResponse 轉換為響應格式
 func (u *User) ToResponse() *UserResponse {
-	return &UserResponse{
+	if u == nil {
+		return nil
+	}
+
+	resp := &UserResponse{
 		ID:          u.ID,
 		Username:    u.Username,
 		Email:       u.Email,
@@ -159,4 +165,11 @@ func (u *User) ToResponse() *UserResponse {
 		UpdatedAt:   u.UpdatedAt,
 		LastLoginAt: u.LastLoginAt,
 	}
+
+	if (resp.AvatarURL == nil || strings.TrimSpace(*resp.AvatarURL) == "") && strings.TrimSpace(u.Email) != "" {
+		defaultURL := gravatar.URL(u.Email, 256)
+		resp.AvatarURL = &defaultURL
+	}
+
+	return resp
 }

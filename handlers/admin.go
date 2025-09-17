@@ -14,6 +14,7 @@ import (
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
+	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -58,6 +59,7 @@ var (
 // @Router /admin/stats [get]
 func GetAdminStats(c *gin.Context) {
 	ctx := context.Background()
+	dbConn := GetDB()
 
 	// 計算系統運行時間
 	uptime := time.Since(startTime)
@@ -89,46 +91,96 @@ func GetAdminStats(c *gin.Context) {
 		avgResponseTime = "0ms"
 	}
 
-	// 從資料庫獲取真實統計數據
-	// 獲取用戶總數
-	totalUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).Count(ctx)
+	var (
+		totalUsers, todayUsers, weekUsers, activeUsers, blockedUsers int
+		totalCharacters                                              int
+		totalSessions, todaySessions                                 int
+		totalMessages, todayMessages                                 int
+		openaiRequests, grokRequests, otherRequests                  int
+		openaiRequests24h, grokRequests24h, otherRequests24h         int
+	)
 
-	// 獲取今日新增用戶數
 	todayStart := time.Now().Truncate(24 * time.Hour)
-	todayUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).
-		Where("created_at >= ?", todayStart).Count(ctx)
-
-	// 獲取本週新增用戶數
 	weekStart := time.Now().AddDate(0, 0, -7)
-	weekUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).
-		Where("created_at >= ?", weekStart).Count(ctx)
+	last24h := time.Now().Add(-24 * time.Hour)
 
-	// 獲取活躍用戶數（最近7天有登入記錄）
-	activeUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).
-		Where("last_login_at >= ? AND status = ?", weekStart, "active").Count(ctx)
+	if dbConn != nil {
+		// 用戶統計
+		totalUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).Count(ctx)
+		todayUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).
+			Where("created_at >= ?", todayStart).Count(ctx)
+		weekUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).
+			Where("created_at >= ?", weekStart).Count(ctx)
+		activeUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).
+			Where("last_login_at >= ? AND status = ?", weekStart, "active").Count(ctx)
+		blockedUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).
+			Where("status = ?", "banned").Count(ctx)
 
-	// 獲取已封鎖用戶數
-	blockedUsers, _ := GetDB().NewSelect().Model((*db.UserDB)(nil)).
-		Where("status = ?", "banned").Count(ctx)
+		// 角色、聊天、訊息
+		totalCharacters, _ = dbConn.NewSelect().Model((*db.CharacterDB)(nil)).
+			Where("is_active = ?", true).Count(ctx)
+		totalSessions, _ = dbConn.NewSelect().Model((*db.ChatDB)(nil)).
+			Where("status != ?", "deleted").Count(ctx)
+		todaySessions, _ = dbConn.NewSelect().Model((*db.ChatDB)(nil)).
+			Where("created_at >= ? AND status != ?", todayStart, "deleted").Count(ctx)
+		totalMessages, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).Count(ctx)
+		todayMessages, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
+			Where("created_at >= ?", todayStart).Count(ctx)
 
-	// 獲取角色總數
-	totalCharacters, _ := GetDB().NewSelect().Model((*db.CharacterDB)(nil)).
-		Where("is_active = ?", true).Count(ctx)
+		// AI 引擎使用統計
+		openaiRequests, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
+			Where("role = ?", "assistant").
+			Where("ai_engine = ?", "openai").
+			Count(ctx)
 
-	// 獲取聊天會話總數
-	totalSessions, _ := GetDB().NewSelect().Model((*db.ChatDB)(nil)).
-		Where("status != ?", "deleted").Count(ctx)
+		grokRequests, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
+			Where("role = ?", "assistant").
+			Where("ai_engine = ?", "grok").
+			Count(ctx)
 
-	// 獲取今日新增會話數
-	todaySessions, _ := GetDB().NewSelect().Model((*db.ChatDB)(nil)).
-		Where("created_at >= ? AND status != ?", todayStart, "deleted").Count(ctx)
+		otherRequests, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
+			Where("role = ?", "assistant").
+			Where("ai_engine NOT IN (?)", bun.In([]string{"openai", "grok"})).
+			Count(ctx)
 
-	// 獲取消息總數
-	totalMessages, _ := GetDB().NewSelect().Model((*db.MessageDB)(nil)).Count(ctx)
+		openaiRequests24h, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
+			Where("role = ?", "assistant").
+			Where("ai_engine = ?", "openai").
+			Where("created_at >= ?", last24h).
+			Count(ctx)
 
-	// 獲取今日消息數
-	todayMessages, _ := GetDB().NewSelect().Model((*db.MessageDB)(nil)).
-		Where("created_at >= ?", todayStart).Count(ctx)
+		grokRequests24h, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
+			Where("role = ?", "assistant").
+			Where("ai_engine = ?", "grok").
+			Where("created_at >= ?", last24h).
+			Count(ctx)
+
+		otherRequests24h, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
+			Where("role = ?", "assistant").
+			Where("ai_engine NOT IN (?)", bun.In([]string{"openai", "grok"})).
+			Where("created_at >= ?", last24h).
+			Count(ctx)
+	}
+
+	totalAIRequests := openaiRequests + grokRequests + otherRequests
+	totalAIRequests24h := openaiRequests24h + grokRequests24h + otherRequests24h
+
+	aiEngines := gin.H{
+		"total_requests":  totalAIRequests,
+		"openai_requests": openaiRequests,
+		"grok_requests":   grokRequests,
+		"last_24h": gin.H{
+			"total":  totalAIRequests24h,
+			"openai": openaiRequests24h,
+			"grok":   grokRequests24h,
+		},
+	}
+	if otherRequests > 0 {
+		aiEngines["other_requests"] = otherRequests
+	}
+	if otherRequests24h > 0 {
+		aiEngines["last_24h"].(gin.H)["other"] = otherRequests24h
+	}
 
 	// 構建完整的統計響應
 	stats := gin.H{
@@ -181,6 +233,7 @@ func GetAdminStats(c *gin.Context) {
 			"gc_count":         m.NumGC,
 			"goroutines":       goroutines,
 		},
+		"ai_engines": aiEngines,
 
 		// 時間戳
 		"last_updated": time.Now(),
@@ -307,22 +360,7 @@ func GetAdminUserByID(c *gin.Context) {
 		return
 	}
 
-	// 轉換為響應格式
-	userResponse := models.UserResponse{
-		ID:          user.ID,
-		Username:    user.Username,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Bio:         user.Bio,
-		Status:      user.Status,
-		Nickname:    user.Nickname,
-		Gender:      user.Gender,
-		IsVerified:  user.IsVerified,
-		IsAdult:     user.IsAdult,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-		LastLoginAt: user.LastLoginAt,
-	}
+	userResponse := models.UserFromDB(&user).ToResponse()
 
 	utils.Logger.WithFields(logrus.Fields{
 		"user_id": userID,
@@ -615,6 +653,8 @@ func GetAdminUsers(c *gin.Context) {
 	}
 	status := c.Query("status")
 	search := c.Query("search")
+	sortBy := c.Query("sort_by")
+	sortOrder := c.Query("sort_order")
 
 	// 設置分頁限制
 	if limit > 100 {
@@ -651,10 +691,31 @@ func GetAdminUsers(c *gin.Context) {
 		return
 	}
 
+	// 處理排序
+	orderClause := "created_at DESC" // 默認排序
+	if sortBy != "" {
+		// 允許的排序字段
+		validSortFields := map[string]string{
+			"username":   "username",
+			"email":      "email",
+			"status":     "status",
+			"created_at": "created_at",
+			"updated_at": "updated_at",
+		}
+
+		if field, valid := validSortFields[sortBy]; valid {
+			direction := "DESC"
+			if sortOrder == "asc" {
+				direction = "ASC"
+			}
+			orderClause = field + " " + direction
+		}
+	}
+
 	// 分頁查詢
 	var users []db.UserDB
 	err = query.
-		Order("created_at DESC").
+		Order(orderClause).
 		Offset((page-1)*limit).
 		Limit(limit).
 		Scan(ctx, &users)
@@ -673,25 +734,12 @@ func GetAdminUsers(c *gin.Context) {
 
 	// 轉換為響應格式
 	var userResponses []*models.UserResponse
-	for _, user := range users {
-		userResponse := &models.UserResponse{
-			ID:          user.ID,
-			Username:    user.Username,
-			Email:       user.Email,
-			DisplayName: user.DisplayName,
-			Bio:         user.Bio,
-			Status:      user.Status,
-			Nickname:    user.Nickname,
-			Gender:      user.Gender,
-			BirthDate:   user.BirthDate,
-			AvatarURL:   user.AvatarURL,
-			IsVerified:  user.IsVerified,
-			IsAdult:     user.IsAdult,
-			CreatedAt:   user.CreatedAt,
-			UpdatedAt:   user.UpdatedAt,
-			LastLoginAt: user.LastLoginAt,
+	for i := range users {
+		userModel := models.UserFromDB(&users[i])
+		if userModel == nil {
+			continue
 		}
-		userResponses = append(userResponses, userResponse)
+		userResponses = append(userResponses, userModel.ToResponse())
 	}
 
 	// 計算分頁信息
@@ -982,24 +1030,7 @@ func UpdateAdminUser(c *gin.Context) {
 		"user_id":  userID,
 	}).Info("Admin updated user profile")
 
-	// 轉換為響應格式
-	userResponse := &models.UserResponse{
-		ID:          user.ID,
-		Username:    user.Username,
-		Email:       user.Email,
-		DisplayName: user.DisplayName,
-		Bio:         user.Bio,
-		Status:      user.Status,
-		Nickname:    user.Nickname,
-		Gender:      user.Gender,
-		BirthDate:   user.BirthDate,
-		AvatarURL:   user.AvatarURL,
-		IsVerified:  user.IsVerified,
-		IsAdult:     user.IsAdult,
-		CreatedAt:   user.CreatedAt,
-		UpdatedAt:   user.UpdatedAt,
-		LastLoginAt: user.LastLoginAt,
-	}
+	userResponse := models.UserFromDB(&user).ToResponse()
 
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
@@ -1174,6 +1205,8 @@ func AdminSearchChats(c *gin.Context) {
 	characterID := c.Query("character_id") // 角色過濾
 	dateFrom := c.Query("date_from")       // 日期範圍
 	dateTo := c.Query("date_to")
+	sortBy := c.Query("sort_by")           // 排序字段
+	sortOrder := c.Query("sort_order")     // 排序方向
 	includeUserInfo := c.Query("include_user_info") != "false" // 默認包含用戶信息
 
 	// 解析分頁參數
@@ -1192,7 +1225,7 @@ func AdminSearchChats(c *gin.Context) {
 	}
 
 	// 執行管理員專用搜尋
-	results, totalCount, err := adminSearchChatSessions(ctx, query, userIDFilter, characterID, dateFrom, dateTo, page, limit, includeUserInfo)
+	results, totalCount, err := adminSearchChatSessions(ctx, query, userIDFilter, characterID, dateFrom, dateTo, sortBy, sortOrder, page, limit, includeUserInfo)
 	if err != nil {
 		utils.Logger.WithError(err).WithField("admin_id", adminID).Error("管理員搜尋聊天記錄失敗")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
@@ -1238,7 +1271,7 @@ func AdminSearchChats(c *gin.Context) {
 }
 
 // adminSearchChatSessions 管理員專用的聊天會話搜尋函數
-func adminSearchChatSessions(ctx context.Context, query, userIDFilter, characterID, dateFrom, dateTo string, page, limit int, includeUserInfo bool) ([]gin.H, int, error) {
+func adminSearchChatSessions(ctx context.Context, query, userIDFilter, characterID, dateFrom, dateTo, sortBy, sortOrder string, page, limit int, includeUserInfo bool) ([]gin.H, int, error) {
 	database := GetDB()
 	if database == nil {
 		return nil, 0, fmt.Errorf("database connection unavailable")
@@ -1296,8 +1329,28 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 		CharacterAvatar string `bun:"avatar_url"`
 	}
 
+	// 處理排序
+	orderClause := "c.created_at DESC" // 默認排序
+	if sortBy != "" {
+		validSortFields := map[string]string{
+			"title":          "c.title",
+			"username":       "", // 需要透過 JOIN 處理
+			"character_name": "char.name",
+			"created_at":     "c.created_at",
+			"updated_at":     "c.updated_at",
+		}
+
+		if field, valid := validSortFields[sortBy]; valid && field != "" {
+			direction := "DESC"
+			if sortOrder == "asc" {
+				direction = "ASC"
+			}
+			orderClause = field + " " + direction
+		}
+	}
+
 	err = baseQuery.
-		Order("c.updated_at DESC").
+		Order(orderClause).
 		Limit(limit).
 		Offset(offset).
 		Scan(ctx, &results)
@@ -1780,6 +1833,8 @@ func AdminGetCharacters(c *gin.Context) {
 	status := c.Query("status")        // active, inactive, all
 	createdBy := c.Query("created_by") // 特定創建者篩選
 	charType := c.Query("type")        // system, user, all
+	sortBy := c.Query("sort_by")       // 排序字段
+	sortOrder := c.Query("sort_order") // 排序方向
 	includeDeleted := c.Query("include_deleted") == "true"
 
 	// 構建查詢
@@ -1831,10 +1886,31 @@ func AdminGetCharacters(c *gin.Context) {
 		return
 	}
 
+	// 處理排序
+	orderClause := "updated_at DESC" // 默認排序
+	if sortBy != "" {
+		validSortFields := map[string]string{
+			"name":        "name",
+			"type":        "type",
+			"status":      "is_active",
+			"creator":     "created_by",
+			"popularity":  "popularity",
+			"updated_at":  "updated_at",
+		}
+
+		if field, valid := validSortFields[sortBy]; valid {
+			direction := "DESC"
+			if sortOrder == "asc" {
+				direction = "ASC"
+			}
+			orderClause = field + " " + direction
+		}
+	}
+
 	// 分頁查詢
 	var characters []db.CharacterDB
 	err = query.
-		Order("created_at DESC").
+		Order(orderClause).
 		Offset((page-1)*limit).
 		Limit(limit).
 		Scan(ctx, &characters)

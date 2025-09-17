@@ -3,34 +3,38 @@
 {{define "characters-content"}}
 <div class="space-y-6" data-page="characters">
     <!-- Header -->
-    <div class="flex justify-between items-center">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900">角色管理</h1>
+    <div class="flex flex-col space-y-4">
+        <div class="flex-shrink-0">
+            <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">角色管理</h1>
             <p class="text-gray-600 mt-1">管理系統角色和設定</p>
         </div>
-        <div class="flex items-center space-x-4">
-            <div class="relative">
-                <input type="text" id="characterSearchInput" placeholder="搜尋角色..." 
-                       class="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+
+        <!-- Search Controls -->
+        <div class="bg-gray-50 rounded-lg p-4">
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
+                <div class="relative sm:col-span-2">
+                    <input type="text" id="characterSearchInput" placeholder="搜尋角色..."
+                           class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+                </div>
+                <select id="characterTypeFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="all">所有類型</option>
+                    <option value="system">系統角色</option>
+                    <option value="user">用戶角色</option>
+                </select>
+                <select id="characterActiveFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="all">所有狀態</option>
+                    <option value="active">活躍角色</option>
+                    <option value="inactive">已停用角色</option>
+                </select>
+                <select id="characterDeletedFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+                    <option value="">正常角色</option>
+                    <option value="true">包含已刪除</option>
+                </select>
+                <button onclick="AdminPages.characters.reload()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
+                    <i class="fas fa-sync-alt mr-2"></i><span class="hidden sm:inline">重新整理</span><span class="sm:hidden">重新整理</span>
+                </button>
             </div>
-            <select id="characterTypeFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="all">所有類型</option>
-                <option value="system">系統角色</option>
-                <option value="user">用戶角色</option>
-            </select>
-            <select id="characterActiveFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="all">所有狀態</option>
-                <option value="active">活躍角色</option>
-                <option value="inactive">已停用角色</option>
-            </select>
-            <select id="characterDeletedFilter" class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
-                <option value="">正常角色</option>
-                <option value="true">包含已刪除</option>
-            </select>
-            <button onclick="AdminPages.characters.reload()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                <i class="fas fa-sync-alt mr-2"></i>重新整理
-            </button>
         </div>
     </div>
 
@@ -40,25 +44,66 @@
     </div>
 
     <!-- Characters Table -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div class="px-6 py-4 border-b border-gray-200">
-            <h3 class="text-lg font-medium text-gray-900">角色列表</h3>
+    <div class="relative overflow-hidden bg-white shadow-md sm:rounded-lg">
+        <div class="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">角色列表</h3>
+            <div class="text-sm text-gray-500">
+                <span id="charactersCount">0</span> 個角色
+            </div>
         </div>
-        
+
         <div class="overflow-x-auto">
-            <table class="w-full" id="charactersTable">
-                <thead class="bg-gray-50">
+            <table class="w-full text-sm text-left text-gray-500 min-w-[1000px]" id="charactersTable">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">角色資訊</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">類型</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">創建者</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">人氣度</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">更新時間</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                        <th scope="col" class="px-6 py-3">
+                            <div class="flex items-center">
+                                角色資訊
+                                <button type="button" class="ml-1 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-sort text-xs"></i>
+                                </button>
+                            </div>
+                        </th>
+                        <th scope="col" class="px-6 py-3">
+                            <div class="flex items-center">
+                                類型
+                                <button type="button" class="ml-1 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-sort text-xs"></i>
+                                </button>
+                            </div>
+                        </th>
+                        <th scope="col" class="px-6 py-3">
+                            <div class="flex items-center">
+                                狀態
+                                <button type="button" class="ml-1 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-sort text-xs"></i>
+                                </button>
+                            </div>
+                        </th>
+                        <th scope="col" class="px-6 py-3">創建者</th>
+                        <th scope="col" class="px-6 py-3">
+                            <div class="flex items-center">
+                                人氣度
+                                <button type="button" class="ml-1 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-sort text-xs"></i>
+                                </button>
+                            </div>
+                        </th>
+                        <th scope="col" class="px-6 py-3">
+                            <div class="flex items-center">
+                                更新時間
+                                <button type="button" class="ml-1 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-sort text-xs"></i>
+                                </button>
+                            </div>
+                        </th>
+                        <th scope="col" class="px-6 py-3">
+                            <span class="sr-only">操作</span>
+                            操作
+                        </th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200" id="charactersTableBody">
+                <tbody id="charactersTableBody">
                     <!-- Dynamic content -->
                 </tbody>
             </table>

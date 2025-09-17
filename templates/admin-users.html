@@ -3,19 +3,26 @@
 {{define "users-content"}}
 <div class="space-y-6" data-page="users">
     <!-- Header -->
-    <div class="flex justify-between items-center">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900">用戶管理</h1>
+    <div class="flex flex-col space-y-4 lg:flex-row lg:justify-between lg:items-center lg:space-y-0">
+        <div class="flex-shrink-0">
+            <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">用戶管理</h1>
             <p class="text-gray-600 mt-1">管理系統用戶和權限</p>
         </div>
-        <div class="flex items-center space-x-4">
-            <div class="relative">
-                <input type="text" id="userSearchInput" placeholder="搜尋用戶..." 
-                       class="pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
+        <div class="flex flex-col space-y-3 sm:flex-row sm:items-center sm:space-y-0 sm:space-x-3">
+            <div class="relative min-w-0 flex-1 sm:flex-initial">
+                <input type="text" id="userSearchInput" placeholder="搜尋用戶..."
+                       class="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500">
                 <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
             </div>
-            <button onclick="AdminPages.users.reload()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                <i class="fas fa-sync-alt mr-2"></i>重新整理
+            <select id="userPageSizeSelect" onchange="AdminPages.users.changePageSize(this.value)"
+                    class="px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 flex-shrink-0">
+                <option value="10">10 筆/頁</option>
+                <option value="20" selected>20 筆/頁</option>
+                <option value="50">50 筆/頁</option>
+                <option value="100">100 筆/頁</option>
+            </select>
+            <button onclick="AdminPages.users.reload()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex-shrink-0">
+                <i class="fas fa-sync-alt mr-2"></i><span class="hidden sm:inline">重新整理</span><span class="sm:hidden">重新整理</span>
             </button>
         </div>
     </div>
@@ -26,22 +33,49 @@
     </div>
 
     <!-- Users Table -->
-    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div class="px-6 py-4 border-b border-gray-200">
-            <h3 class="text-lg font-medium text-gray-900">用戶列表</h3>
+    <div class="relative overflow-hidden bg-white shadow-md sm:rounded-lg">
+        <div class="flex items-center justify-between px-4 py-3 bg-white border-b border-gray-200">
+            <h3 class="text-lg font-semibold text-gray-900">用戶列表</h3>
+            <div class="text-sm text-gray-500">
+                <span id="usersCount">0</span> 位用戶
+            </div>
         </div>
-        
+
         <div class="overflow-x-auto">
-            <table class="w-full" id="usersTable">
-                <thead class="bg-gray-50">
+            <table class="w-full text-sm text-left text-gray-500 min-w-[800px]" id="usersTable">
+                <thead class="text-xs text-gray-700 uppercase bg-gray-50">
                     <tr>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">用戶資訊</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">狀態</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">註冊時間</th>
-                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">操作</th>
+                        <th scope="col" class="px-6 py-3">
+                            <div class="flex items-center">
+                                用戶資訊
+                                <button type="button" class="ml-1 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-sort text-xs"></i>
+                                </button>
+                            </div>
+                        </th>
+                        <th scope="col" class="px-6 py-3">
+                            <div class="flex items-center">
+                                狀態
+                                <button type="button" class="ml-1 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-sort text-xs"></i>
+                                </button>
+                            </div>
+                        </th>
+                        <th scope="col" class="px-6 py-3">
+                            <div class="flex items-center">
+                                註冊時間
+                                <button type="button" class="ml-1 text-gray-400 hover:text-gray-600">
+                                    <i class="fas fa-sort text-xs"></i>
+                                </button>
+                            </div>
+                        </th>
+                        <th scope="col" class="px-6 py-3">
+                            <span class="sr-only">操作</span>
+                            操作
+                        </th>
                     </tr>
                 </thead>
-                <tbody class="bg-white divide-y divide-gray-200" id="usersTableBody">
+                <tbody id="usersTableBody">
                     <!-- Dynamic content -->
                 </tbody>
             </table>
@@ -68,15 +102,37 @@
 
 <!-- User Detail Modal -->
 <div id="userDetailModal" class="hidden fixed inset-0 bg-black bg-opacity-50 overflow-y-auto h-full w-full z-50">
-    <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-2/3 lg:w-1/2 shadow-lg rounded-md bg-white">
-        <div class="flex justify-between items-center mb-4">
-            <h3 class="text-lg font-bold text-gray-900">用戶詳情</h3>
-            <button onclick="Utils.hideById('userDetailModal')" class="text-gray-400 hover:text-gray-600">
-                <i class="fas fa-times text-xl"></i>
+    <div class="relative top-6 mx-auto p-0 border-0 w-11/12 md:w-2/3 lg:w-1/2 xl:w-2/5 max-w-2xl shadow-2xl rounded-xl bg-white">
+        <!-- Modal Header -->
+        <div class="flex justify-between items-center px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-t-xl">
+            <div class="flex items-center">
+                <div class="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center mr-3">
+                    <i class="fas fa-user text-white"></i>
+                </div>
+                <div>
+                    <h3 class="text-lg font-bold text-gray-900">用戶詳情</h3>
+                    <p class="text-sm text-gray-600">查看用戶完整信息</p>
+                </div>
+            </div>
+            <button onclick="Utils.hideById('userDetailModal')" class="text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full p-2 transition-colors">
+                <i class="fas fa-times text-lg"></i>
             </button>
         </div>
-        <div id="userDetailContent">
-            <!-- Dynamic content -->
+
+        <!-- Modal Content -->
+        <div class="px-6 py-4 max-h-96 overflow-y-auto">
+            <div id="userDetailContent">
+                <!-- Dynamic content -->
+            </div>
+        </div>
+
+        <!-- Modal Footer -->
+        <div class="px-6 py-4 border-t border-gray-200 bg-gray-50 rounded-b-xl">
+            <div class="flex justify-end">
+                <button onclick="Utils.hideById('userDetailModal')" class="px-4 py-2 bg-gray-600 text-white rounded-md hover:bg-gray-700 transition-colors">
+                    <i class="fas fa-times mr-2"></i>關閉
+                </button>
+            </div>
         </div>
     </div>
 </div>

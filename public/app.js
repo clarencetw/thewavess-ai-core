@@ -39,19 +39,43 @@ const API = {
                 console.log(`✅ API 響應: ${response.config.method?.toUpperCase()} ${response.config.url}`, response.data);
                 return response;
             },
-            (error) => {
+            async (error) => {
                 console.error(`❌ API 錯誤: ${error.config?.method?.toUpperCase()} ${error.config?.url}`, {
                     status: error.response?.status,
                     statusText: error.response?.statusText,
                     data: error.response?.data
                 });
-                
+
                 // 處理認證錯誤
                 if (error.response?.status === 401) {
-                    console.warn('🔒 認證失敗，清除本地儲存');
+                    console.warn('🔒 認證失敗，嘗試刷新 Token 或重新登入');
+
+                    // 如果不是登入請求和刷新請求，嘗試刷新 token
+                    const originalRequest = error.config;
+                    if (!originalRequest._retry &&
+                        !originalRequest.url.includes('/admin/auth/login') &&
+                        !originalRequest.url.includes('/auth/refresh')) {
+
+                        originalRequest._retry = true;
+
+                        const refreshResult = await API.auth.refreshToken();
+                        if (refreshResult.success) {
+                            // 更新原請求的 Authorization header
+                            const newToken = localStorage.getItem('adminToken');
+                            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+
+                            // 重試原請求
+                            return API.client(originalRequest);
+                        }
+                    }
+
+                    // 刷新失敗或其他情況，清除認證並跳轉到登入頁
                     API.clearAuth();
+                    if (window.location.pathname !== '/admin/login') {
+                        window.location.href = '/admin/login';
+                    }
                 }
-                
+
                 return Promise.reject(error);
             }
         );
@@ -130,13 +154,42 @@ const API = {
         async login(username, password) {
             console.log('🚀 管理員登入:', { username });
             const result = await API.post('/admin/auth/login', { username, password });
-            
+
             if (result.success) {
                 console.log('🔐 登入成功，儲存認證資訊');
                 API.setAuth(result.data.access_token, result.data.admin);
             }
-            
+
             return result;
+        },
+
+        async refreshToken() {
+            console.log('🔄 嘗試刷新 Token');
+            const refreshToken = localStorage.getItem('adminRefreshToken');
+
+            if (!refreshToken) {
+                console.warn('⚠️ 沒有 Refresh Token，需要重新登入');
+                this.logout();
+                return { success: false, message: '沒有刷新令牌' };
+            }
+
+            try {
+                const result = await API.post('/auth/refresh', { refresh_token: refreshToken });
+
+                if (result.success) {
+                    console.log('✅ Token 刷新成功');
+                    API.setAuth(result.data.access_token, null, result.data.refresh_token);
+                    return result;
+                } else {
+                    console.warn('⚠️ Token 刷新失敗，需要重新登入');
+                    this.logout();
+                    return result;
+                }
+            } catch (error) {
+                console.error('❌ Token 刷新錯誤:', error);
+                this.logout();
+                return { success: false, message: '刷新令牌失敗' };
+            }
         },
         
         logout() {
@@ -191,19 +244,26 @@ const API = {
     },
     
     // 認證狀態管理
-    setAuth(token, adminInfo) {
+    setAuth(token, adminInfo, refreshToken = null) {
         console.log('💾 儲存認證資料:', {
             token: token.substring(0, 20) + '...',
-            admin: adminInfo.username + ' (' + adminInfo.role + ')'
+            admin: adminInfo ? adminInfo.username + ' (' + adminInfo.role + ')' : '(保持現有資料)',
+            hasRefreshToken: !!refreshToken
         });
         localStorage.setItem('adminToken', token);
-        localStorage.setItem('adminInfo', JSON.stringify(adminInfo));
+        if (adminInfo) {
+            localStorage.setItem('adminInfo', JSON.stringify(adminInfo));
+        }
+        if (refreshToken) {
+            localStorage.setItem('adminRefreshToken', refreshToken);
+        }
     },
     
     clearAuth() {
         console.log('🗑️ 清除認證資料');
         localStorage.removeItem('adminToken');
         localStorage.removeItem('adminInfo');
+        localStorage.removeItem('adminRefreshToken');
     },
     
     getAuth() {
@@ -327,20 +387,50 @@ const Utils = {
 
     // 統計卡片渲染函數 - 統一所有統計卡片的樣式
     renderStatsCards(cards) {
-        return cards.map(card => `
-            <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <div class="flex items-center justify-between">
-                    <div>
-                        <p class="text-sm text-gray-600 font-medium">${card.title}</p>
-                        <p class="text-2xl font-bold text-gray-900">${(card.value || 0).toLocaleString()}</p>
-                        ${card.change !== undefined ? `<p class="text-sm text-gray-500 mt-1">${card.change > 0 ? '+' : ''}${card.change}%</p>` : ''}
-                    </div>
-                    <div class="text-${card.color}-600">
-                        <i class="${card.icon} text-2xl"></i>
+        return cards.map(card => {
+            // 格式化數值顯示
+            let valueDisplay = card.value;
+            if (typeof card.value === 'number' && !card.isUptime && !card.isMemory && !card.isResponseTime && !card.isAIEngine) {
+                valueDisplay = card.value.toLocaleString();
+            }
+
+            // 格式化變化信息
+            let changeDisplay = '';
+            if (card.change !== undefined && card.changeText) {
+                if (card.isResponseTime) {
+                    changeDisplay = `<p class="text-sm text-gray-500 mt-1">${card.changeText}: ${card.change}%</p>`;
+                } else if (card.isMemory) {
+                    changeDisplay = `<p class="text-sm text-gray-500 mt-1">${card.change} ${card.changeText}</p>`;
+                } else if (card.isAIEngine) {
+                    changeDisplay = `<p class="text-sm text-blue-600 mt-1">${card.change} ${card.changeText}</p>`;
+                    // 添加引擎詳細信息
+                    if (card.aiEngineData) {
+                        const openai = card.aiEngineData.openai_requests || 0;
+                        const grok = card.aiEngineData.grok_requests || 0;
+                        changeDisplay += `<p class="text-xs text-gray-500 mt-1">OpenAI: ${openai} | Grok: ${grok}</p>`;
+                    }
+                } else if (card.change > 0) {
+                    changeDisplay = `<p class="text-sm text-green-600 mt-1">+${card.change} ${card.changeText}</p>`;
+                } else if (card.changeText) {
+                    changeDisplay = `<p class="text-sm text-gray-500 mt-1">${card.changeText}</p>`;
+                }
+            }
+
+            return `
+                <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <p class="text-sm text-gray-600 font-medium">${card.title}</p>
+                            <p class="text-2xl font-bold text-gray-900">${valueDisplay}</p>
+                            ${changeDisplay}
+                        </div>
+                        <div class="text-${card.color}-600">
+                            <i class="${card.icon} text-2xl"></i>
+                        </div>
                     </div>
                 </div>
-            </div>
-        `).join('');
+            `;
+        }).join('');
     },
 
     // 分頁渲染函數 - 統一分頁組件樣式
@@ -622,38 +712,109 @@ const AdminPages = {
             console.log('Admin stats received:', stats); // Debug log
             
             const cards = [
-                { 
-                    title: '總用戶數', 
-                    value: stats.users?.total || 0, 
+                {
+                    title: '總用戶數',
+                    value: stats.users?.total || 0,
                     icon: 'fas fa-users',
                     color: 'blue',
-                    change: 0
+                    change: stats.users?.today_new || 0,
+                    changeText: '今日新增'
                 },
-                { 
-                    title: '活躍用戶', 
-                    value: stats.users?.active_7d || 0, 
+                {
+                    title: '活躍用戶',
+                    value: stats.users?.active_7d || 0,
                     icon: 'fas fa-user-check',
                     color: 'green',
-                    change: 0
+                    change: stats.users?.week_new || 0,
+                    changeText: '本週新增'
                 },
-                { 
-                    title: '聊天會話', 
-                    value: stats.chats?.total_sessions || 0, 
+                {
+                    title: '聊天會話',
+                    value: stats.chats?.total_sessions || 0,
                     icon: 'fas fa-comments',
                     color: 'purple',
-                    change: 0
+                    change: stats.chats?.today_sessions || 0,
+                    changeText: '今日新增'
                 },
-                { 
-                    title: '今日訊息', 
-                    value: stats.chats?.today_messages || 0, 
-                    icon: 'fas fa-envelope',
-                    color: 'orange',
-                    change: 0
+                {
+                    title: '總訊息數',
+                    value: stats.chats?.total_messages || 0,
+                    icon: 'fas fa-envelope-open-text',
+                    color: 'indigo',
+                    change: stats.chats?.today_messages || 0,
+                    changeText: '今日新增'
+                },
+                {
+                    title: '角色數量',
+                    value: stats.characters?.total || 0,
+                    icon: 'fas fa-user-friends',
+                    color: 'pink',
+                    change: 0,
+                    changeText: '活躍角色'
+                },
+                {
+                    title: '系統運行',
+                    value: stats.uptime || '0天',
+                    icon: 'fas fa-server',
+                    color: 'teal',
+                    change: 0,
+                    changeText: '持續運行',
+                    isUptime: true
+                },
+                {
+                    title: '記憶體使用',
+                    value: stats.memory_usage || '0MB',
+                    icon: 'fas fa-memory',
+                    color: 'yellow',
+                    change: parseInt(stats.go_routines) || 0,
+                    changeText: 'Goroutines',
+                    isMemory: true
+                },
+                {
+                    title: 'AI 引擎使用',
+                    value: this.calculateAIEngineUsage(stats),
+                    icon: 'fas fa-brain',
+                    color: 'cyan',
+                    change: stats.ai_engines?.total_requests || 0,
+                    changeText: '總請求數',
+                    isAIEngine: true,
+                    aiEngineData: stats.ai_engines
+                },
+                {
+                    title: '回應時間',
+                    value: stats.avg_response_time || '0ms',
+                    icon: 'fas fa-tachometer-alt',
+                    color: 'red',
+                    change: parseFloat(stats.error_rate) || 0,
+                    changeText: '錯誤率',
+                    isResponseTime: true
                 }
             ];
             
             // 使用統一的統計卡片渲染函數
             container.innerHTML = Utils.renderStatsCards(cards);
+        },
+
+        calculateAIEngineUsage(stats) {
+            const engines = stats.ai_engines;
+            if (!engines) return '未知';
+
+            const openai = engines.openai_requests || 0;
+            const grok = engines.grok_requests || 0;
+            const total = openai + grok;
+
+            if (total === 0) return '無使用';
+
+            // 顯示主要使用的引擎
+            if (openai > grok) {
+                const percentage = Math.round((openai / total) * 100);
+                return `OpenAI ${percentage}%`;
+            } else if (grok > openai) {
+                const percentage = Math.round((grok / total) * 100);
+                return `Grok ${percentage}%`;
+            } else {
+                return '平均使用';
+            }
         },
 
         async loadSystemStatus() {
@@ -750,10 +911,6 @@ const AdminPages = {
             container.innerHTML = `
                 <div class="space-y-4">
                     <div class="flex justify-between items-center">
-                        <span class="text-gray-600">記憶體使用</span>
-                        <span class="text-lg font-semibold text-blue-600">${memoryBytes}</span>
-                    </div>
-                    <div class="flex justify-between items-center">
                         <span class="text-gray-600">執行緒數</span>
                         <span class="text-lg font-semibold ${goroutines > 50 ? 'text-red-600' : 'text-green-600'}">${goroutines}</span>
                     </div>
@@ -764,6 +921,10 @@ const AdminPages = {
                     <div class="flex justify-between items-center">
                         <span class="text-gray-600">下次 GC</span>
                         <span class="text-gray-900 text-sm">${data.runtime?.next_gc || 'N/A'}</span>
+                    </div>
+                    <div class="flex justify-between items-center">
+                        <span class="text-gray-600">記憶體堆疊</span>
+                        <span class="text-gray-900 text-sm">${data.runtime?.heap_objects || 'N/A'} 物件</span>
                     </div>
                 </div>
             `;
@@ -1148,14 +1309,17 @@ const AdminPages = {
     users: {
         currentData: null,
         currentPage: 1,
-        pageSize: 10,
+        pageSize: 20,
         searchQuery: '',
+        sortBy: 'created_at',
+        sortOrder: 'desc',
 
         async init() {
             console.log('👥 初始化用戶管理');
             await this.loadStats();
             await this.loadUsers();
             this.initSearch();
+            this.initSorting();
         },
 
         async reload() {
@@ -1202,22 +1366,25 @@ const AdminPages = {
 
         async loadUsers() {
             AdminPages.common.setLoadingState('usersTableLoading', 'usersTableEmpty', true);
-            
+
             try {
                 const params = {
                     page: this.currentPage,
-                    limit: this.pageSize
+                    limit: this.pageSize,
+                    sort_by: this.sortBy,
+                    sort_order: this.sortOrder
                 };
-                
+
                 if (this.searchQuery) {
                     params.search = this.searchQuery;
                 }
                 
                 const response = await API.admin.getUsers(params);
                 if (response.success) {
-                    this.currentData = response.data;
-                    this.renderUsersTable(response.data);
-                    this.renderPagination(response.pagination);
+                    const data = response.data || {};
+                    this.currentData = data;
+                    this.renderUsersTable(data);
+                    this.renderPagination(data.pagination);
                 } else {
                     this.showUsersError(response.message || '用戶載入失敗');
                 }
@@ -1232,13 +1399,14 @@ const AdminPages = {
         renderUsersTable(data) {
             const tbody = document.getElementById('usersTableBody');
             if (!tbody || !data.users) return;
-            
+
             if (data.users.length === 0) {
                 Utils.showById('usersTableEmpty');
                 tbody.innerHTML = '';
                 return;
             }
-            
+
+            Utils.hideById('usersTableEmpty');
             tbody.innerHTML = data.users.map(user => `
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4">
@@ -1278,7 +1446,7 @@ const AdminPages = {
                         <button onclick="AdminPages.users.toggleUserStatus('${user.id}', '${user.status}')" 
                                 class="text-${user.status === 'active' ? 'red' : 'green'}-600 hover:text-${user.status === 'active' ? 'red' : 'green'}-800">
                             <i class="fas fa-${user.status === 'active' ? 'ban' : 'check'}"></i>
-                            ${user.status === 'active' ? '封鎖' : '啟用'}
+                            ${user.status === 'active' ? '暫停' : '啟用'}
                         </button>
                     </td>
                 </tr>
@@ -1312,6 +1480,12 @@ const AdminPages = {
 
         async goToPage(page) {
             this.currentPage = page;
+            await this.loadUsers();
+        },
+
+        async changePageSize(newPageSize) {
+            this.pageSize = parseInt(newPageSize);
+            this.currentPage = 1;
             await this.loadUsers();
         },
 
@@ -1349,16 +1523,81 @@ const AdminPages = {
             
             if (mode === 'view') {
                 document.getElementById(contentId).innerHTML = `
-                    <div class="space-y-4">
-                        <div><label class="font-medium">用戶名稱:</label> ${user.username}</div>
-                        <div><label class="font-medium">電子郵件:</label> ${user.email || 'N/A'}</div>
-                        <div><label class="font-medium">狀態:</label> 
-                            <span class="px-2 py-1 text-xs font-semibold rounded-full ${Utils.getStatusClass(user.status)}">
-                                ${Utils.getStatusText(user.status)}
-                            </span>
+                    <div class="space-y-6">
+                        <!-- 用戶基本信息卡片 -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                                <i class="fas fa-user-circle text-blue-600 mr-2"></i>
+                                基本信息
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
+                                        <i class="fas fa-user text-blue-600 text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500">用戶名稱</p>
+                                        <p class="font-medium text-gray-900">${user.username}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
+                                        <i class="fas fa-envelope text-green-600 text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500">電子郵件</p>
+                                        <p class="font-medium text-gray-900">${user.email || 'N/A'}</p>
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                        <div><label class="font-medium">註冊時間:</label> ${Utils.formatDate(user.created_at)}</div>
-                        <div><label class="font-medium">最後登入:</label> ${Utils.formatDate(user.last_login_at) || 'N/A'}</div>
+
+                        <!-- 狀態信息卡片 -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                                <i class="fas fa-info-circle text-purple-600 mr-2"></i>
+                                狀態信息
+                            </h4>
+                            <div class="flex items-center">
+                                <div class="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center mr-3">
+                                    <i class="fas fa-toggle-on text-purple-600 text-xs"></i>
+                                </div>
+                                <div>
+                                    <p class="text-xs text-gray-500">當前狀態</p>
+                                    <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${Utils.getStatusClass(user.status)}">
+                                        ${Utils.getStatusText(user.status)}
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 時間信息卡片 -->
+                        <div class="bg-gray-50 rounded-lg p-4">
+                            <h4 class="text-sm font-semibold text-gray-900 mb-3 flex items-center">
+                                <i class="fas fa-clock text-orange-600 mr-2"></i>
+                                時間記錄
+                            </h4>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center mr-3">
+                                        <i class="fas fa-calendar-plus text-orange-600 text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500">註冊時間</p>
+                                        <p class="font-medium text-gray-900">${Utils.formatDate(user.created_at)}</p>
+                                    </div>
+                                </div>
+                                <div class="flex items-center">
+                                    <div class="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center mr-3">
+                                        <i class="fas fa-sign-in-alt text-red-600 text-xs"></i>
+                                    </div>
+                                    <div>
+                                        <p class="text-xs text-gray-500">最後登入</p>
+                                        <p class="font-medium text-gray-900">${Utils.formatDate(user.last_login_at) || 'N/A'}</p>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 `;
             } else {
@@ -1377,7 +1616,7 @@ const AdminPages = {
                             <select name="status" class="mt-1 block w-full border border-gray-300 rounded-md px-3 py-2">
                                 <option value="active" ${user.status === 'active' ? 'selected' : ''}>活躍</option>
                                 <option value="inactive" ${user.status === 'inactive' ? 'selected' : ''}>未活躍</option>
-                                <option value="blocked" ${user.status === 'blocked' ? 'selected' : ''}>已封鎖</option>
+                                <option value="suspended" ${user.status === 'suspended' ? 'selected' : ''}>已暫停</option>
                             </select>
                         </div>
                         <input type="hidden" name="user_id" value="${user.id}">
@@ -1420,7 +1659,7 @@ const AdminPages = {
 
         async toggleUserStatus(userId, currentStatus) {
             const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
-            const action = newStatus === 'suspended' ? '封鎖' : '啟用';
+            const action = newStatus === 'suspended' ? '暫停' : '啟用';
             
             if (!confirm(`確定要${action}此用戶嗎？`)) return;
             
@@ -1436,6 +1675,33 @@ const AdminPages = {
                 console.error(`${action}用戶失敗:`, error);
                 AdminPages.common.showAlert(`${action}失敗`, 'error');
             }
+        },
+
+        initSorting() {
+            // 為每個排序按鈕綁定點擊事件
+            const sortButtons = document.querySelectorAll('#usersTable th button');
+            sortButtons.forEach((button, index) => {
+                const fieldMap = ['username', 'status', 'created_at']; // 對應表格列的字段
+                const field = fieldMap[index];
+                if (field) {
+                    button.addEventListener('click', () => {
+                        this.sortByField(field);
+                    });
+                }
+            });
+        },
+
+        async sortByField(field) {
+            // 如果點擊同一欄位，切換排序方向
+            if (this.sortBy === field) {
+                this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortBy = field;
+                this.sortOrder = 'desc'; // 預設降序
+            }
+
+            this.currentPage = 1; // 重新排序時回到第一頁
+            await this.loadUsers();
         }
     },
 
@@ -1444,6 +1710,8 @@ const AdminPages = {
         currentData: null,
         currentPage: 1,
         pageSize: 10,
+        sortBy: 'created_at',
+        sortOrder: 'desc',
         filters: {
             search: '',
             user: '',
@@ -1458,6 +1726,7 @@ const AdminPages = {
             await this.loadChats();
             await this.loadFilterOptions();
             this.initSearch();
+            this.initSorting();
         },
 
         async reload() {
@@ -1575,13 +1844,23 @@ const AdminPages = {
         async loadChats() {
             Utils.showById('chatsTableLoading');
             Utils.hideById('chatsTableEmpty');
-            
+
             try {
                 const params = {
                     page: this.currentPage,
                     limit: this.pageSize,
-                    ...this.filters
+                    sort_by: this.sortBy,
+                    sort_order: this.sortOrder
                 };
+
+                // 只添加非空的篩選參數
+                if (this.filters.search) params.query = this.filters.search;
+                if (this.filters.user) params.user_id = this.filters.user;
+                if (this.filters.character) params.character_id = this.filters.character;
+                if (this.filters.dateFrom) params.date_from = this.filters.dateFrom;
+                if (this.filters.dateTo) params.date_to = this.filters.dateTo;
+
+                console.log('🔍 聊天搜尋參數:', params);
                 
                 const response = await API.admin.getChats(params);
                 if (response.success) {
@@ -2045,6 +2324,31 @@ const AdminPages = {
                 console.error('匯出聊天記錄失敗:', error);
                 AdminPages.common.showAlert('匯出失敗', 'error');
             }
+        },
+
+        initSorting() {
+            const sortButtons = document.querySelectorAll('#chatsTable th button');
+            sortButtons.forEach((button, index) => {
+                const fieldMap = ['title', 'username', 'character_name', 'created_at']; // 對應表格列的字段
+                const field = fieldMap[index];
+                if (field) {
+                    button.addEventListener('click', () => {
+                        this.sortByField(field);
+                    });
+                }
+            });
+        },
+
+        async sortByField(field) {
+            if (this.sortBy === field) {
+                this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortBy = field;
+                this.sortOrder = 'desc';
+            }
+
+            this.currentPage = 1;
+            await this.loadChats();
         }
     },
 
@@ -2052,6 +2356,8 @@ const AdminPages = {
     characters: {
         currentPage: 1,
         limit: 20,
+        sortBy: 'updated_at',
+        sortOrder: 'desc',
         filters: {
             query: '',
             type: 'all',
@@ -2062,6 +2368,7 @@ const AdminPages = {
         init() {
             console.log('🎭 初始化角色管理頁面');
             this.initEventListeners();
+            this.initSorting();
             this.loadCharacters();
         },
 
@@ -2114,6 +2421,8 @@ const AdminPages = {
                 const params = {
                     page: this.currentPage,
                     limit: this.limit,
+                    sort_by: this.sortBy,
+                    sort_order: this.sortOrder,
                     status: this.filters.status,
                     type: this.filters.type,
                     include_deleted: this.filters.includeDeleted
@@ -2425,13 +2734,13 @@ const AdminPages = {
                         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">頭像 URL</label>
-                                <input type="url" id="editCharacterAvatar" value="${character.metadata?.avatar_url || ''}" 
+                                <input type="url" id="editCharacterAvatar" value="${character.avatar_url || ''}"
                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                                       placeholder="https://example.com/avatar.jpg">
+                                      placeholder="https://www.gravatar.com/avatar/?d=mp">
                             </div>
                             <div>
                                 <label class="block text-sm font-medium text-gray-700 mb-1">人氣度</label>
-                                <input type="number" id="editCharacterPopularity" value="${character.metadata?.popularity || 0}" 
+                                <input type="number" id="editCharacterPopularity" value="${character.popularity || 0}" 
                                        class="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                        min="0" max="100">
                             </div>
@@ -2441,7 +2750,7 @@ const AdminPages = {
                         <div>
                             <label class="block text-sm font-medium text-gray-700 mb-1">標籤</label>
                             <div class="flex flex-wrap gap-2 mb-2" id="editCharacterTagsDisplay">
-                                ${(character.metadata?.tags || []).map(tag => 
+                                ${(character.tags || []).map(tag => 
                                     `<span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                                         ${Utils.escapeHtml(tag)}
                                         <button type="button" onclick="this.parentElement.remove()" class="ml-1 text-blue-600 hover:text-blue-800">
@@ -2567,12 +2876,11 @@ const AdminPages = {
                     name: name,
                     type: type,
                     is_active: isActive,
+                    is_public: isPublic,
                     user_description: description || null,
-                    metadata: {
-                        avatar_url: avatarUrl || null,
-                        tags: tags,
-                        popularity: popularity
-                    }
+                    avatar_url: avatarUrl || null,
+                    tags: tags,
+                    popularity: popularity
                 };
 
                 // 發送更新請求
@@ -2658,6 +2966,31 @@ const AdminPages = {
                 console.error('永久刪除失敗:', error);
                 AdminPages.common.showAlert('永久刪除時發生錯誤', 'error');
             }
+        },
+
+        initSorting() {
+            const sortButtons = document.querySelectorAll('#charactersTable th button');
+            sortButtons.forEach((button, index) => {
+                const fieldMap = ['name', 'type', 'status', 'creator', 'popularity', 'updated_at']; // 對應表格列的字段
+                const field = fieldMap[index];
+                if (field) {
+                    button.addEventListener('click', () => {
+                        this.sortByField(field);
+                    });
+                }
+            });
+        },
+
+        async sortByField(field) {
+            if (this.sortBy === field) {
+                this.sortOrder = this.sortOrder === 'asc' ? 'desc' : 'asc';
+            } else {
+                this.sortBy = field;
+                this.sortOrder = 'desc';
+            }
+
+            this.currentPage = 1;
+            await this.loadCharacters();
         }
     }
 };

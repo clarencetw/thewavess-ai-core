@@ -3,20 +3,20 @@
 {{define "dashboard-content"}}
 <div class="space-y-6" data-page="dashboard">
     <!-- Header -->
-    <div class="flex justify-between items-center">
-        <div>
-            <h1 class="text-3xl font-bold text-gray-900">管理儀表板</h1>
+    <div class="flex flex-col space-y-4 lg:flex-row lg:justify-between lg:items-center lg:space-y-0">
+        <div class="flex-shrink-0">
+            <h1 class="text-2xl lg:text-3xl font-bold text-gray-900">管理儀表板</h1>
             <p class="text-gray-600 mt-1">系統總覽與統計資訊</p>
         </div>
-        <div class="flex space-x-2">
+        <div class="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
             <button onclick="AdminPages.dashboard.toggleAlerts()" id="alertsBtn" class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors">
-                <i class="fas fa-bell mr-2"></i>警報 <span id="alertsCount" class="ml-1 px-2 py-1 text-xs bg-yellow-500 rounded-full">0</span>
+                <i class="fas fa-bell mr-2"></i><span class="hidden sm:inline">警報</span><span class="sm:hidden">警報</span> <span id="alertsCount" class="ml-1 px-2 py-1 text-xs bg-yellow-500 rounded-full">0</span>
             </button>
             <button onclick="AdminPages.dashboard.reload()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
-                <i class="fas fa-sync-alt mr-2"></i>重新整理
+                <i class="fas fa-sync-alt mr-2"></i><span class="hidden sm:inline">重新整理</span><span class="sm:hidden">重新整理</span>
             </button>
             <button onclick="AdminPages.dashboard.toggleAutoRefresh()" id="autoRefreshBtn" class="px-4 py-2 bg-green-600 text-white rounded-md hover:bg-green-700 transition-colors">
-                <i class="fas fa-play mr-2"></i>自動更新
+                <i class="fas fa-play mr-2"></i><span class="hidden sm:inline">自動更新</span><span class="sm:hidden">自動更新</span>
             </button>
         </div>
     </div>
@@ -37,7 +37,7 @@
     </div>
 
     <!-- Statistics Cards -->
-    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6" id="statsGrid">
+    <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-6" id="statsGrid">
         <!-- Dynamic content will be loaded here -->
     </div>
 
