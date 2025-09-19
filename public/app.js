@@ -1443,7 +1443,10 @@ const AdminPages = {
                         <button onclick="AdminPages.users.editUser('${user.id}')" class="text-green-600 hover:text-green-800">
                             <i class="fas fa-edit"></i> 編輯
                         </button>
-                        <button onclick="AdminPages.users.toggleUserStatus('${user.id}', '${user.status}')" 
+                        <button onclick="AdminPages.users.showPasswordModal('${user.id}', '${user.username}')" class="text-orange-600 hover:text-orange-800">
+                            <i class="fas fa-key"></i> 密碼
+                        </button>
+                        <button onclick="AdminPages.users.toggleUserStatus('${user.id}', '${user.status}')"
                                 class="text-${user.status === 'active' ? 'red' : 'green'}-600 hover:text-${user.status === 'active' ? 'red' : 'green'}-800">
                             <i class="fas fa-${user.status === 'active' ? 'ban' : 'check'}"></i>
                             ${user.status === 'active' ? '暫停' : '啟用'}
@@ -1660,9 +1663,9 @@ const AdminPages = {
         async toggleUserStatus(userId, currentStatus) {
             const newStatus = currentStatus === 'active' ? 'suspended' : 'active';
             const action = newStatus === 'suspended' ? '暫停' : '啟用';
-            
+
             if (!confirm(`確定要${action}此用戶嗎？`)) return;
-            
+
             try {
                 const response = await API.admin.updateUserStatus(userId, newStatus);
                 if (response.success) {
@@ -1674,6 +1677,72 @@ const AdminPages = {
             } catch (error) {
                 console.error(`${action}用戶失敗:`, error);
                 AdminPages.common.showAlert(`${action}失敗`, 'error');
+            }
+        },
+
+        showPasswordModal(userId, username) {
+            const modal = document.getElementById('userPasswordModal');
+            const form = document.getElementById('userPasswordForm');
+            const usernameSpan = document.getElementById('passwordModalUsername');
+
+            if (!modal || !form || !usernameSpan) {
+                AdminPages.common.showAlert('密碼修改模態框初始化失敗', 'error');
+                return;
+            }
+
+            // 設置用戶名顯示
+            usernameSpan.textContent = username;
+
+            // 清空表單
+            form.reset();
+
+            // 設置表單提交處理
+            form.onsubmit = (e) => {
+                e.preventDefault();
+                this.updateUserPassword(userId);
+            };
+
+            // 顯示模態框
+            modal.classList.remove('hidden');
+        },
+
+        async updateUserPassword(userId) {
+            const newPassword = document.getElementById('newPassword').value;
+            const confirmPassword = document.getElementById('confirmPassword').value;
+
+            // 驗證密碼
+            if (!newPassword || newPassword.length < 8) {
+                AdminPages.common.showAlert('密碼長度至少需要8個字符', 'error');
+                return;
+            }
+
+            if (newPassword !== confirmPassword) {
+                AdminPages.common.showAlert('兩次輸入的密碼不一致', 'error');
+                return;
+            }
+
+            try {
+                const response = await API.client.put(`/admin/users/${userId}/password`, {
+                    new_password: newPassword
+                });
+
+                if (response.data.success) {
+                    AdminPages.common.showAlert('密碼修改成功');
+                    this.hidePasswordModal();
+                } else {
+                    AdminPages.common.showAlert(response.data.message || '密碼修改失敗', 'error');
+                }
+            } catch (error) {
+                console.error('密碼修改失敗:', error);
+                const errorMessage = error.response?.data?.message || '密碼修改時發生錯誤';
+                AdminPages.common.showAlert(errorMessage, 'error');
+            }
+        },
+
+        hidePasswordModal() {
+            const modal = document.getElementById('userPasswordModal');
+            if (modal) {
+                modal.classList.add('hidden');
             }
         },
 
