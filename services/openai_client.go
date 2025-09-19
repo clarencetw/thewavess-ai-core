@@ -6,15 +6,16 @@ import (
 	"strings"
 
 	"github.com/clarencetw/thewavess-ai-core/utils"
-	"github.com/sashabaranov/go-openai"
+	"github.com/openai/openai-go/v2"
+	"github.com/openai/openai-go/v2/option"
 )
 
 // OpenAIClient OpenAI 客戶端
 type OpenAIClient struct {
-	client      *openai.Client
-	model       string
+	client      openai.Client
+	model       openai.ChatModel
 	maxTokens   int
-	temperature float32
+	temperature float64
 	baseURL     string
 }
 
@@ -33,26 +34,8 @@ type OpenAIMessage struct {
 	Content string `json:"content"`
 }
 
-// OpenAIResponse OpenAI 回應結構
-type OpenAIResponse struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	Model   string `json:"model"`
-	Choices []struct {
-		Index   int `json:"index"`
-		Message struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-	Usage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	} `json:"usage"`
-}
+// OpenAIResponse 使用官方 SDK 的 ChatCompletion 作為響應類型
+type OpenAIResponse = openai.ChatCompletion
 
 // NewOpenAIClient 創建新的 OpenAI 客戶端
 func NewOpenAIClient() *OpenAIClient {
@@ -65,31 +48,48 @@ func NewOpenAIClient() *OpenAIClient {
 	}
 
 	// 從環境變數讀取配置，提供預設值
-	model := utils.GetEnvWithDefault("OPENAI_MODEL", "gpt-4o")
+	modelName := utils.GetEnvWithDefault("OPENAI_MODEL", "gpt-4o-mini")
 	maxTokens := utils.GetEnvIntWithDefault("OPENAI_MAX_TOKENS", 1200)
 	temperature := utils.GetEnvFloatWithDefault("OPENAI_TEMPERATURE", 0.8)
 
 	// 獲取自定義 API URL
 	baseURL := utils.GetEnvWithDefault("OPENAI_API_URL", "https://api.openai.com/v1")
 
-	var client *openai.Client
+	// 設定 model
+	var model openai.ChatModel
+	switch modelName {
+	case "gpt-4o":
+		model = openai.ChatModelGPT4o
+	case "gpt-4o-mini":
+		model = openai.ChatModelGPT4oMini
+	case "gpt-4":
+		model = openai.ChatModelGPT4
+	case "gpt-3.5-turbo":
+		model = openai.ChatModelGPT3_5Turbo
+	default:
+		model = openai.ChatModelGPT4oMini
+	}
+
+	var client openai.Client
 	if baseURL != "https://api.openai.com/v1" {
 		// 自定義端點
-		config := openai.DefaultConfig(apiKey)
-		config.BaseURL = baseURL
-		client = openai.NewClientWithConfig(config)
-
+		client = openai.NewClient(
+			option.WithAPIKey(apiKey),
+			option.WithBaseURL(baseURL),
+		)
 		utils.Logger.WithField("base_url", baseURL).Info("Using custom OpenAI API URL")
 	} else {
 		// 使用默認 OpenAI API
-		client = openai.NewClient(apiKey)
+		client = openai.NewClient(
+			option.WithAPIKey(apiKey),
+		)
 	}
 
 	return &OpenAIClient{
 		client:      client,
 		model:       model,
 		maxTokens:   maxTokens,
-		temperature: float32(temperature),
+		temperature: temperature,
 		baseURL:     baseURL,
 	}
 }
@@ -136,60 +136,142 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	}
 
 	// 轉換消息格式
-	messages := make([]openai.ChatCompletionMessage, len(request.Messages))
+	messages := make([]openai.ChatCompletionMessageParamUnion, len(request.Messages))
 	for i, msg := range request.Messages {
-		messages[i] = openai.ChatCompletionMessage{
-			Role:    msg.Role,
-			Content: msg.Content,
+		switch msg.Role {
+		case "system":
+			messages[i] = openai.SystemMessage(msg.Content)
+		case "user":
+			messages[i] = openai.UserMessage(msg.Content)
+		case "assistant":
+			messages[i] = openai.AssistantMessage(msg.Content)
+		default:
+			messages[i] = openai.UserMessage(msg.Content)
 		}
 	}
 
-	// 構建請求
-	chatRequest := openai.ChatCompletionRequest{
+	// 建立 API 參數
+	params := openai.ChatCompletionNewParams{
 		Model:       c.model,
 		Messages:    messages,
-		MaxTokens:   c.maxTokens,
-		Temperature: c.temperature,
-		User:        request.User,
+		MaxTokens:   openai.Int(int64(c.maxTokens)),
+		Temperature: openai.Float(c.temperature),
+		User:        openai.String(request.User),
+	}
+
+	// 可選功能：Logprobs（調試和分析模型信心）
+	if utils.GetEnvWithDefault("OPENAI_LOGPROBS", "false") == "true" {
+		params.Logprobs = openai.Bool(true)
+		if topLogprobs := utils.GetEnvIntWithDefault("OPENAI_TOP_LOGPROBS", 0); topLogprobs > 0 && topLogprobs <= 20 {
+			params.TopLogprobs = openai.Int(int64(topLogprobs))
+		}
+	}
+
+	// 可選功能：服務層級控制
+	if serviceTier := utils.GetEnvWithDefault("OPENAI_SERVICE_TIER", ""); serviceTier != "" {
+		switch serviceTier {
+		case "auto", "default", "flex", "scale", "priority":
+			params.ServiceTier = openai.ChatCompletionNewParamsServiceTier(serviceTier)
+		}
+	}
+
+	// 加入種子參數以提高一致性（可選）
+	if seed := utils.GetEnvWithDefault("OPENAI_SEED", ""); seed != "" {
+		if seedInt := utils.GetEnvIntWithDefault("OPENAI_SEED", 0); seedInt > 0 {
+			params.Seed = openai.Int(int64(seedInt))
+		}
 	}
 
 	// 調用 OpenAI API
-	resp, err := c.client.CreateChatCompletion(ctx, chatRequest)
+	resp, err := c.client.Chat.Completions.New(ctx, params)
 
 	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service": "openai",
 			"error":   err.Error(),
-			"model":   c.model,
+			"model":   string(c.model),
 			"user":    request.User,
 		}).Error("OpenAI API call failed")
 		return nil, fmt.Errorf("failed OpenAI API call: %w", err)
 	}
 
-	// 記錄API響應信息
-	utils.Logger.WithFields(map[string]interface{}{
+	// 計算簡單成本估算
+	totalTokens := int(resp.Usage.TotalTokens)
+	var costEstimate float64
+	switch string(resp.Model) {
+	case "gpt-4o":
+		costEstimate = float64(totalTokens) * 0.000005 // $0.005 per 1K tokens
+	case "gpt-4o-mini":
+		costEstimate = float64(totalTokens) * 0.00000015 // $0.00015 per 1K tokens
+	case "gpt-4":
+		costEstimate = float64(totalTokens) * 0.00003 // $0.03 per 1K tokens
+	case "gpt-3.5-turbo":
+		costEstimate = float64(totalTokens) * 0.0000015 // $0.0015 per 1K tokens
+	default:
+		costEstimate = float64(totalTokens) * 0.000002 // Default estimate
+	}
+
+	// 記錄API響應信息，包含 token 使用和成本
+	logFields := map[string]interface{}{
 		"service":           "openai",
 		"response_id":       resp.ID,
-		"model":             resp.Model,
+		"model":             string(resp.Model),
+		"object":            string(resp.Object),
+		"created":           resp.Created,
 		"prompt_tokens":     resp.Usage.PromptTokens,
 		"completion_tokens": resp.Usage.CompletionTokens,
 		"total_tokens":      resp.Usage.TotalTokens,
+		"cost_usd":          fmt.Sprintf("$%.6f", costEstimate),
 		"choices_count":     len(resp.Choices),
-	}).Info("OpenAI API response received")
+	}
+
+	// 加入 finish_reason 和內容過濾相關資訊
+	if len(resp.Choices) > 0 {
+		finishReason := string(resp.Choices[0].FinishReason)
+		logFields["finish_reason"] = finishReason
+
+		// 標記是否被內容過濾器阻擋
+		if finishReason == "content_filter" {
+			logFields["content_filtered"] = true
+		}
+	}
+
+	// SystemFingerprint 已被官方標記為 deprecated，不再記錄
+
+	// 加入服務層級資訊（可能影響內容過濾）
+	if resp.ServiceTier != "" {
+		logFields["service_tier"] = string(resp.ServiceTier)
+	}
+
+	// 記錄 Logprobs 資訊（如果啟用）
+	if len(resp.Choices) > 0 {
+		logprobs := resp.Choices[0].Logprobs
+		if logprobs.Content != nil && len(logprobs.Content) > 0 {
+			logFields["logprobs_enabled"] = true
+			logFields["logprobs_tokens"] = len(logprobs.Content)
+		}
+	}
+
+	// 加入 seed 參數（如果有設定）
+	if seed := utils.GetEnvWithDefault("OPENAI_SEED", ""); seed != "" {
+		logFields["seed_used"] = seed
+	}
+
+	utils.Logger.WithFields(logFields).Info("OpenAI API response received")
 
 	// 開發模式下詳細記錄響應內容
 	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service":     "openai",
 			"response_id": resp.ID,
-			"model":       resp.Model,
+			"model":       string(resp.Model),
 		}).Info("🎯 OpenAI Response Details")
 
 		for i, choice := range resp.Choices {
 			utils.Logger.WithFields(map[string]interface{}{
 				"service":        "openai",
 				"choice_index":   i,
-				"finish_reason":  choice.FinishReason,
+				"finish_reason":  string(choice.FinishReason),
 				"content_length": len(choice.Message.Content),
 			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, choice.Message.Content))
 		}
@@ -199,52 +281,14 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 			utils.Logger.WithFields(map[string]interface{}{
 				"service":        "openai",
 				"choice_index":   i,
-				"finish_reason":  choice.FinishReason,
+				"finish_reason":  string(choice.FinishReason),
 				"content_length": len(choice.Message.Content),
 			}).Debug("OpenAI response choice")
 		}
 	}
 
-	// 轉換回應格式
-	response := &OpenAIResponse{
-		ID:      resp.ID,
-		Object:  resp.Object,
-		Created: resp.Created,
-		Model:   resp.Model,
-		Usage: struct {
-			PromptTokens     int `json:"prompt_tokens"`
-			CompletionTokens int `json:"completion_tokens"`
-			TotalTokens      int `json:"total_tokens"`
-		}{
-			PromptTokens:     resp.Usage.PromptTokens,
-			CompletionTokens: resp.Usage.CompletionTokens,
-			TotalTokens:      resp.Usage.TotalTokens,
-		},
-	}
-
-	// 轉換選項
-	for _, choice := range resp.Choices {
-		response.Choices = append(response.Choices, struct {
-			Index   int `json:"index"`
-			Message struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			} `json:"message"`
-			FinishReason string `json:"finish_reason"`
-		}{
-			Index: choice.Index,
-			Message: struct {
-				Role    string `json:"role"`
-				Content string `json:"content"`
-			}{
-				Role:    choice.Message.Role,
-				Content: choice.Message.Content,
-			},
-			FinishReason: string(choice.FinishReason),
-		})
-	}
-
-	return response, nil
+	// 直接返回官方 SDK 的響應結構
+	return resp, nil
 }
 
 // BuildCharacterPrompt 構建角色提示詞
