@@ -245,6 +245,7 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 		Confidence:    1.0,
 	}
 
+	// 歡迎訊息使用 OpenAI 引擎，L1 等級
 	response, err := s.generatePersonalizedResponse(ctx, "openai", "[SYSTEM_WELCOME_FIRST_MESSAGE]", welcomeContext, analysis)
 
 	if err != nil {
@@ -256,8 +257,8 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 	// 5. 生成消息ID並保存到數據庫
 	messageID := fmt.Sprintf("msg_%s_welcome", utils.GenerateUUID())
 
-	// 保存歡迎消息到數據庫
-	err = s.saveAssistantMessageToDB(ctx, welcomeRequest, messageID, response, 50, "openai", analysis, time.Since(startTime))
+	// 保存歡迎消息到數據庫 (歡迎消息固定 L1)
+	err = s.saveAssistantMessageToDB(ctx, welcomeRequest, messageID, response, 1, "openai", analysis, time.Since(startTime))
 
 	if err != nil {
 		utils.Logger.WithError(err).Error("保存歡迎消息失敗")
@@ -315,13 +316,15 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	}
 
 	// 5. 選擇 AI 引擎
-	engine := s.selectAIEngine(analysis, conversationContext, nil)
+	selectedEngine := s.selectAIEngine(analysis, conversationContext, request.UserMessage)
+
 	utils.Logger.WithFields(logrus.Fields{
-		"selected_engine": engine,
+		"selected_engine": selectedEngine,
+		"nsfw_level": analysis.Intensity,
 	}).Info("引擎選擇完成")
 
 	// 6. 生成 AI 回應
-	response, err := s.generatePersonalizedResponse(ctx, engine, request.UserMessage, conversationContext, analysis)
+	response, err := s.generatePersonalizedResponse(ctx, selectedEngine, request.UserMessage, conversationContext, analysis)
 	if err != nil {
 		return nil, fmt.Errorf("failed to generate personalized response: %w", err)
 	}
@@ -329,8 +332,8 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	// 7. 更新好感度
 	newAffection := s.updateAffection(conversationContext.Affection, response)
 
-	// 8. 保存 AI 回應
-	err = s.saveAssistantMessageToDB(ctx, request, messageID, response, newAffection, engine, analysis, time.Since(startTime))
+	// 8. 保存 AI 回應（智能 NSFW 等級記錄）
+	err = s.saveAssistantMessageToDB(ctx, request, messageID, response, newAffection, selectedEngine, analysis, time.Since(startTime))
 	if err != nil {
 		utils.Logger.WithError(err).Error("保存對話到資料庫失敗")
 	}
@@ -341,7 +344,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		MessageID:    messageID,
 		Content:      response.Content,
 		Affection:    newAffection,
-		AIEngine:     engine,
+		AIEngine:     selectedEngine,
 		NSFWLevel:    analysis.Intensity,
 		Confidence:   analysis.Confidence,
 		ResponseTime: time.Since(startTime),
@@ -355,7 +358,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 			"chat_id":      request.ChatID,
 			"user_id":      request.UserID,
 			"character_id": request.CharacterID,
-			"ai_engine":    engine,
+			"ai_engine":    selectedEngine,
 			"nsfw_level":   analysis.Intensity,
 			"affection":    newAffection,
 		},
@@ -365,7 +368,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		"chat_id":       request.ChatID,
 		"character_id":  request.CharacterID,
 		"nsfw_level":    analysis.Intensity,
-		"ai_engine":     engine,
+		"ai_engine":     selectedEngine,
 		"affection":     newAffection,
 		"response_time": chatResponse.ResponseTime.Milliseconds(),
 	}).Info("AI對話處理完成")
@@ -432,8 +435,8 @@ func (s *ChatService) buildFemaleOrientedContext(ctx context.Context, request *P
 	// 2. 從 messages 表獲取最近對話記憶（限制 5 條，控制 AI 上下文大小）
 	recentMemories, err := s.getRecentMemoriesFromDB(ctx, request.ChatID, 5)
 	if err != nil {
-		utils.Logger.WithError(err).Warn("獲取會話歷史失敗，使用內存數據")
-		recentMemories = s.getRecentMemories(request.ChatID, request.UserID, request.CharacterID, 5)
+		utils.Logger.WithError(err).Warn("獲取會話歷史失敗，使用空歷史")
+		recentMemories = []ChatMessage{} // 直接使用空歷史，簡化邏輯
 	}
 
 	// 3. 組裝標準化對話上下文數據結構
@@ -491,22 +494,10 @@ func (s *ChatService) getAffectionFromDB(ctx context.Context, userID, characterI
 	return relationship.Affection, nil
 }
 
-// getRecentMemories 獲取最近的對話記憶 - fallback版本（當資料庫查詢失敗時使用）
-func (s *ChatService) getRecentMemories(chatID, userID, characterID string, limit int) []ChatMessage {
-	// 作為 getRecentMemoriesFromDB 失敗時的 fallback
-	// 在生產環境中，這裡可以嘗試從快取或其他資料源獲取
-	utils.Logger.WithFields(logrus.Fields{
-		"chat_id":      chatID,
-		"user_id":      userID,
-		"character_id": characterID,
-		"limit":        limit,
-	}).Debug("使用 fallback 記憶獲取（返回空歷史）")
-
-	return []ChatMessage{}
-}
+// getRecentMemories 已移除：統一使用資料庫查詢，失敗時返回空歷史
 
 // selectAIEngine 智能選擇 AI 引擎（基於精確的 L1-L5 分級）
-func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *ConversationContext, _ map[string]interface{}) string {
+func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *ConversationContext, userMessage string) string {
 	// Debug 日誌：記錄輸入參數
 	chatID := "nil"
 	if conv != nil {
@@ -561,6 +552,21 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 		}
 	} else {
 		utils.Logger.Debug("無對話上下文，跳過 NSFW Sticky 檢查")
+	}
+
+	// 1.5. 上下文相關性判斷：即使sticky過期，檢查是否為NSFW話題延續
+	if conv != nil && analysis != nil && analysis.Intensity < 4 {
+		if s.isNSFWContextualContinuation(conv, userMessage) {
+			utils.Logger.WithFields(map[string]interface{}{
+				"chat_id": conv.ChatID,
+				"reason":  "nsfw_contextual_continuation",
+				"message": userMessage,
+			}).Info("選擇 Grok 引擎：NSFW 上下文延續")
+
+			// 刷新 NSFW sticky 狀態，確保對話延續性
+			s.markNSFWSticky(conv.ChatID)
+			return "grok"
+		}
 	}
 
 	// 2. 基於精確的 NSFW 分級選擇引擎
@@ -755,6 +761,86 @@ func (s *ChatService) cleanupExpiredNSFWSticky() {
 		}).Debug("清理過期的 NSFW 黏滯狀態")
 	}
 }
+
+// isNSFWContextualContinuation 檢查當前訊息是否為 NSFW 對話的語境延續
+// 即使當前訊息本身不含 NSFW 關鍵字，但在 NSFW 語境下應繼續使用 Grok 引擎
+func (s *ChatService) isNSFWContextualContinuation(conv *ConversationContext, userMessage string) bool {
+	if conv == nil || len(conv.RecentMessages) == 0 {
+		return false
+	}
+
+	// 1. 檢查最近 3 條訊息是否有 L4+ NSFW 內容
+	recentNSFWFound := false
+	checkCount := 3
+	if len(conv.RecentMessages) < 3 {
+		checkCount = len(conv.RecentMessages)
+	}
+
+	for i := len(conv.RecentMessages) - checkCount; i < len(conv.RecentMessages); i++ {
+		msg := conv.RecentMessages[i]
+
+		// 分析歷史訊息的 NSFW 等級
+		if analysis, err := s.analyzeContent(msg.Content); err == nil {
+			if analysis.Intensity >= 4 { // L4+ 即為明確 NSFW 內容
+				recentNSFWFound = true
+				previewLen := 50
+				if len(msg.Content) < 50 {
+					previewLen = len(msg.Content)
+				}
+				utils.Logger.WithFields(map[string]interface{}{
+					"message_content": msg.Content[:previewLen],
+					"nsfw_level":     analysis.Intensity,
+					"chat_id":        conv.ChatID,
+				}).Debug("發現最近 NSFW 內容")
+				break
+			}
+		}
+	}
+
+	if !recentNSFWFound {
+		return false
+	}
+
+	// 2. 檢查當前訊息是否包含語境延續指標 (專注中文)
+	msg := strings.ToLower(strings.TrimSpace(userMessage))
+
+	// 中文語境延續模式
+	contextualPatterns := []string{
+		// 指代詞 - 指向之前討論的身體部位或行為
+		"那裡", "這裡", "那個", "這個", "那邊", "這邊",
+
+		// 疑問回應 - 對之前內容的追問
+		"是哪裡", "在哪裡", "哪裡是", "什麼地方", "怎麼回事", "什麼感覺", "感覺怎麼樣",
+
+		// 延續動作 - 繼續或重複之前的行為
+		"再來", "繼續", "不要停", "接著", "然後呢", "還要", "再一次", "更多",
+
+		// 反應回應 - 對刺激的反應
+		"好舒服", "好爽", "好棒", "很舒服", "感覺好", "太棒了", "喜歡",
+
+		// 程度表達 - 對強度的描述
+		"更深", "更用力", "輕一點", "慢一點", "快一點", "大力", "溫柔",
+
+		// 簡短回應 - 在親密情境中的簡單回應
+		"嗯", "啊", "喔", "是", "好", "要", "不要", "可以",
+	}
+
+	for _, pattern := range contextualPatterns {
+		if strings.Contains(msg, pattern) {
+			utils.Logger.WithFields(map[string]interface{}{
+				"chat_id":         conv.ChatID,
+				"user_message":    userMessage,
+				"matched_pattern": pattern,
+			}).Debug("檢測到中文 NSFW 語境延續指標")
+			return true
+		}
+	}
+
+
+	return false
+}
+
+
 
 // CharacterResponseData 角色回應數據
 type CharacterResponseData struct {
@@ -1287,19 +1373,40 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, prompt string
 	return response.Content, nil
 }
 
-// buildHistoryMessages 統一的歷史訊息構建方法（簡化版含去重）
+// buildHistoryMessages 統一的歷史訊息構建方法（確保用戶-AI對話對）
 func (s *ChatService) buildHistoryMessages(context *ConversationContext, currentUserMessage string) []map[string]string {
     var messages []map[string]string
 
-    // 加入最近2則歷史訊息（時間順序：舊 -> 新）
+    // 智能選擇歷史訊息，確保包含用戶-AI對話對
     if context != nil && len(context.RecentMessages) > 0 {
-        start := len(context.RecentMessages) - 2
-        if start < 0 {
-            start = 0
+        // 從最新消息開始，找到最近的AI回應和對應的用戶消息
+        var historyMessages []ChatMessage
+
+        // 如果有超過3條消息，優先包含最近的AI回應
+        if len(context.RecentMessages) >= 3 {
+            // 找最近的AI回應
+            for i := len(context.RecentMessages) - 1; i >= 0; i-- {
+                msg := context.RecentMessages[i]
+                if msg.Role == "assistant" && strings.TrimSpace(msg.Content) != "" {
+                    // 找到AI回應，包含它和之前的1-2條用戶消息
+                    start := max(0, i-2)
+                    historyMessages = context.RecentMessages[start:i+1]
+                    break
+                }
+            }
         }
 
-        for i := start; i < len(context.RecentMessages); i++ {
-            msg := context.RecentMessages[i]
+        // 如果沒找到AI回應，就取最近的2-3條消息
+        if len(historyMessages) == 0 {
+            start := len(context.RecentMessages) - 3
+            if start < 0 {
+                start = 0
+            }
+            historyMessages = context.RecentMessages[start:]
+        }
+
+        // 轉換為API格式
+        for _, msg := range historyMessages {
             if strings.TrimSpace(msg.Content) != "" {
                 messages = append(messages, map[string]string{
                     "role":    msg.Role,
@@ -1329,6 +1436,14 @@ func (s *ChatService) buildHistoryMessages(context *ConversationContext, current
     }
 
     return messages
+}
+
+// max 輔助函數
+func max(a, b int) int {
+    if a > b {
+        return a
+    }
+    return b
 }
 
 // updateAffection 好感度更新
@@ -1407,7 +1522,7 @@ func (s *ChatService) saveAssistantMessageToDB(ctx context.Context, request *Pro
 			},
 			AIEngine:       engine,
 			ResponseTimeMs: int(responseTime.Milliseconds()),
-			NSFWLevel:      analysis.Intensity,
+			NSFWLevel:      s.determineEffectiveNSFWLevel(request, engine, analysis),
 			CreatedAt:      time.Now(),
 		}
 
@@ -1516,4 +1631,44 @@ func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, chatID string
 	}).Debug("成功從資料庫獲取會話歷史")
 
 	return chatMessages, nil
+}
+
+// determineEffectiveNSFWLevel 智能確定記錄的 NSFW 等級
+// 解決 sticky session 和 contextual continuation 時等級記錄不準確的問題
+func (s *ChatService) determineEffectiveNSFWLevel(request *ProcessMessageRequest, engine string, analysis *ContentAnalysis) int {
+	originalLevel := analysis.Intensity
+
+	// 如果不是 Grok 引擎，或等級已經是 L4+，直接返回原始等級
+	if engine != "grok" || originalLevel >= 4 {
+		return originalLevel
+	}
+
+	// Grok 引擎 + L1-L3 等級：檢查是否因特殊原因選擇 Grok
+
+	// 檢查 sticky session
+	if s.isNSFWSticky(request.ChatID) {
+		utils.Logger.WithFields(logrus.Fields{
+			"chat_id": request.ChatID,
+			"original_level": originalLevel,
+			"effective_level": 4,
+			"reason": "sticky_session_adjustment",
+		}).Info("因 sticky session 調整記錄的 NSFW 等級")
+		return 4 // sticky session 表示之前有 L4+ 內容
+	}
+
+	// 檢查 contextual continuation（需要獲取對話上下文）
+	if conv, err := s.buildFemaleOrientedContext(context.Background(), request); err == nil {
+		if s.isNSFWContextualContinuation(conv, request.UserMessage) {
+			utils.Logger.WithFields(logrus.Fields{
+				"chat_id": request.ChatID,
+				"original_level": originalLevel,
+				"effective_level": 4,
+				"reason": "contextual_continuation_adjustment",
+			}).Info("因上下文延續調整記錄的 NSFW 等級")
+			return 4 // contextual continuation 表示在 NSFW 語境中
+		}
+	}
+
+	// 其他情況（如角色標籤觸發），保持原始等級
+	return originalLevel
 }

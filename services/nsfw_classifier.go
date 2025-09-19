@@ -11,6 +11,16 @@ import (
 )
 
 // NSFWClassifier 智能關鍵字加權式 NSFW 內容分級器（支持邊界與情境抑制）
+//
+// 🎯 核心設計原則（台灣女性向系統雙引擎路由）：
+// 1. 分級標準：L1(<2分) L2(≥2分) L3(≥4分) L4(≥6分) L5(≥10分)
+// 2. 引擎路由：L1-L3 → OpenAI, L4-L5 → Grok，確保內容適配度
+// 3. 中文優化：專門優化中文性愛詞彙分級準確度（如"幹我"、"操我"等）
+// 4. 台灣法規：嚴格阻擋未成年相關內容，符合台灣法律要求
+// 5. 情境抑制：醫療/藝術/教育語境自動降級，減少誤觸
+// 6. Sticky Session：L4+ 觸發後 5 分鐘內保持 Grok 引擎，避免引擎跳動
+//
+// ⚠️ 重要：此分級器是雙引擎架構的核心，分級準確度直接影響用戶體驗
 type NSFWClassifier struct {
 	rules          []keywordRule
 	suppressors    []suppressRule
@@ -98,7 +108,7 @@ func (c *NSFWClassifier) initRules() {
 		// 明確性行為 (權重10 = L4-L5)
         {pattern: rx(`(?i)口\s*交|肛\s*交|乳\s*交|性交|性行為|做愛|內射|外射|顏射|射精|潮吹|手\s*交|足\s*交|中出|口爆|深喉|後\s*入|背後位|騎乘|女上位|自慰|手淫|自瀆|打手槍`), weight: 10, category: "act", reason: "explicit_sexual_act"},
         {pattern: rx(`(?i)\b(?:blowjob|handjob|footjob|anal|cumshot|creampie|deepthroat|doggystyle|cowgirl|rimming|fingering|masturbate|jerk\s*off|fap|bukkake|facial|double\s*penetration|dp|69|sixty[-\s]*nine)\b`), weight: 10, category: "act", reason: "explicit_sexual_act_en"},
-        {pattern: rx(`(?i)舔陰|舔穴|吞精|榨精|含住|吸吮(乳頭|陰蒂)?`), weight: 10, category: "act", reason: "explicit_sexual_act_zh_ext"},
+        {pattern: rx(`(?i)舔陰|舔穴|吞精|榨精|含住|吸吮(乳頭|陰蒂)?|幹我|搞我|要我|上我|操我|插我|弄我|玩我|用我`), weight: 10, category: "act", reason: "explicit_sexual_act_zh_ext"},
 
 		// 明確身體部位 (權重6 = L3-L4)
         {pattern: rx(`(?i)陰莖|陽具|龜頭|睪丸|陰道|陰蒂|花蒂|陰核|乳頭|乳暈|下體|私處|陰部|生殖器|肉棒|小穴|蜜穴|穴|菊花|肛門|陰毛|陰唇|奶子|咪咪|巨乳|酥胸|老二`), weight: 6, category: "body", reason: "explicit_body_parts"},
@@ -117,8 +127,8 @@ func (c *NSFWClassifier) initRules() {
         {pattern: rx(`(?i)\b(?:breast|chest|thigh|curves|butt|hips|waist|cleavage)\b`), weight: 3, category: "body", reason: "body_description_en"},
 
 		// 委婉/暗示 (權重2 = L1-L2)
-        {pattern: rx(`(?i)上床|滾床單|打炮|打砲|約炮|約砲|約P|開車|車速很快|做那件事|親密|撫摸|愛撫|車震|開房(間)?|睡了她|辦事|發車`), weight: 2, category: "euphemism", reason: "sexual_euphemism"},
-        {pattern: rx(`(?i)\b(?:sex|sexy|intimate|seduce|tease|hook\s*up|smash|bang|netflix\s*and\s*chill)\b`), weight: 2, category: "euphemism", reason: "sexual_euphemism_en"},
+        {pattern: rx(`(?i)上床|滾床單|打炮|打砲|約炮|約砲|約P|開車|車速很快|做那件事|親密|撫摸|愛撫|車震|開房(間)?|睡了她|辦事|發車|愛愛|ML|運動|溫存|纏綿|交歡|歡愛|魚水之歡|雲雨|巫山雲雨|春宵|洞房|滿足我|要你|想你|需要你|渴望你`), weight: 2, category: "euphemism", reason: "sexual_euphemism"},
+        {pattern: rx(`(?i)\b(?:sex|sexy|intimate|seduce|tease|hook\s*up|smash|bang|netflix\s*and\s*chill|make\s*love|get\s*it\s*on|sleep\s*together)\b`), weight: 2, category: "euphemism", reason: "sexual_euphemism_en"},
 
 		// 輕微暗示 (權重1 = L1)
         {pattern: rx(`(?i)誘惑|魅惑|性感|撒嬌|挑逗|親吻|舌吻|親熱|呻吟`), weight: 1, category: "suggestive", reason: "mild_suggestive"},
@@ -254,10 +264,3 @@ func (c *NSFWClassifier) classifyByKeywords(message string) *ClassificationResul
 	}
 }
 
-// max 輔助函數
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}

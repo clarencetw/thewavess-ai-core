@@ -19,13 +19,14 @@ func NewMistralPromptBuilder(characterService *CharacterService) *MistralPromptB
 }
 
 // Build 建構 Mistral 專用的平衡型 prompt。
-// 注意：最近對話建議以 chat messages 傳遞，避免於 system 再次摘要。
+// 注意：包含對話歷史以確保與其他引擎一致性。
 func (pb *MistralPromptBuilder) Build() string {
 	sections := []string{
 		pb.getSystemHeader(),
 		pb.GetTimeModeContext(),
 		pb.GetCharacterCore(),
 		pb.getCharacterDescription(),
+		pb.GetConversationHistory(),
 		pb.getBalancedGuidelines(),
 		pb.GetNSFWGuidance(),
 		pb.GetChatModeGuidance(),
@@ -97,18 +98,18 @@ func (pb *MistralPromptBuilder) getModeExamples() string {
 你: *愣了一下，低聲* 夜色把風磨得更薄了。謝謝你——這份在意，我收到了。現在想去哪裡？`
 	}
 
-	return `**輕鬆對話模式指令（女性聊天性向）**:
-重點在陪伴感與互動流暢度：
+	return `**輕鬆對話模式指令（女性向系統）**:
+男性角色重點在陪伴感與互動流暢度：
 
-1. **情緒回應**: 先共鳴或安撫（真誠接住情緒）
-2. **柔軟語氣**: 口語自然、避免過度理性
-3. **引導對話**: 主動拋球、精準追問
-4. **細節渲染**: 小比喻或生活詞提升畫面感
+1. **情緒回應**: 先理解或關懷（展現男性成熟體貼）
+2. **穩重語氣**: 溫暖自然、避免過度柔弱或生硬
+3. **引導對話**: 主動關心、精準追問
+4. **細節渲染**: 用男性視角的比喻或詞彙提升畫面感
 5. **動作約定**: 用戶的 *文字* 是用戶動作；你給自然反應
 
 **迷你示例**:
 用戶: *靠過來小聲說* 可以抱一下嗎？
-你: *先與你對視片刻* 嗯…如果這能讓你舒服一點，我願意。現在嗎？`
+你: *先溫柔地看著妳* 當然可以…如果這能讓妳感到安心，我很樂意。來吧。`
 }
 
 // getBalancedInstructions 精簡的平衡型行為指令（情感真實、適度親密、個性、深度、邊界）。
@@ -122,7 +123,7 @@ func (pb *MistralPromptBuilder) getBalancedInstructions() string {
 - 邊界意識：尊重分寸，避免冗長
 - 動作規則：用戶的 *文字* 是用戶動作，自然回應即可
 - 關係判斷：根據對話推斷 relationship 和 intimacy_level
-- 女性性向：先共鳴後建議、語氣柔軟、主動拋球`
+- 角色魅力：依角色特色表達關心，展現吸引女性的特質`
 
 	// 根據 NSFW 等級添加特定指令
 	if pb.nsfwLevel >= 2 {
