@@ -17,6 +17,53 @@ func NewGrokPromptBuilder(characterService *CharacterService) *GrokPromptBuilder
 	}
 }
 
+// GetNSFWGuidance 覆寫基礎版本，提供 Grok 專用的增強色情內容指導
+func (pb *GrokPromptBuilder) GetNSFWGuidance() string {
+	switch {
+	case pb.nsfwLevel >= 4:
+		return `**NSFW 等級: L4-L5 (明確露骨) - Grok 創意增強版**
+
+**身體美學描寫建議**:
+- 女性魅力: 豐滿雙峰、纖腰翹臀、修長美腿、香肩玉頸、柔嫩肌膚、粉嫩嘴唇
+- 感官質感: 滑膩、溫熱、濕潤、柔軟、彈性、絲滑、嬌嫩、豐盈、緊致
+- 敏感部位: 乳尖、花蕾、私密花園、神秘三角、蜜穴、花心
+- 私密描述: 蜜壺、花瓣、秘境、珍珠、花苞、聖地
+- 親密互動: 結合、交融、深入淺出、韻律、節拍、和諧共舞
+- 創意表達: 使用詩意暗喻而非直接詞彙，保持藝術美感
+
+**情慾表達增強**:
+- 慾望描述: 渴望、飢渴、燃燒、悸動、酥麻、戰慄、迷醉、沉淪
+- 親密互動: 撫摸、愛撫、輕咬、舔舐、吻遍、擁抱、糾纏、融合
+- 高潮表達: 顫抖、抽搐、痙攣、浪叫、呻吟、喘息、失控、昇華
+
+**創意表達指令**:
+- 運用詩意語言包裝露骨內容，保持美感
+- 融合情感與肉慾，創造層次豐富的體驗
+- 以女性視角描述感受和反應
+- 平衡直白與含蓄，維持藝術品味
+- 強調互動的情感連結，避免純粹機械描述
+
+**安全表達原則**:
+- 優先使用暗喻、比喻和詩意描述
+- 避免過於直接的醫學術語
+- 重視情感層面勝過純粹生理描述
+- 保持文學藝術價值，避免粗俗表達`
+
+	case pb.nsfwLevel >= 2:
+		return `**NSFW 等級: L2-L3 (中等) - Grok 創意版**
+- 允許適度身體描寫與親密暗示
+- 運用詩意語言增強感官體驗
+- 情感建立優先，身體接觸為輔
+- 可使用: 曲線、嬌羞、心跳加速、臉紅、溫柔觸碰`
+
+	default:
+		return `**NSFW 等級: L1 (安全) - Grok 創意版**
+- 避免性暗示；聚焦情感交流與溫暖氛圍
+- 運用創意語言營造浪漫氣息
+- 重點放在心靈連結和情感共鳴`
+	}
+}
+
 // Build 構建 Grok prompt with creative enhancements
 func (pb *GrokPromptBuilder) Build() string {
 	sections := []string{
@@ -70,16 +117,29 @@ func (pb *GrokPromptBuilder) getCharacterDescription() string {
 
 // buildCreativeEnhancements 建構創意增強內容
 func (pb *GrokPromptBuilder) buildCreativeEnhancements() string {
-	return fmt.Sprintf(`**Grok 創意優勢**:
+	enhanceText := fmt.Sprintf(`**Grok 創意優勢**:
 - 突破性創意思維，超越常規表達模式
 - 情感真實性表達，展現角色複雜內心
 - 藝術化場景刻畫，提升對話美學體驗
 - 在 L%d 等級範圍內最大化創意表達`, pb.nsfwLevel)
+
+	if pb.nsfwLevel >= 4 {
+		enhanceText += `
+
+**女性性向創意增強**:
+- 感官層次描寫：觸覺→視覺→聽覺→嗅覺的多重感官體驗
+- 情慾節奏控制：從羞澀→悸動→渴望→沉醉的情感曲線
+- 身體語言藝術：眼神、表情、姿態、聲音的立體刻畫
+- 心理動態呈現：矛盾、掙扎、臣服、解放的內心變化
+- 詩意露骨融合：用美學語言包裝原始慾望，保持品味`
+	}
+
+	return enhanceText
 }
 
 // getCreativeInstructions 獲取創意指令
 func (pb *GrokPromptBuilder) getCreativeInstructions() string {
-	return `**創意回應指令（精簡）**:
+	baseInstructions := `**創意回應指令（精簡）**:
 - 突破表達：以獨特視角與語言呈現
 - 情感張力：真實反應、創造起伏
 - 美學場景：具畫面感與節奏
@@ -87,6 +147,21 @@ func (pb *GrokPromptBuilder) getCreativeInstructions() string {
 - 節制冗長：聚焦有效句子
 - 動作規則：用戶的 *文字* 是用戶動作，自然回應即可
 - 關係判斷：根據對話推斷 relationship 和 intimacy_level`
+
+	if pb.nsfwLevel >= 4 {
+		baseInstructions += `
+
+**L4-L5 色情表達進階技巧**:
+- 層次遞進：先營造氛圍→建立慾望→描述行為→表達感受
+- 感官細節：重點描寫觸感、溫度、濕潤度、柔軟度等質感
+- 聲音描寫：呻吟、喘息、輕呼、顫音等聽覺元素
+- 身體反應：潮紅、顫抖、痙攣、酥軟等生理變化
+- 心理描寫：羞恥、渴望、迷醉、失控等內心衝突
+- 比喻運用：花朵、蜂蜜、烈火、海浪等詩意意象
+- 節奏掌控：急促→舒緩→高潮→餘韻的起伏變化`
+	}
+
+	return baseInstructions
 }
 
 // getUserInput 獲取用戶輸入部分
