@@ -54,10 +54,17 @@ make create-migration NAME=migration_name  # Create new Go migration
 
 ### Testing
 ```bash
-./tests/test-all.sh                    # Complete test suite
+./tests/test-all.sh                    # Complete test suite (unified testing tool)
 ./tests/chat_api_validation.sh         # Chat API + dual-engine validation
 ./tests/test_mistral_integration.sh    # Mistral engine integration tests
-make test-integration                  # Integration tests
+
+# Specialized test scripts
+./tests/test_user_profile.sh           # User profile CRUD operations
+./tests/test_chat_advanced.sh          # Advanced chat features
+./tests/test_relationships.sh          # Relationship system testing
+./tests/test_search.sh                 # Search functionality
+./tests/test_tts.sh                    # TTS voice synthesis
+./tests/test_admin_advanced.sh         # Admin system features
 ```
 
 ## Development Standards
@@ -132,10 +139,10 @@ Required variables in `.env`:
 - **CORS**: `CORS_ALLOWED_ORIGINS`
 
 ## Current System Status
-- **API**: 47/47 endpoints implemented (100% complete)
+- **API**: 50/50 endpoints implemented (100% complete)
 - **Database**: 7 optimized tables, production-ready architecture
 - **Performance**: 1-3s response time, 95%+ NSFW accuracy
-- **Testing**: 24/24 tests passing (100% success rate)
+- **Testing**: 24/24 core tests + 6 specialized test scripts (100% success rate)
 - **Documentation**: Swagger UI at http://localhost:8080/swagger/index.html
 
 ## Troubleshooting
@@ -145,10 +152,12 @@ Required variables in `.env`:
 - **Build Issues**: Check `docs/` generation with `make docs` before `make build`
 
 ## Testing Strategy
-- **Integration Tests**: Full API workflow testing in `tests/`
-- **Chat Validation**: Specialized NSFW and conversation flow testing
-- **Health Checks**: Automated service monitoring via `make check`
-- **Test Configuration**: Environment-specific settings in `tests/test-config.sh`
+- **Unified Testing**: `./tests/test-all.sh` provides comprehensive system validation
+- **Specialized Tests**: Domain-specific test scripts for user management, chat features, relationships, search, TTS, and admin functions
+- **Test Isolation**: Unique test users with PID + timestamp to prevent conflicts
+- **Authentication Flow**: Automatic user registration and authentication via `tc_register_and_authenticate()`
+- **CSV Reporting**: Enhanced test reporting with proper character escaping for data analysis
+- **Configuration**: Environment-specific settings in `tests/test-config.sh`
 
 ## Commit Guidelines
 Follow existing commit style with detailed descriptions and co-authoring format.

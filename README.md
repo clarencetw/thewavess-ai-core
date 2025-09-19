@@ -28,6 +28,9 @@ make dev                 # 生成 Swagger 並啟動服務
 
 # 可選：驗證系統運行狀態
 ./tests/test-all.sh      # 執行完整測試套件 (24個測試項目，100%通過率)
+# 或執行專門化測試：
+./tests/test_user_profile.sh     # 用戶資料管理測試
+./tests/test_chat_advanced.sh    # 聊天進階功能測試
 ```
 
 預設端點：
