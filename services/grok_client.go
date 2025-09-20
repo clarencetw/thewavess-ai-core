@@ -1,27 +1,27 @@
 package services
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
 	"fmt"
-	"io"
-	"net/http"
 	"strings"
 	"time"
 
 	db "github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/utils"
+	"github.com/openai/openai-go/v2"
+	"github.com/openai/openai-go/v2/option"
 )
 
-// GrokClient Grok 客戶端
+// GrokClient Grok 客戶端 (使用 OpenAI SDK)
 type GrokClient struct {
-	apiKey     string
-	baseURL    string
-	httpClient *http.Client
+	client      openai.Client
+	model       string // Grok 模型名稱 (string 類型以支援自定義模型)
+	maxTokens   int
+	temperature float64
+	baseURL     string
 }
 
-// GrokRequest Grok 請求結構（類似 OpenAI 格式）
+// GrokRequest Grok 請求結構 (相容 OpenAI 格式)
 type GrokRequest struct {
 	Model       string        `json:"model"`
 	Messages    []GrokMessage `json:"messages"`
@@ -36,28 +36,10 @@ type GrokMessage struct {
 	Content string `json:"content"`
 }
 
-// GrokResponse Grok 回應結構
-type GrokResponse struct {
-	ID      string `json:"id"`
-	Object  string `json:"object"`
-	Created int64  `json:"created"`
-	Model   string `json:"model"`
-	Choices []struct {
-		Index   int `json:"index"`
-		Message struct {
-			Role    string `json:"role"`
-			Content string `json:"content"`
-		} `json:"message"`
-		FinishReason string `json:"finish_reason"`
-	} `json:"choices"`
-	Usage struct {
-		PromptTokens     int `json:"prompt_tokens"`
-		CompletionTokens int `json:"completion_tokens"`
-		TotalTokens      int `json:"total_tokens"`
-	} `json:"usage"`
-}
+// GrokResponse 使用官方 OpenAI SDK 的 ChatCompletion 作為響應類型
+type GrokResponse = openai.ChatCompletion
 
-// NewGrokClient 創建新的 Grok 客戶端
+// NewGrokClient 創建新的 Grok 客戶端 (使用 OpenAI SDK)
 func NewGrokClient() *GrokClient {
 	// 確保環境變數已載入
 	utils.LoadEnv()
@@ -67,19 +49,32 @@ func NewGrokClient() *GrokClient {
 		utils.Logger.Fatal("GROK_API_KEY is required but not set in environment")
 	}
 
+	// 從環境變數讀取配置
+	modelName := utils.GetEnvWithDefault("GROK_MODEL", "grok-beta")
+	maxTokens := utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 2000)
+	temperature := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.7)
+
 	// 獲取 API URL
 	baseURL := utils.GetEnvWithDefault("GROK_API_URL", "https://api.x.ai/v1")
 
+	// 創建 OpenAI 客戶端，使用 xAI 端點
+	client := openai.NewClient(
+		option.WithAPIKey(apiKey),
+		option.WithBaseURL(baseURL),
+	)
+
+	utils.Logger.WithField("base_url", baseURL).Info("Using xAI Grok API with OpenAI SDK")
+
 	return &GrokClient{
-		apiKey:  apiKey,
-		baseURL: baseURL,
-		httpClient: &http.Client{
-			Timeout: 60 * time.Second, // 增加到60秒
-		},
+		client:      client,
+		model:       modelName,
+		maxTokens:   maxTokens,
+		temperature: temperature,
+		baseURL:     baseURL,
 	}
 }
 
-// GenerateResponse 生成對話回應（NSFW 內容）
+// GenerateResponse 生成對話回應 (使用 OpenAI SDK)
 func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest) (*GrokResponse, error) {
 	startTime := time.Now()
 
@@ -92,7 +87,6 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		"temperature":    request.Temperature,
 		"user":           request.User,
 		"messages_count": len(request.Messages),
-		"api_configured": c.apiKey != "",
 	}).Info("Grok API request started")
 
 	// 開發模式下詳細記錄 prompt 內容
@@ -115,133 +109,64 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 
 	// 設置默認值
 	if request.Model == "" {
-		request.Model = getGrokModel()
+		request.Model = c.model
 	}
 	if request.MaxTokens == 0 {
-		request.MaxTokens = getGrokMaxTokens()
+		request.MaxTokens = c.maxTokens
 	}
-	// 設定預設溫度
 	if request.Temperature <= 0 {
-		request.Temperature = getGrokTemperature()
+		request.Temperature = c.temperature
 	}
 
-	// 準備 HTTP 請求
-	requestBody, err := json.Marshal(request)
-	if err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service": "grok",
-			"error":   err.Error(),
-		}).Error("Failed to marshal Grok request")
-		return nil, fmt.Errorf("failed to marshal request: %w", err)
+	// 轉換為 OpenAI SDK 格式
+	messages := make([]openai.ChatCompletionMessageParamUnion, len(request.Messages))
+	for i, msg := range request.Messages {
+		messages[i] = openai.UserMessage(msg.Content)
+		switch msg.Role {
+		case "system":
+			messages[i] = openai.SystemMessage(msg.Content)
+		case "assistant":
+			messages[i] = openai.AssistantMessage(msg.Content)
+		}
 	}
 
-	// 創建 HTTP 請求
-	url := c.baseURL + "/chat/completions"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(requestBody))
-	if err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service": "grok",
-			"url":     url,
-			"error":   err.Error(),
-		}).Error("Failed to create HTTP request")
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	// 構建請求參數 (Grok 使用自定義模型名稱)
+	params := openai.ChatCompletionNewParams{
+		Model:       openai.ChatModel(request.Model),
+		Messages:    messages,
+		MaxTokens:   openai.Int(int64(request.MaxTokens)),
+		Temperature: openai.Float(request.Temperature),
 	}
 
-	// 設置請求標頭
-	httpReq.Header.Set("Content-Type", "application/json")
-	httpReq.Header.Set("User-Agent", "thewavess-ai-core/1.0")
-	httpReq.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if request.User != "" {
+		params.User = openai.String(request.User)
+	}
 
-	// 發送 HTTP 請求，帶重試機制
+	// 發送請求
 	utils.Logger.WithFields(map[string]interface{}{
-		"service":        "grok",
-		"url":            url,
-		"content_length": len(requestBody),
-	}).Info("Sending Grok API request")
+		"service": "grok",
+		"model":   request.Model,
+	}).Info("Sending Grok API request via OpenAI SDK")
 
-	var resp *http.Response
-	maxRetries := 3
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		// 重新創建請求體（因為可能被讀取過）
-		httpReq.Body = io.NopCloser(bytes.NewReader(requestBody))
-
-		utils.Logger.WithFields(map[string]interface{}{
-			"service":     "grok",
-			"attempt":     attempt,
-			"max_retries": maxRetries,
-		}).Info("Attempting Grok API request")
-
-		resp, err = c.httpClient.Do(httpReq)
-		if err == nil {
-			break // 成功，跳出重試循環
-		}
-
+	resp, err := c.client.Chat.Completions.New(ctx, params)
+	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service": "grok",
-			"attempt": attempt,
 			"error":   err.Error(),
-		}).Warn("Grok API request failed, will retry")
-
-		// 如果不是最後一次嘗試，等待後重試
-		if attempt < maxRetries {
-			time.Sleep(time.Duration(attempt) * 2 * time.Second) // 指數退避
-		}
-	}
-
-	if err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service":  "grok",
-			"url":      url,
-			"error":    err.Error(),
-			"attempts": maxRetries,
-		}).Error("Failed to send Grok API request after retries")
-		return nil, fmt.Errorf("failed to send request after %d attempts: %w", maxRetries, err)
-	}
-	defer resp.Body.Close()
-
-	// 讀取響應
-	responseBody, err := io.ReadAll(resp.Body)
-	if err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service":     "grok",
-			"status_code": resp.StatusCode,
-			"error":       err.Error(),
-		}).Error("Failed to read Grok API response")
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// 檢查 HTTP 狀態碼
-	if resp.StatusCode != http.StatusOK {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service":        "grok",
-			"status_code":    resp.StatusCode,
-			"response_body":  string(responseBody),
-			"content_length": len(responseBody),
-		}).Error("Grok API returned non-200 status")
-		return nil, fmt.Errorf("API returned status %d: %s", resp.StatusCode, string(responseBody))
-	}
-
-	// 解析響應
-	var grokResponse GrokResponse
-	if err := json.Unmarshal(responseBody, &grokResponse); err != nil {
-		utils.Logger.WithFields(map[string]interface{}{
-			"service":        "grok",
-			"error":          err.Error(),
-			"response_body":  string(responseBody),
-			"content_length": len(responseBody),
-		}).Error("Failed to unmarshal Grok API response")
-		return nil, fmt.Errorf("failed to unmarshal response: %w", err)
+			"model":   request.Model,
+		}).Error("Grok API call failed")
+		return nil, fmt.Errorf("failed Grok API call: %w", err)
 	}
 
 	// 計算響應時間
 	duration := time.Since(startTime)
 
-	// 計算 Grok API 成本 (根據官方文件 2025 年計價)
-	promptTokens := int(grokResponse.Usage.PromptTokens)
-	completionTokens := int(grokResponse.Usage.CompletionTokens)
+	// 計算 Grok API 成本 (保留現有邏輯)
+	promptTokens := int(resp.Usage.PromptTokens)
+	completionTokens := int(resp.Usage.CompletionTokens)
 
 	var inputCostPer1M, outputCostPer1M float64
-	switch grokResponse.Model {
+	switch resp.Model {
 	case "grok-4-0709":
 		inputCostPer1M = 3.00   // $3.00 per 1M input tokens
 		outputCostPer1M = 15.00 // $15.00 per 1M output tokens
@@ -276,17 +201,17 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	// 記錄成功響應，包含詳細成本資訊
 	utils.Logger.WithFields(map[string]interface{}{
 		"service":            "grok",
-		"response_id":        grokResponse.ID,
-		"model":              grokResponse.Model,
-		"prompt_tokens":      grokResponse.Usage.PromptTokens,
-		"completion_tokens":  grokResponse.Usage.CompletionTokens,
-		"total_tokens":       grokResponse.Usage.TotalTokens,
+		"response_id":        resp.ID,
+		"model":              resp.Model,
+		"prompt_tokens":      resp.Usage.PromptTokens,
+		"completion_tokens":  resp.Usage.CompletionTokens,
+		"total_tokens":       resp.Usage.TotalTokens,
 		"input_cost_usd":     fmt.Sprintf("$%.6f", inputCost),
 		"output_cost_usd":    fmt.Sprintf("$%.6f", outputCost),
 		"total_cost_usd":     fmt.Sprintf("$%.6f", totalCost),
 		"input_rate_per_1m":  fmt.Sprintf("$%.2f", inputCostPer1M),
 		"output_rate_per_1m": fmt.Sprintf("$%.2f", outputCostPer1M),
-		"choices_count":      len(grokResponse.Choices),
+		"choices_count":      len(resp.Choices),
 		"duration_ms":        duration.Milliseconds(),
 	}).Info("Grok API response received")
 
@@ -294,21 +219,21 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service":     "grok",
-			"response_id": grokResponse.ID,
-			"model":       grokResponse.Model,
+			"response_id": resp.ID,
+			"model":       resp.Model,
 		}).Info("🎯 Grok Response Details")
 
-		for i, choice := range grokResponse.Choices {
+		for i, choice := range resp.Choices {
 			utils.Logger.WithFields(map[string]interface{}{
 				"service":        "grok",
 				"choice_index":   i,
-				"finish_reason":  choice.FinishReason,
+				"finish_reason":  string(choice.FinishReason),
 				"content_length": len(choice.Message.Content),
 			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, choice.Message.Content))
 		}
 	}
 
-	return &grokResponse, nil
+	return resp, nil
 }
 
 // BuildNSFWPrompt 構建 NSFW 場景的提示詞（使用統一模板）
@@ -379,17 +304,3 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage string, conversati
 	return messages
 }
 
-// getGrokModel 獲取 Grok 模型配置
-func getGrokModel() string {
-	return utils.GetEnvWithDefault("GROK_MODEL", "grok-beta")
-}
-
-// getGrokMaxTokens 獲取 Grok 最大 Token 數配置
-func getGrokMaxTokens() int {
-	return utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 2000)
-}
-
-// getGrokTemperature 獲取 Grok 溫度配置
-func getGrokTemperature() float64 {
-	return utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.7)
-}

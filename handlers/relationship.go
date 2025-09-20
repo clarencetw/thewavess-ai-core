@@ -78,6 +78,37 @@ type InteractionSummaryInfo struct {
 	TotalInteractions int `json:"total_interactions"`
 }
 
+// AffectionHistoryResponse 好感度歷史響應結構
+type AffectionHistoryResponse struct {
+	UserID            string                   `json:"user_id"`
+	CharacterID       string                   `json:"character_id"`
+	ChatID            string                   `json:"chat_id"`
+	CharacterName     string                   `json:"character_name"`
+	CurrentAffection  int                      `json:"current_affection"`
+	History           []AffectionHistoryEntry  `json:"history"`
+	Statistics        AffectionHistoryStats    `json:"statistics"`
+	UpdatedAt         string                   `json:"updated_at"`
+}
+
+// AffectionHistoryEntry 好感度歷史條目
+type AffectionHistoryEntry struct {
+	Date      string `json:"date"`
+	Affection int    `json:"affection"`
+	Event     string `json:"event"`
+	Change    int    `json:"change"`
+}
+
+// AffectionHistoryStats 好感度歷史統計
+type AffectionHistoryStats struct {
+	TotalInteractions int    `json:"total_interactions"`
+	PositiveChanges   int    `json:"positive_changes"`
+	NegativeChanges   int    `json:"negative_changes"`
+	HighestAffection  int    `json:"highest_affection"`
+	LowestAffection   int    `json:"lowest_affection"`
+	GrowthRate        string `json:"growth_rate"`
+	UpdatedAt         string `json:"updated_at"`
+}
+
 // ChatInfo 聊天信息结构，用于验证chat_id并获取相关信息
 type ChatInfo struct {
 	ChatID      string `json:"chat_id"`
@@ -182,29 +213,33 @@ func GetRelationshipStatus(c *gin.Context) {
 
 	if err != nil {
 		utils.Logger.WithError(err).Error("查詢關係狀態失敗")
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "未找到關係狀態",
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Message: "未找到關係狀態",
+			Error: &models.APIError{
+				Code:    "RELATIONSHIP_NOT_FOUND",
+				Message: "未找到關係狀態",
+			},
 		})
 		return
 	}
 
 	// 專注於當前情感狀態的響應 - 移除與affection API重複的資料
-	relationshipStatus := gin.H{
-		"user_id":      userIDStr,
-		"character_id": chatInfo.CharacterID,
-		"chat_id":      chatID,
-		"current_relationship": gin.H{
-			"type":        relationship.Relationship,
-			"intensity":   getEmotionIntensity(relationship.Mood),
-			"description": getEmotionDescription(relationship.Mood, relationship.Affection),
+	relationshipStatus := &RelationshipStatusResponse{
+		UserID:      userIDStr,
+		CharacterID: chatInfo.CharacterID,
+		ChatID:      chatID,
+		CurrentRelationship: CurrentRelationshipInfo{
+			Type:        relationship.Relationship,
+			Intensity:   getEmotionIntensity(relationship.Mood),
+			Description: getEmotionDescription(relationship.Mood, relationship.Affection),
 		},
-		"relationship_context": gin.H{
-			"stability":        getMoodStability(relationship.Mood),
-			"last_interaction": relationship.TotalInteractions,
-			"recent_triggers":  []string{},
+		RelationshipContext: RelationshipContextInfo{
+			Stability:       getMoodStability(relationship.Mood),
+			LastInteraction: relationship.TotalInteractions,
+			RecentTriggers:  []string{},
 		},
-		"updated_at": utils.GetCurrentTimestampString(),
+		UpdatedAt: utils.GetCurrentTimestampString(),
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -262,9 +297,13 @@ func GetAffectionLevel(c *gin.Context) {
 
 	if err != nil {
 		utils.Logger.WithError(err).Error("查詢關係狀態失敗")
-		c.JSON(http.StatusNotFound, gin.H{
-			"success": false,
-			"message": "未找到關係狀態",
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Message: "未找到關係狀態",
+			Error: &models.APIError{
+				Code:    "RELATIONSHIP_NOT_FOUND",
+				Message: "未找到關係狀態",
+			},
 		})
 		return
 	}
@@ -274,31 +313,31 @@ func GetAffectionLevel(c *gin.Context) {
 	nextLevelThreshold := getNextLevelThreshold(levelTier)
 	pointsNeeded := nextLevelThreshold - relationship.Affection
 
-	affectionData := gin.H{
-		"user_id":      userIDStr,
-		"character_id": chatInfo.CharacterID,
-		"chat_id":      chatID,
-		"affection_level": gin.H{
-			"current":     relationship.Affection,
-			"max":         100,
-			"level_name":  levelName,
-			"level_tier":  levelTier,
-			"description": getAffectionDescription(levelTier),
+	affectionData := &AffectionLevelResponse{
+		UserID:      userIDStr,
+		CharacterID: chatInfo.CharacterID,
+		ChatID:      chatID,
+		AffectionLevel: AffectionLevelInfo{
+			Current:     relationship.Affection,
+			Max:         100,
+			LevelName:   levelName,
+			LevelTier:   levelTier,
+			Description: getAffectionDescription(levelTier),
 		},
-		"relationship": gin.H{
-			"status":   relationship.Relationship,
-			"intimacy": relationship.IntimacyLevel,
+		Relationship: RelationshipInfo{
+			Status:   relationship.Relationship,
+			Intimacy: relationship.IntimacyLevel,
 		},
-		"progress": gin.H{
-			"to_next_level":  nextLevelThreshold,
-			"points_needed":  max(0, pointsNeeded),
-			"estimated_days": max(1, pointsNeeded/2),
-			"growth_tips":    getGrowthTips(levelTier), // 新增成長建議
+		Progress: ProgressInfo{
+			ToNextLevel:   nextLevelThreshold,
+			PointsNeeded:  max(0, pointsNeeded),
+			EstimatedDays: max(1, pointsNeeded/2),
+			GrowthTips:    getGrowthTips(levelTier), // 新增成長建議
 		},
-		"interaction_summary": gin.H{
-			"total_interactions": relationship.TotalInteractions,
+		InteractionSummary: InteractionSummaryInfo{
+			TotalInteractions: relationship.TotalInteractions,
 		},
-		"updated_at": utils.GetCurrentTimestampString(),
+		UpdatedAt: utils.GetCurrentTimestampString(),
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -317,7 +356,7 @@ func GetAffectionLevel(c *gin.Context) {
 // @Security     BearerAuth
 // @Param        chat_id path string true "聊天ID"
 // @Param        days query int false "查詢天數" default(30)
-// @Success      200 {object} models.APIResponse "獲取成功"
+// @Success      200 {object} models.APIResponse{data=AffectionHistoryResponse} "獲取成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Router       /relationships/chat/{chat_id}/history [get]
@@ -394,9 +433,10 @@ func GetRelationshipHistory(c *gin.Context) {
 	}
 
 	// 轉換歷史記錄
-	var historyEntries []gin.H
+	var historyEntries []AffectionHistoryEntry
 	var positiveChanges, negativeChanges int
 	var highestAffection int = currentRelationship.Affection
+	var lowestAffection int = currentRelationship.Affection
 
 	prevAffection := 0
 	for i, state := range emotionStates {
@@ -412,16 +452,18 @@ func GetRelationshipHistory(c *gin.Context) {
 		if state.Affection > highestAffection {
 			highestAffection = state.Affection
 		}
+		if state.Affection < lowestAffection {
+			lowestAffection = state.Affection
+		}
 
 		// 根據好感度變化推斷事件類型
 		eventName := getEventNameFromAffectionChange(change, state.Mood)
 
-		historyEntries = append(historyEntries, gin.H{
-			"date":      state.CreatedAt,
-			"affection": state.Affection,
-			"event":     eventName,
-			"change":    change,
-			"trigger":   state.Mood,
+		historyEntries = append(historyEntries, AffectionHistoryEntry{
+			Date:      state.CreatedAt.Format("2006-01-02 15:04:05"),
+			Affection: state.Affection,
+			Event:     eventName,
+			Change:    change,
 		})
 
 		prevAffection = state.Affection
@@ -438,20 +480,23 @@ func GetRelationshipHistory(c *gin.Context) {
 		}
 	}
 
-	history := gin.H{
-		"user_id":           userIDStr,
-		"character_id":      chatInfo.CharacterID,
-		"chat_id":           chatID,
-		"character_name":    characterName,
-		"current_affection": currentRelationship.Affection,
-		"history":           historyEntries,
-		"statistics": gin.H{
-			"total_interactions": len(emotionStates),
-			"positive_changes":   positiveChanges,
-			"negative_changes":   negativeChanges,
-			"highest_affection":  highestAffection,
-			"growth_rate":        growthRate,
+	history := &AffectionHistoryResponse{
+		UserID:           userIDStr,
+		CharacterID:      chatInfo.CharacterID,
+		ChatID:           chatID,
+		CharacterName:    characterName,
+		CurrentAffection: currentRelationship.Affection,
+		History:          historyEntries,
+		Statistics: AffectionHistoryStats{
+			TotalInteractions: len(emotionStates),
+			PositiveChanges:   positiveChanges,
+			NegativeChanges:   negativeChanges,
+			HighestAffection:  highestAffection,
+			LowestAffection:   lowestAffection,
+			GrowthRate:        growthRate,
+			UpdatedAt:         utils.GetCurrentTimestampString(),
 		},
+		UpdatedAt: utils.GetCurrentTimestampString(),
 	}
 
 	c.JSON(http.StatusOK, models.APIResponse{

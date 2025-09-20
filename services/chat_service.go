@@ -177,7 +177,7 @@ func NewChatService() *ChatService {
 	openaiClient := NewOpenAIClient()
 	grokClient := NewGrokClient()
 	mistralClient := NewMistralClient()
-	nsfwClassifier := NewNSFWClassifier()
+	nsfwClassifier := GetNSFWClassifier()
 
 	service := &ChatService{
 		db:             GetDB(),
@@ -274,6 +274,7 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 		Affection:    50,
 		AIEngine:     "openai",
 		NSFWLevel:    1,
+		Confidence:   1.0,                      // 歡迎消息固定信心度
 		ResponseTime: time.Since(startTime),
 	}, nil
 }

@@ -58,7 +58,8 @@ services:
       # TTS (Optional)
       - TTS_API_KEY=${TTS_API_KEY:-}
       # NSFW RAG Configuration
-      - NSFW_RAG_CORPUS_PATH=${NSFW_RAG_CORPUS_PATH:-configs/nsfw/rag_corpus.json}
+      - NSFW_CORPUS_DATA_PATH=${NSFW_CORPUS_DATA_PATH:-configs/nsfw/corpus.json}
+      - NSFW_CORPUS_EMBEDDING_PATH=${NSFW_CORPUS_EMBEDDING_PATH:-configs/nsfw/embeddings.json}
       - NSFW_RAG_LOCALE=${NSFW_RAG_LOCALE:-zh-Hant}
       - NSFW_RAG_TOP_K=${NSFW_RAG_TOP_K:-4}
       - NSFW_RAG_LEVEL_THRESHOLDS=${NSFW_RAG_LEVEL_THRESHOLDS:-5:0.55,4:0.42,3:0.30,2:0.18,1:0.10}

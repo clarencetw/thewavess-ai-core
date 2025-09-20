@@ -31,23 +31,7 @@ type User struct {
 	Chats []*Chat `json:"chats,omitempty"`
 }
 
-// UserCreateRequest 用戶創建請求
-type UserCreateRequest struct {
-	Username  string    `json:"username" binding:"required,min=3,max=50"`
-	Email     string    `json:"email" binding:"required,email"`
-	Password  string    `json:"password" binding:"required,min=8"`
-	Nickname  string    `json:"nickname,omitempty"`
-	Gender    string    `json:"gender,omitempty" binding:"omitempty,oneof=male female other"`
-	BirthDate time.Time `json:"birth_date" binding:"required"`
-}
 
-// UserUpdateRequest 用戶更新請求
-type UserUpdateRequest struct {
-	Nickname  string     `json:"nickname,omitempty"`
-	Gender    string     `json:"gender,omitempty" binding:"omitempty,oneof=male female other"`
-	BirthDate *time.Time `json:"birth_date,omitempty"`
-	AvatarURL string     `json:"avatar_url,omitempty"`
-}
 
 // UserResponse 用戶響應（隱藏敏感信息）
 type UserResponse struct {

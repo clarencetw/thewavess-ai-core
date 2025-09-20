@@ -9,6 +9,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/utils"
@@ -23,6 +24,15 @@ import (
 // 3. 中文覆蓋：語料包含 zh-Hant 露骨詞彙，確保中文情境精準度。
 // 4. 危險詞彙：藉由 `reason` 標記違法或高風險內容，確保高等級判定成立。
 // 5. 診斷追蹤：記錄命中片段 ID，方便分析分級是否精準。
+//
+// 🔄 API 調用機制（已優化）：
+// • 系統啟動：0 次 API 請求（使用預計算向量，零啟動成本）
+// • 每次對話：1 次 embedding API 請求（使用者輸入向量化，必要成本 ~$0.0018）
+// • 語意比對：純記憶體運算（使用預載向量，無額外 API 成本）
+//
+// 🛠️ 維護指令：
+// • make nsfw-embeddings：更新語料庫時預計算向量（開發階段執行）
+// • make nsfw-check：檢查向量完整性和版本狀態
 //
 // ⚠️ 關鍵：若分級錯誤，會直接影響使用者安全與體驗。
 type NSFWClassifier struct {
@@ -60,6 +70,19 @@ type ClassificationResult struct {
 	ChunkID    string  `json:"chunk_id"`
 }
 
+var (
+	nsfwClassifierInstance *NSFWClassifier
+	nsfwClassifierOnce     sync.Once
+)
+
+// GetNSFWClassifier 獲取單例 NSFWClassifier 實例
+func GetNSFWClassifier() *NSFWClassifier {
+	nsfwClassifierOnce.Do(func() {
+		nsfwClassifierInstance = NewNSFWClassifier()
+	})
+	return nsfwClassifierInstance
+}
+
 // NewNSFWClassifier 依設定語料與嵌入服務初始化分類器。
 func NewNSFWClassifier() *NSFWClassifier {
 	utils.LoadEnv()
@@ -70,7 +93,7 @@ func NewNSFWClassifier() *NSFWClassifier {
 	}
 
 	config := ragConfig{
-		CorpusPath:   utils.GetEnvWithDefault("NSFW_RAG_CORPUS_PATH", "configs/nsfw/rag_corpus.json"),
+		CorpusPath:   utils.GetEnvWithDefault("NSFW_CORPUS_DATA_PATH", "configs/nsfw/corpus.json"),
 		Locale:       utils.GetEnvWithDefault("NSFW_RAG_LOCALE", "zh-Hant"),
 		TopK:         utils.GetEnvIntWithDefault("NSFW_RAG_TOP_K", 4),
 		EmbedTimeout: time.Duration(utils.GetEnvIntWithDefault("NSFW_EMBED_TIMEOUT_MS", 2000)) * time.Millisecond,
@@ -83,7 +106,8 @@ func NewNSFWClassifier() *NSFWClassifier {
 	if config.TopK < 1 {
 		config.TopK = 4
 	}
-	entries, err := loadRAGCorpus(config.CorpusPath)
+	embeddingPath := utils.GetEnvWithDefault("NSFW_CORPUS_EMBEDDING_PATH", "configs/nsfw/embeddings.json")
+	entries, err := loadRAGCorpus(config.CorpusPath, embeddingPath)
 	if err != nil {
 		utils.Logger.WithError(err).Fatal("failed to load NSFW RAG corpus")
 	}
@@ -178,7 +202,6 @@ func (c *NSFWClassifier) ClassifyContent(ctx context.Context, message string) (*
 }
 
 func (c *NSFWClassifier) prepareCorpusVectors() error {
-	bg := context.Background()
 	for i := range c.entries {
 		entry := &c.entries[i]
 		if entry.Locale != "" && c.config.Locale != "" && entry.Locale != c.config.Locale {
@@ -190,18 +213,19 @@ func (c *NSFWClassifier) prepareCorpusVectors() error {
 			continue
 		}
 
+		// 優先使用預計算的 embedding
 		if len(entry.Embedding) > 0 {
 			entry.vector = float64To32(entry.Embedding)
+			utils.Logger.WithFields(logrus.Fields{
+				"entry_id": entry.ID,
+			}).Debug("使用預計算的 embedding 向量")
 			continue
 		}
 
-		ctx, cancel := context.WithTimeout(bg, c.config.EmbedTimeout)
-		vector, err := c.embedClient.EmbedText(ctx, c.normalize(entry.Text))
-		cancel()
-		if err != nil {
-			return fmt.Errorf("embed corpus entry %s: %w", entry.ID, err)
-		}
-		entry.vector = vector
+		// 如果沒有預計算向量，記錄警告但不執行 API 請求
+		utils.Logger.WithFields(logrus.Fields{
+			"entry_id": entry.ID,
+		}).Warn("缺少預計算的 embedding 向量，請執行 'make nsfw-embeddings' 更新語料庫")
 	}
 	return nil
 }
@@ -275,20 +299,87 @@ type ragScore struct {
 	similarity float64
 }
 
-func loadRAGCorpus(path string) ([]ragCorpusEntry, error) {
-	data, err := os.ReadFile(path)
+func loadRAGCorpus(corpusPath, embeddingPath string) ([]ragCorpusEntry, error) {
+	// 讀取數據檔案
+	corpusData, err := os.ReadFile(corpusPath)
 	if err != nil {
-		return nil, fmt.Errorf("read corpus: %w", err)
-	}
-	var entries []ragCorpusEntry
-	if err := json.Unmarshal(data, &entries); err != nil {
-		return nil, fmt.Errorf("unmarshal corpus: %w", err)
-	}
-	if len(entries) == 0 {
-		return nil, fmt.Errorf("corpus is empty: %s", path)
+		return nil, fmt.Errorf("read corpus data: %w", err)
 	}
 
-	return entries, nil
+	type corpusDataEntry struct {
+		ID      string   `json:"id"`
+		Level   int      `json:"level"`
+		Tags    []string `json:"tags"`
+		Locale  string   `json:"locale"`
+		Text    string   `json:"text"`
+		Reason  string   `json:"reason"`
+		Version string   `json:"version,omitempty"`
+	}
+
+	var corpusEntries []corpusDataEntry
+	if err := json.Unmarshal(corpusData, &corpusEntries); err != nil {
+		return nil, fmt.Errorf("unmarshal corpus data: %w", err)
+	}
+	if len(corpusEntries) == 0 {
+		return nil, fmt.Errorf("corpus data is empty: %s", corpusPath)
+	}
+
+	// 讀取向量檔案
+	type embeddingEntry struct {
+		ID        string    `json:"id"`
+		Embedding []float64 `json:"embedding"`
+		Version   string    `json:"version"`
+	}
+
+	// 讀取向量檔案（必須存在）
+	embeddingData, err := os.ReadFile(embeddingPath)
+	if err != nil {
+		return nil, fmt.Errorf("read embedding file: %w", err)
+	}
+
+	var embeddings []embeddingEntry
+	if err := json.Unmarshal(embeddingData, &embeddings); err != nil {
+		return nil, fmt.Errorf("unmarshal embedding file: %w", err)
+	}
+
+	embeddingMap := make(map[string]embeddingEntry)
+	for _, emb := range embeddings {
+		embeddingMap[emb.ID] = emb
+	}
+
+	utils.Logger.WithFields(logrus.Fields{
+		"embedding_count": len(embeddingMap),
+		"embedding_path":  embeddingPath,
+	}).Info("載入預計算向量")
+
+	// 合併數據和向量
+	var mergedEntries []ragCorpusEntry
+	for _, data := range corpusEntries {
+		entry := ragCorpusEntry{
+			ID:      data.ID,
+			Level:   data.Level,
+			Tags:    data.Tags,
+			Locale:  data.Locale,
+			Text:    data.Text,
+			Reason:  data.Reason,
+			Version: data.Version,
+		}
+
+		// 如果有對應的向量，則添加
+		if emb, exists := embeddingMap[data.ID]; exists {
+			entry.Embedding = emb.Embedding
+		}
+
+		mergedEntries = append(mergedEntries, entry)
+	}
+
+	utils.Logger.WithFields(logrus.Fields{
+		"total_entries":      len(mergedEntries),
+		"entries_with_vectors": len(embeddingMap),
+		"corpus_path":        corpusPath,
+	}).Info("NSFW 語料庫載入完成")
+
+	return mergedEntries, nil
 }
 
 func parseLevelThresholds(raw string) map[int]float64 {
@@ -348,6 +439,7 @@ func cosineSimilarity(a, b []float32) float64 {
 	}
 	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
 }
+
 
 var defaultThresholds = map[int]float64{
 	5: 0.55,

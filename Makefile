@@ -1,4 +1,4 @@
-.PHONY: help install run build test clean docs docs-serve migrate migrate-down migrate-status migrate-reset db-init db-setup fixtures fixtures-recreate create-migration test-api test-all test-integration test-system run-bg stop-bg docker-build docker-run dev check
+.PHONY: help install run build test clean docs docs-serve migrate migrate-down migrate-status migrate-reset db-init db-setup fixtures fixtures-recreate create-migration nsfw-embeddings nsfw-check test-api test-all test-integration test-system run-bg stop-bg docker-build docker-run dev check
 
 # 預設目標
 help: ## 📋 顯示幫助訊息
@@ -184,6 +184,32 @@ check: ## 🔍 檢查所有服務是否正在運行
 		echo "❌ API Server not running"; \
 		echo "💡 Start with: make run or make dev"; \
 	fi
+
+# ===============================
+# 🔒 NSFW 內容分級相關指令
+# ===============================
+
+nsfw-embeddings: ## 🧠 預計算 NSFW 語料庫的 embedding 向量
+	@echo "🧠 Computing NSFW corpus embeddings..."
+	@if [ ! -f configs/nsfw/corpus.json ]; then \
+		echo "❌ NSFW corpus data file not found: configs/nsfw/corpus.json"; \
+		exit 1; \
+	fi
+	@go run tools/nsfw_embeddings.go
+	@echo "✅ NSFW embeddings computation completed"
+
+
+nsfw-check: ## 🔍 檢查 NSFW 語料庫向量完整性
+	@echo "🔍 Checking NSFW corpus embeddings..."
+	@if [ ! -f configs/nsfw/corpus.json ]; then \
+		echo "❌ NSFW corpus data file not found: configs/nsfw/corpus.json"; \
+		exit 1; \
+	fi
+	@if [ ! -f configs/nsfw/embeddings.json ]; then \
+		echo "❌ NSFW embeddings file not found: configs/nsfw/embeddings.json"; \
+		exit 1; \
+	fi
+	@go run tools/nsfw_check.go
 
 # ===============================
 # 🧪 測試相關指令

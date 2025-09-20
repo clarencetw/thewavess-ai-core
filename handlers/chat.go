@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"strconv"
-	"strings"
 	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/database"
@@ -190,7 +189,6 @@ func CreateChatSession(c *gin.Context) {
 			AIEngine:       welcomeMessage.AIEngine,
 			ResponseTimeMs: int(welcomeMessage.ResponseTime.Milliseconds()),
 			NSFWLevel:      welcomeMessage.NSFWLevel,
-			IsRegenerated:  false,
 			CreatedAt:      time.Now(),
 		}
 
@@ -395,7 +393,7 @@ func GetChatSessions(c *gin.Context) {
 // @Security     BearerAuth
 // @Param        chat_id path string true "會話ID"
 // @Param        message body models.SendMessageRequest true "消息內容"
-// @Success      201 {object} models.APIResponse{data=models.MessageResponse} "發送成功"
+// @Success      201 {object} models.APIResponse{data=models.SendMessageResponse} "發送成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求參數錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Router       /chats/{chat_id}/messages [post]
@@ -521,17 +519,18 @@ func SendMessage(c *gin.Context) {
 	// ChatService 已經處理了 AI 消息插入和會話統計更新
 	// 這裡不需要重複操作
 
-	// 構建完整的女性向聊天回應
-	response := map[string]interface{}{
-		"chat_id":       chatResponse.ChatID,
-		"message_id":    chatResponse.MessageID,
-		"content":       chatResponse.Content,   // 統一的內容格式
-		"affection":     chatResponse.Affection, // 直接返回好感度
-		"ai_engine":     chatResponse.AIEngine,
-		"nsfw_level":    chatResponse.NSFWLevel,
-		"confidence":    chatResponse.Confidence, // NSFW 分級信心度
-		"response_time": chatResponse.ResponseTime.Milliseconds(),
-		"timestamp":     time.Now(),
+	// 構建 SendMessage API 專用響應格式
+	response := &models.SendMessageResponse{
+		ChatID:         chatResponse.ChatID,
+		MessageID:      chatResponse.MessageID,
+		Content:        chatResponse.Content,
+		Affection:      chatResponse.Affection,
+		AIEngine:       chatResponse.AIEngine,
+		NSFWLevel:      chatResponse.NSFWLevel,
+		Confidence:     chatResponse.Confidence,
+		ChatMode:       chat.ChatMode,
+		ResponseTimeMs: chatResponse.ResponseTime.Milliseconds(),
+		Timestamp:      time.Now(),
 	}
 
 	c.JSON(http.StatusCreated, models.APIResponse{
@@ -632,7 +631,7 @@ func GetMessageHistory(c *gin.Context) {
 	}
 
 	// 轉換為領域模型並生成響應格式
-	messageResponses := make([]*models.MessageResponse, len(messagesDB))
+	messageResponses := make([]*models.DetailedMessageResponse, len(messagesDB))
 	for i, messageDB := range messagesDB {
 		message := models.MessageFromDB(messageDB)
 		messageResponses[i] = message.ToResponse()
@@ -1014,7 +1013,7 @@ func formatDuration(d time.Duration) string {
 // @Security     BearerAuth
 // @Param        chat_id path string true "會話ID"
 // @Param        message_id path string true "消息ID"
-// @Success      200 {object} models.APIResponse "生成成功"
+// @Success      200 {object} models.APIResponse{data=models.RegenerateMessageResponse} "生成成功"
 // @Failure      400 {object} models.APIResponse{error=models.APIError} "請求錯誤"
 // @Failure      401 {object} models.APIResponse{error=models.APIError} "未授權"
 // @Failure      404 {object} models.APIResponse{error=models.APIError} "消息不存在"
@@ -1135,24 +1134,33 @@ func RegenerateResponse(c *gin.Context) {
 		utils.Logger.WithError(err).Error("Failed to mark original message as regenerated")
 	}
 
+	// 構建詳細 MessageResponse 用於 RegenerateMessageResponse
+	now := time.Now()
+	messageResponse := &models.DetailedMessageResponse{
+		MessageResponse: models.MessageResponse{
+			ID:             response.MessageID,
+			ChatID:         response.ChatID,
+			Role:           "assistant",
+			Dialogue:       response.Content,
+			AIEngine:       response.AIEngine,
+			ResponseTimeMs: int(response.ResponseTime.Milliseconds()),
+			NSFWLevel:      response.NSFWLevel,
+			CreatedAt:      now,
+		},
+		IsRegenerated: true, // 標記為重新生成
+	}
+
+	// 使用專用的 RegenerateMessageResponse 結構
+	regenerateResponse := &models.RegenerateMessageResponse{
+		Message:           messageResponse,
+		PreviousMessageID: messageID,
+		Regenerated:       true,
+	}
+
 	c.JSON(http.StatusOK, models.APIResponse{
 		Success: true,
 		Message: "回應重新生成成功",
-		Data: gin.H{
-			"message":             response,
-			"previous_message_id": messageID,
-			"regenerated":         true,
-		},
+		Data:    regenerateResponse,
 	})
 }
 
-// generateSimpleFallback 簡單保底回應生成
-func generateSimpleFallback(userMessage string) string {
-	if len(userMessage) > 50 {
-		return "*眨眨眼*\n你說了很多呢...能簡單一點嗎？"
-	}
-	if strings.Contains(userMessage, "?") || strings.Contains(userMessage, "？") {
-		return "*想了想*\n這個問題有點難，換個方式問我吧？"
-	}
-	return "*微笑*\n不好意思，能再說一遍嗎？"
-}

@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/sirupsen/logrus"
@@ -127,9 +128,10 @@ func HealthCheck(c *gin.Context) {
 		"db_status": dbStatus,
 	}).Info("健康檢查完成")
 
-	c.JSON(httpStatus, gin.H{
-		"success": status == "healthy",
-		"data":    response,
+	c.JSON(httpStatus, models.APIResponse{
+		Success: httpStatus == http.StatusOK,
+		Message: "系統健康檢查完成",
+		Data:    response,
 	})
 }
 
@@ -202,9 +204,10 @@ func GetSystemStats(c *gin.Context) {
 		"db_connected": dbInfo.Connected,
 	}).Info("系統狀態統計獲取完成")
 
-	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"data":    response,
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "獲取系統狀態成功",
+		Data:    response,
 	})
 }
 
