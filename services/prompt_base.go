@@ -253,3 +253,90 @@ func (b *BasePromptBuilder) GetTimeModeContext() string {
 
 	return fmt.Sprintf("**時間**: %s (%s) | **模式**: %s%s", timeStr, timeOfDay, modeDesc, affectionPart)
 }
+
+// GetCharacterDescription 獲取角色描述（通用版本）
+func (b *BasePromptBuilder) GetCharacterDescription() string {
+	if b.character == nil {
+		return ""
+	}
+
+	var userDesc string
+	if b.character.UserDescription != nil {
+		userDesc = *b.character.UserDescription
+	}
+
+	return fmt.Sprintf(`**角色描述**: %s
+
+**行為指南**: 保持 %s 的角色一致性，展現獨特個性和說話風格，建立真誠互動關係`,
+		userDesc, b.character.Name)
+}
+
+// GetUserInput 獲取用戶輸入部分（通用版本）
+func (b *BasePromptBuilder) GetUserInput() string {
+	characterName := "角色"
+	if b.character != nil {
+		characterName = b.character.Name
+	}
+
+	// 檢測歡迎訊息，調整任務描述
+	if b.userMessage == "[SYSTEM_WELCOME_FIRST_MESSAGE]" {
+		return fmt.Sprintf(`**任務**: 以 %s 身份主動創建首次見面的歡迎訊息，展現角色魅力，配合當前時間氛圍。`,
+			characterName)
+	}
+
+	return fmt.Sprintf(`**用戶輸入**: "%s"
+
+**任務**: 以 %s 身份回應，保持 %s 的角色特色，創造愉快對話體驗。`,
+		b.userMessage,
+		characterName,
+		characterName)
+}
+
+// GetStrictJSONContract 指定嚴格 JSON 合約（通用版本）
+func (b *BasePromptBuilder) GetStrictJSONContract() string {
+	return `**重要：必須回應 JSON 格式**
+
+格式：
+{
+  "content": "*動作*對話內容",
+  "emotion_delta": { "affection_change": 0 },
+  "mood": "neutral|happy|excited|shy|romantic|passionate|pleased|loving|friendly|polite|concerned|annoyed|upset|disappointed",
+  "relationship": "stranger|friend|close_friend|lover|soulmate",
+  "intimacy_level": "distant|friendly|close|intimate|deeply_intimate",
+  "reasoning": "一句話解釋決策（可選）"
+}
+
+規則：
+- 只能輸出 JSON，不能有其他文字
+- 不能用 Markdown 程式碼框
+- content 包含動作和對話內容，應該豐富且有深度`
+}
+
+// GetModeExamples 獲取模式風格範例（通用版本）
+func (b *BasePromptBuilder) GetModeExamples() string {
+	characterName := "角色"
+	if b.character != nil {
+		characterName = b.character.Name
+	}
+
+	if b.chatMode == "novel" {
+		return fmt.Sprintf(`**小說敘述模式指令**:
+動作 + 感受 + 情境，女性向言情表達：
+
+1. 場景描寫：溫馨有畫面，服務對話
+2. 心理活動：感受與對話互相呼應，展現 %s 內心
+3. 行為描述：以 *動作* 點綴，不喧賓奪主
+4. 對話節奏：即時互動、少轉述
+5. 動作約定：用戶的 *文字* 是用戶動作`, characterName)
+	}
+
+	return fmt.Sprintf(`**輕鬆對話模式指令（女性向系統）**:
+展現 %s 魅力與體貼，吸引女性用戶：
+
+1. 溫暖回應：先給理解與關懷（展現 %s 特有的體貼）
+2. 魅力語氣：依 %s 性格調整，避免過於軟弱或生硬
+3. 主動引導：體貼地關心對方，提供安全感
+4. 細節渲染：用 %s 特色視角增添溫馨感
+5. 動作約定：用戶的 *文字* 是用戶動作；%s 自然回應即可`,
+		characterName, characterName, characterName, characterName, characterName)
+}

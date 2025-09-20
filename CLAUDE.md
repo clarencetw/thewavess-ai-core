@@ -112,7 +112,7 @@ The system uses a sophisticated 18-rule weighted keyword classifier:
 - **Fallback Chain**: OpenAI rejection → Grok, ensures service availability
 
 ## Prompt Builder Architecture
-The system uses an inheritance-based prompt builder pattern:
+The system uses an inheritance-based prompt builder pattern with shared base functionality:
 
 ### Core Pattern
 ```go
@@ -122,6 +122,14 @@ BasePromptBuilder  // Shared functionality (context, character, NSFW levels)
 └── GrokPromptBuilder      // Creative content (L4-L5) + artistic enhancements
 ```
 
+### Shared Base Functions (Refactored for DRY)
+Recent optimization moved common functions to `BasePromptBuilder`:
+- `GetCharacterDescription()` - Unified character description format
+- `GetUserInput()` - Unified user input handling (includes welcome message detection)
+- `GetStrictJSONContract()` - Unified JSON response format specification
+- `GetModeExamples()` - Unified chat/novel mode examples
+- `GetTimeModeContext()` - Combined time and mode context
+
 ### Key Methods
 - `WithCharacter(character)` - Inject character personality and traits
 - `WithContext(conversationContext)` - Add chat history (6 messages @ 120 chars)
@@ -129,8 +137,15 @@ BasePromptBuilder  // Shared functionality (context, character, NSFW levels)
 - `WithChatMode(mode)` - Switch between "chat" (conversational) and "novel" (narrative)
 - `Build()` - Generate final prompt string for AI engine
 
+### Prompt Optimization Considerations
+Current system prompt analysis:
+- **Size**: ~5042 characters (~1767 tokens per request)
+- **Cost**: $0.003984 per request (OpenAI GPT-4o)
+- **Performance**: Acceptable but can be optimized for scale
+- **Structure**: 13 distinct instruction sections
+
 ### Chat vs Novel Modes
-- **Chat Mode**: Natural conversation flow, concise responses (150-300 chars)
+- **Chat Mode**: Natural conversation flow, concise responses (200-350 chars)
 - **Novel Mode**: Rich narrative descriptions, detailed scenes (~2x content length)
 
 ## Environment Configuration
@@ -189,3 +204,9 @@ Enable via environment variables for development and troubleshooting.
 
 ## Commit Guidelines
 Follow existing commit style with detailed descriptions and co-authoring format.
+
+# important-instruction-reminders
+Do what has been asked; nothing more, nothing less.
+NEVER create files unless they're absolutely necessary for achieving your goal.
+ALWAYS prefer editing an existing file to creating a new one.
+NEVER proactively create documentation files (*.md) or README files. Only create documentation files if explicitly requested by the User.
