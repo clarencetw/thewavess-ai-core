@@ -120,10 +120,9 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	if request.MaxTokens == 0 {
 		request.MaxTokens = getGrokMaxTokens()
 	}
-	// 動態調整溫度：若未顯式設定，依據 prompt 中的 Level 推斷
+	// 設定預設溫度
 	if request.Temperature <= 0 {
-		lvl := inferNSFWLevelFromMessages(request.Messages)
-		request.Temperature = temperatureForLevel(lvl)
+		request.Temperature = getGrokTemperature()
 	}
 
 	// 準備 HTTP 請求
@@ -237,17 +236,58 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	// 計算響應時間
 	duration := time.Since(startTime)
 
-	// 記錄成功響應
+	// 計算 Grok API 成本 (根據官方文件 2025 年計價)
+	promptTokens := int(grokResponse.Usage.PromptTokens)
+	completionTokens := int(grokResponse.Usage.CompletionTokens)
+
+	var inputCostPer1M, outputCostPer1M float64
+	switch grokResponse.Model {
+	case "grok-4-0709":
+		inputCostPer1M = 3.00   // $3.00 per 1M input tokens
+		outputCostPer1M = 15.00 // $15.00 per 1M output tokens
+	case "grok-4-fast-reasoning", "grok-4-fast", "grok-4-fast-reasoning-latest":
+		inputCostPer1M = 0.20   // $0.20 per 1M input tokens
+		outputCostPer1M = 0.50  // $0.50 per 1M output tokens
+	case "grok-4-fast-non-reasoning", "grok-4-fast-non-reasoning-latest", "grok-4-mini-non-reasoning-latest":
+		inputCostPer1M = 0.20   // $0.20 per 1M input tokens
+		outputCostPer1M = 0.50  // $0.50 per 1M output tokens
+	case "grok-3", "grok-3-latest", "grok-3-beta", "grok-3-fast", "grok-3-fast-latest", "grok-3-fast-beta":
+		inputCostPer1M = 3.00   // $3.00 per 1M input tokens
+		outputCostPer1M = 15.00 // $15.00 per 1M output tokens
+	case "grok-3-mini":
+		inputCostPer1M = 0.30   // $0.30 per 1M input tokens
+		outputCostPer1M = 0.50  // $0.50 per 1M output tokens
+	case "grok-2-vision-1212":
+		inputCostPer1M = 2.00   // $2.00 per 1M input tokens
+		outputCostPer1M = 10.00 // $10.00 per 1M output tokens
+	case "grok-code-fast-1":
+		inputCostPer1M = 0.20   // $0.20 per 1M input tokens
+		outputCostPer1M = 1.50  // $1.50 per 1M output tokens
+	default:
+		// Default to grok-3 pricing for unknown models
+		inputCostPer1M = 3.00
+		outputCostPer1M = 15.00
+	}
+
+	inputCost := float64(promptTokens) * inputCostPer1M / 1000000
+	outputCost := float64(completionTokens) * outputCostPer1M / 1000000
+	totalCost := inputCost + outputCost
+
+	// 記錄成功響應，包含詳細成本資訊
 	utils.Logger.WithFields(map[string]interface{}{
-		"service":           "grok",
-		"response_id":       grokResponse.ID,
-		"model":             grokResponse.Model,
-		"prompt_tokens":     grokResponse.Usage.PromptTokens,
-		"completion_tokens": grokResponse.Usage.CompletionTokens,
-		"total_tokens":      grokResponse.Usage.TotalTokens,
-		"choices_count":     len(grokResponse.Choices),
-		"duration_ms":       duration.Milliseconds(),
-		"is_mock":           false,
+		"service":            "grok",
+		"response_id":        grokResponse.ID,
+		"model":              grokResponse.Model,
+		"prompt_tokens":      grokResponse.Usage.PromptTokens,
+		"completion_tokens":  grokResponse.Usage.CompletionTokens,
+		"total_tokens":       grokResponse.Usage.TotalTokens,
+		"input_cost_usd":     fmt.Sprintf("$%.6f", inputCost),
+		"output_cost_usd":    fmt.Sprintf("$%.6f", outputCost),
+		"total_cost_usd":     fmt.Sprintf("$%.6f", totalCost),
+		"input_rate_per_1m":  fmt.Sprintf("$%.2f", inputCostPer1M),
+		"output_rate_per_1m": fmt.Sprintf("$%.2f", outputCostPer1M),
+		"choices_count":      len(grokResponse.Choices),
+		"duration_ms":        duration.Milliseconds(),
 	}).Info("Grok API response received")
 
 	// 開發模式下詳細記錄響應內容
@@ -264,7 +304,6 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 				"choice_index":   i,
 				"finish_reason":  choice.FinishReason,
 				"content_length": len(choice.Message.Content),
-				"is_mock":        false,
 			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, choice.Message.Content))
 		}
 	}
@@ -353,52 +392,4 @@ func getGrokMaxTokens() int {
 // getGrokTemperature 獲取 Grok 溫度配置
 func getGrokTemperature() float64 {
 	return utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.7)
-}
-
-// inferNSFWLevelFromMessages 從 system prompt 內判斷 Level 4/5
-func inferNSFWLevelFromMessages(msgs []GrokMessage) int {
-	for _, m := range msgs {
-		if m.Role != "system" {
-			continue
-		}
-		s := m.Content
-		if strings.Contains(s, "Level 5") {
-			return 5
-		}
-		if strings.Contains(s, "Level 4") {
-			return 4
-		}
-	}
-	return 3
-}
-
-// temperatureForLevel 根據 NSFW 等級動態調整溫度
-func temperatureForLevel(level int) float64 {
-	// 預設（可被環境變數覆蓋）
-	switch level {
-	case 5:
-		t := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE_L5", 0.6)
-		if t < 0.2 {
-			t = 0.2
-		}
-		if t > 1.2 {
-			t = 1.2
-		}
-		return t
-	case 4:
-		t := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE_L4", 0.7)
-		if t < 0.2 {
-			t = 0.2
-		}
-		if t > 1.2 {
-			t = 1.2
-		}
-		return t
-	case 3:
-		return 0.75
-	case 1, 2:
-		return 0.60
-	default:
-		return getGrokTemperature() // fallback: GROK_TEMPERATURE or 0.7
-	}
 }

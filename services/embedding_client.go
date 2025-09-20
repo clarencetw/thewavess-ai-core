@@ -77,12 +77,42 @@ func (c *OpenAIEmbeddingClient) EmbedText(ctx context.Context, input string) ([]
 
 	resp, err := c.client.Embeddings.New(ctx, params)
 	if err != nil {
+		utils.Logger.WithFields(map[string]interface{}{
+			"service": "openai_embeddings",
+			"error":   err.Error(),
+			"model":   string(c.model),
+		}).Error("OpenAI embedding API call failed")
 		return nil, fmt.Errorf("embedding request failed: %w", err)
 	}
 
 	if len(resp.Data) == 0 {
 		return nil, fmt.Errorf("embedding response had no data")
 	}
+
+	// 計算 embedding 成本 (根據官方文件 2025 年計價)
+	totalTokens := int(resp.Usage.TotalTokens)
+	var costEstimate float64
+	switch string(c.model) {
+	case string(openai.EmbeddingModelTextEmbedding3Small):
+		costEstimate = float64(totalTokens) * 0.00002 // $0.02 per 1M tokens = $0.00002 per 1K tokens
+	case string(openai.EmbeddingModelTextEmbedding3Large):
+		costEstimate = float64(totalTokens) * 0.00013 // $0.13 per 1M tokens = $0.00013 per 1K tokens
+	case string(openai.EmbeddingModelTextEmbeddingAda002):
+		costEstimate = float64(totalTokens) * 0.0001  // $0.10 per 1M tokens = $0.0001 per 1K tokens
+	default:
+		costEstimate = float64(totalTokens) * 0.00002 // Default to 3-small pricing
+	}
+
+	// 記錄 embedding API 使用資訊
+	utils.Logger.WithFields(map[string]interface{}{
+		"service":        "openai_embeddings",
+		"model":          string(c.model),
+		"input_chars":    len(input),
+		"total_tokens":   totalTokens,
+		"cost_usd":       fmt.Sprintf("$%.8f", costEstimate),
+		"vector_dims":    len(resp.Data[0].Embedding),
+		"purpose":        "nsfw_classification",
+	}).Info("OpenAI embedding request completed")
 
 	raw := resp.Data[0].Embedding
 	vector := make([]float32, len(raw))
