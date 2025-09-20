@@ -15,6 +15,8 @@ services:
       - GIN_MODE=release
       - GO_ENV=development
       - PORT=8080
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
+      - ENVIRONMENT=${ENVIRONMENT:-development}
       # Database Configuration
       - DB_USER=${DB_USER:-thewavess}
       - DB_PASSWORD=${DB_PASSWORD:-password}
@@ -30,10 +32,21 @@ services:
       - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-1200}
       - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.8}
       - OPENAI_API_URL=${OPENAI_API_URL:-https://api.openai.com/v1}
+      # OpenAI Advanced Parameters (Optional)
+      - OPENAI_SEED=${OPENAI_SEED:-}
+      - OPENAI_LOGPROBS=${OPENAI_LOGPROBS:-}
+      - OPENAI_TOP_LOGPROBS=${OPENAI_TOP_LOGPROBS:-}
+      - OPENAI_SERVICE_TIER=${OPENAI_SERVICE_TIER:-auto}
+      # Mistral Configuration
+      - MISTRAL_API_KEY=${MISTRAL_API_KEY:-}
+      - MISTRAL_MODEL=${MISTRAL_MODEL:-mistral-medium-latest}
+      - MISTRAL_MAX_TOKENS=${MISTRAL_MAX_TOKENS:-1200}
+      - MISTRAL_TEMPERATURE=${MISTRAL_TEMPERATURE:-0.8}
       # Grok Configuration
       - GROK_API_KEY=${GROK_API_KEY:-}
-      - GROK_MODEL=${GROK_MODEL:-grok-beta}
+      - GROK_MODEL=${GROK_MODEL:-grok-4-fast}
       - GROK_MAX_TOKENS=${GROK_MAX_TOKENS:-2000}
+      - GROK_TEMPERATURE=${GROK_TEMPERATURE:-0.9}
       - GROK_API_URL=${GROK_API_URL:-https://api.x.ai/v1}
       # Security
       - JWT_SECRET=${JWT_SECRET:-your-super-secret-jwt-key-change-in-production}
@@ -44,6 +57,13 @@ services:
       - CORS_EXPOSED_HEADERS=${CORS_EXPOSED_HEADERS:-}
       # TTS (Optional)
       - TTS_API_KEY=${TTS_API_KEY:-}
+      # NSFW RAG Configuration
+      - NSFW_RAG_CORPUS_PATH=${NSFW_RAG_CORPUS_PATH:-configs/nsfw/rag_corpus.json}
+      - NSFW_RAG_LOCALE=${NSFW_RAG_LOCALE:-zh-Hant}
+      - NSFW_RAG_TOP_K=${NSFW_RAG_TOP_K:-4}
+      - NSFW_RAG_LEVEL_THRESHOLDS=${NSFW_RAG_LEVEL_THRESHOLDS:-5:0.55,4:0.42,3:0.30,2:0.18,1:0.10}
+      - NSFW_EMBED_MODEL=${NSFW_EMBED_MODEL:-text-embedding-3-small}
+      - NSFW_EMBED_TIMEOUT_MS=${NSFW_EMBED_TIMEOUT_MS:-2000}
       # Swagger API Host Configuration
       - API_HOST=${API_HOST:-localhost:8080}
     depends_on:
