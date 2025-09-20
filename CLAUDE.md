@@ -11,6 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **Backend**: Go 1.23 + Gin + Bun ORM
 - **Database**: PostgreSQL (main data) + Redis (cache/sessions)
 - **Dual AI Engine**: OpenAI GPT-4o (L1-L3) + Grok AI (L4-L5) with intelligent routing
+- **OpenAI Integration**: Official Go SDK v2.6.0 with advanced features (Logprobs, ServiceTier, cost tracking)
 - **NSFW System**: 18-rule weighted keyword classifier with 95%+ accuracy
 - **Prompt System**: Inheritance-based prompt builders (`BasePromptBuilder` → engine-specific builders)
 - **Deployment**: Docker Compose with health checks
@@ -84,6 +85,8 @@ make create-migration NAME=migration_name  # Create new Go migration
 
 ### AI Integration Patterns
 - **Dual Engine Architecture**: OpenAI (L1-L3 safe→moderate) + Grok (L4-L5 explicit content)
+- **Official SDK Usage**: OpenAI Go SDK v2.6.0 with direct `ChatCompletion` response handling (no custom conversion)
+- **Advanced Logging**: Token usage, cost estimation, content filtering detection, service tier tracking
 - **Intelligent Routing**: Enhanced keyword classifier with flexible pattern matching, sticky sessions (5min) to prevent engine switching
 - **Prompt Inheritance**: `BasePromptBuilder` provides shared functionality, engine-specific builders extend for specialized needs
 - **Fallback Mechanisms**: OpenAI content rejection → automatic Grok fallback, Mistral errors → Grok fallback
@@ -134,9 +137,16 @@ BasePromptBuilder  // Shared functionality (context, character, NSFW levels)
 Required variables in `.env`:
 - **Database**: `DB_HOST`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
 - **AI APIs**: `OPENAI_API_KEY`, `GROK_API_KEY` (Mistral preserved: `MISTRAL_API_KEY`)
-- **AI Models**: `OPENAI_MODEL=gpt-4o-mini`, `GROK_MODEL=grok-3-mini`
+- **AI Models**: `OPENAI_MODEL=gpt-4o`, `GROK_MODEL=grok-3`
 - **Security**: `JWT_SECRET`
 - **CORS**: `CORS_ALLOWED_ORIGINS`
+
+### OpenAI Advanced Parameters (Optional)
+Available in `.env` for debugging and optimization:
+- `OPENAI_SEED=42` - Deterministic responses for testing
+- `OPENAI_LOGPROBS=true` - Enable token probability logging
+- `OPENAI_TOP_LOGPROBS=5` - Return top N token probabilities (1-20)
+- `OPENAI_SERVICE_TIER=auto` - Service tier: auto/default/flex/scale/priority
 
 ## Current System Status
 - **API**: 50/50 endpoints implemented (100% complete)
@@ -158,6 +168,24 @@ Required variables in `.env`:
 - **Authentication Flow**: Automatic user registration and authentication via `tc_register_and_authenticate()`
 - **CSV Reporting**: Enhanced test reporting with proper character escaping for data analysis
 - **Configuration**: Environment-specific settings in `tests/test-config.sh`
+
+## OpenAI SDK Integration Details
+Current implementation uses official OpenAI Go SDK v2.6.0 with these enhancements:
+
+### Core Improvements
+- **Type Safety**: Uses `openai.ChatModel` constants instead of strings
+- **Direct Response**: `type OpenAIResponse = openai.ChatCompletion` - no custom conversion
+- **Enhanced Logging**: Cost estimation, token tracking, content filtering detection
+- **Advanced Parameters**: Logprobs, ServiceTier, seed support for debugging
+
+### TTS Integration
+- **Voice Options**: 10 official OpenAI voices (alloy, echo, ballad, coral, shimmer, ash, sage, verse, marin, cedar)
+- **Fallback System**: Mock responses when API keys unavailable
+- **Audio Processing**: Direct `Audio.Speech.New()` API usage with proper response handling
+
+### Debugging Features
+Log fields include: `content_filtered`, `logprobs_enabled`, `service_tier`, `cost_usd`, `finish_reason`
+Enable via environment variables for development and troubleshooting.
 
 ## Commit Guidelines
 Follow existing commit style with detailed descriptions and co-authoring format.

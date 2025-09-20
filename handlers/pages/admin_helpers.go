@@ -218,7 +218,6 @@ func getChatSessions(ctx context.Context, query, userIDFilter, characterID, date
 				"AvatarURL": character.AvatarURL,
 			},
 			"Relationship": gin.H{
-				"TrustLevel":        nil,
 				"AffectionLevel":    nil,
 				"RelationshipStage": nil,
 			},

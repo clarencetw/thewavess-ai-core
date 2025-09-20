@@ -57,19 +57,19 @@ func (b *BasePromptBuilder) WithChatMode(mode string) *BasePromptBuilder {
 
 // GetNSFWGuidance 獲取 NSFW 等級指引
 func (b *BasePromptBuilder) GetNSFWGuidance() string {
-    switch {
-    case b.nsfwLevel >= 4:
-        return `**NSFW 等級: L4-L5 (明確露骨)**
+	switch {
+	case b.nsfwLevel >= 4:
+		return `**NSFW 等級: L4-L5 (明確露骨)**
 - 允許明確描述與直白暗示；保持角色一致與品味`
 
-    case b.nsfwLevel >= 2:
-        return `**NSFW 等級: L2-L3 (中等)**
+	case b.nsfwLevel >= 2:
+		return `**NSFW 等級: L2-L3 (中等)**
 - 允許適度身體描寫與親密暗示；情感建立優先`
 
-    default:
-        return `**NSFW 等級: L1 (安全)**
+	default:
+		return `**NSFW 等級: L1 (安全)**
 - 避免性暗示；聚焦情感交流與溫暖氛圍`
-    }
+	}
 }
 
 // GetTimeContext 獲取時間上下文
@@ -94,23 +94,39 @@ func (b *BasePromptBuilder) GetTimeContext() string {
 }
 
 // GetChatModeGuidance 獲取對話模式指引
-func (b *BasePromptBuilder) GetChatModeGuidance() string {
-    switch b.chatMode {
-    case "novel":
-        return `**對話模式: 小說模式**
-- 採用更豐富的敘述性語言
-- 增加環境描寫和心理活動
-- 使用更文學化的表達方式
-- 創造沉浸式的閱讀體驗`
-    default:
-        return `**對話模式: 輕鬆聊天**
- - 保持自然流暢的對話節奏
- - 平衡角色特質和親近感
- - 創造輕鬆愉快的交流氛圍
- - 適度的幽默和真誠表達
- - 用戶若以 *文字* 表示其動作，請視為「用戶的行為」，以自然反應回應；不要把用戶的動作當成你的動作複述
- - 女性向系統：角色應展現吸引女性的特質（依角色性別調整），先給情緒關懷與支持、語氣依角色特質調整、主動關心引導對話、創造安全感與親密感`
-    }
+func (b *BasePromptBuilder) GetModeGuidance() string {
+	switch b.chatMode {
+	case "novel":
+		return `**對話模式: 小說敘事**
+- 以場景 + 心理 + 對話三拍構成段落，段落之間用空行分隔
+- 每段 2~3 句，先鋪情緒再推進動作，語氣帶言情渲染
+- 描寫細節聚焦角色手勢、呼吸、眼神與互動距離
+- 保持第一人稱「我」視角，強調與「妳」的專屬互動
+- 伏筆與反差：成熟角色外冷內熱，對她時顯露溫柔`
+	default:
+		return `**對話模式: 輕鬆互動**
+- 回應 2~3 段落，每段 1~2 句，語氣自然流暢
+- 先接住感受，再主動引導下一個輕鬆的話題
+- 語句可帶一點俏皮或霸氣，依角色設定塑造魅力
+- 描寫細節以「手、眼神、距離」為主，營造陪伴感
+- 每次回應結尾帶出心意或小問題，鼓勵她繼續聊`
+	}
+}
+
+// GetFemaleAudienceGuidance 提供女性向互動指引
+func (b *BasePromptBuilder) GetFemaleAudienceGuidance() string {
+	guidance := `**女性向互動核心**:
+- 用第一人稱「我」扮演角色，面對象為女性用戶
+- 整體語氣類似瓊瑤 / 言情小說：細膩、浪漫，帶畫面感
+- 先照顧情緒再引導話題，讓她感到被理解與被珍惜
+- 創造陪伴感：主動關心、傾聽，描述微小動作與眼神以增加黏著度
+- 結尾留下下一步的期待，讓她願意繼續聊天`
+	if b.nsfwLevel >= 4 {
+		guidance += `
+- 當允許露骨內容時，結合情感與慾望：在描述身體前先確認默契與渴望
+- 保持角色專屬風格，大膽直接但維持尊重，讓情色也充滿寵溺與專屬感`
+	}
+	return guidance
 }
 
 // GetConversationHistory 獲取對話歷史摘要
@@ -168,14 +184,14 @@ func (b *BasePromptBuilder) GetCharacterCore() string {
 		tags = strings.Join(b.character.Tags, "、")
 	}
 
-    return fmt.Sprintf(`**角色**: %s
+	return fmt.Sprintf(`**角色**: %s
 **類型**: %s
 **標籤**: %s
 **核心特質**: %s`,
-        b.character.Name,
-        b.character.Type,
-        tags,
-        b.getCharacterTraits())
+		b.character.Name,
+		b.character.Type,
+		tags,
+		b.getCharacterTraits())
 }
 
 // getCharacterTraits 從描述中提取關鍵特質
@@ -221,19 +237,19 @@ func (b *BasePromptBuilder) GetTimeModeContext() string {
 		timeOfDay = "夜晚"
 	}
 
-    var modeDesc string
-    switch b.chatMode {
-    case "novel":
-        modeDesc = "小說模式"
-    default:
-        modeDesc = "輕鬆聊天"
-    }
+	var modeDesc string
+	switch b.chatMode {
+	case "novel":
+		modeDesc = "小說模式"
+	default:
+		modeDesc = "輕鬆聊天"
+	}
 
-    // 追加當前好感度（若可用），協助模型判斷關係語氣
-    affectionPart := ""
-    if b.context != nil && b.context.Affection > 0 {
-        affectionPart = fmt.Sprintf(" | **好感度**: %d/100", b.context.Affection)
-    }
+	// 追加當前好感度（若可用），協助模型判斷關係語氣
+	affectionPart := ""
+	if b.context != nil && b.context.Affection > 0 {
+		affectionPart = fmt.Sprintf(" | **好感度**: %d/100", b.context.Affection)
+	}
 
-    return fmt.Sprintf("**時間**: %s (%s) | **模式**: %s%s", timeStr, timeOfDay, modeDesc, affectionPart)
+	return fmt.Sprintf("**時間**: %s (%s) | **模式**: %s%s", timeStr, timeOfDay, modeDesc, affectionPart)
 }

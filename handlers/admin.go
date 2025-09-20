@@ -1440,7 +1440,6 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 		if err == nil {
 			// 直接使用 AI 設定的關係狀態，不進行轉換
 			chatData["relationship"] = gin.H{
-				"trust_level":        relationship.Affection,
 				"affection_level":    relationship.Affection,
 				"relationship_stage": relationship.Relationship, // 直接使用資料庫中的關係狀態
 				"mood":               relationship.Mood,
@@ -1450,7 +1449,6 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 		} else {
 			// 如果沒有關係記錄，使用預設值
 			chatData["relationship"] = gin.H{
-				"trust_level":        0,
 				"affection_level":    0,
 				"relationship_stage": "stranger", // 使用預設的英文值，讓前端處理顯示
 				"mood":               "neutral",
@@ -2087,8 +2085,9 @@ func AdminGetCharacterByID(c *gin.Context) {
 		"deleted_at":       character.DeletedAt,
 	}
 
-	// 獲取創建者信息
+	// 獲取創建者信息（可能是用戶或管理員）
 	if character.CreatedBy != nil && *character.CreatedBy != "" {
+		// 先嘗試從用戶表查詢
 		var creator db.UserDB
 		err := GetDB().NewSelect().
 			Model(&creator).
@@ -2101,13 +2100,32 @@ func AdminGetCharacterByID(c *gin.Context) {
 				"username":     creator.Username,
 				"display_name": creator.DisplayName,
 				"email":        creator.Email,
+				"type":         "user",
+			}
+		} else {
+			// 如果用戶表沒找到，嘗試從管理員表查詢
+			var admin db.AdminDB
+			err := GetDB().NewSelect().
+				Model(&admin).
+				Column("id", "username", "display_name", "email").
+				Where("id = ?", *character.CreatedBy).
+				Scan(ctx)
+			if err == nil {
+				charResponse["creator"] = gin.H{
+					"id":           admin.ID,
+					"username":     admin.Username,
+					"display_name": admin.DisplayName,
+					"email":        admin.Email,
+					"type":         "admin",
+				}
 			}
 		}
 	}
 
-	// 獲取更新者信息
+	// 獲取更新者信息（可能是用戶或管理員）
 	if character.UpdatedBy != nil && *character.UpdatedBy != "" &&
 		(character.CreatedBy == nil || *character.UpdatedBy != *character.CreatedBy) {
+		// 先嘗試從用戶表查詢
 		var updater db.UserDB
 		err := GetDB().NewSelect().
 			Model(&updater).
@@ -2120,6 +2138,24 @@ func AdminGetCharacterByID(c *gin.Context) {
 				"username":     updater.Username,
 				"display_name": updater.DisplayName,
 				"email":        updater.Email,
+				"type":         "user",
+			}
+		} else {
+			// 如果用戶表沒找到，嘗試從管理員表查詢
+			var admin db.AdminDB
+			err := GetDB().NewSelect().
+				Model(&admin).
+				Column("id", "username", "display_name", "email").
+				Where("id = ?", *character.UpdatedBy).
+				Scan(ctx)
+			if err == nil {
+				charResponse["updater"] = gin.H{
+					"id":           admin.ID,
+					"username":     admin.Username,
+					"display_name": admin.DisplayName,
+					"email":        admin.Email,
+					"type":         "admin",
+				}
 			}
 		}
 	}
@@ -2134,7 +2170,8 @@ func AdminGetCharacterByID(c *gin.Context) {
 	var messageCount int
 	messageCount, _ = GetDB().NewSelect().
 		Model((*db.MessageDB)(nil)).
-		Where("character_id = ?", characterID).
+		Join("INNER JOIN chats c ON m.chat_id = c.id").
+		Where("c.character_id = ?", characterID).
 		Count(ctx)
 
 	charResponse["usage_stats"] = gin.H{

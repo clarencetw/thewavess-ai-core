@@ -35,9 +35,10 @@ func (pb *OpenAIPromptBuilder) Build() string {
 		pb.GetTimeModeContext(),
 		pb.GetCharacterCore(),
 		pb.getCharacterDescription(),
+		pb.GetFemaleAudienceGuidance(),
+		pb.GetModeGuidance(),
 		pb.getSafetyGuidelines(),
 		pb.GetNSFWGuidance(),
-		pb.GetChatModeGuidance(),
 		pb.getModeExamples(),
 		pb.getSafeInstructions(),
 		pb.getUserInput(),
@@ -159,4 +160,3 @@ func (pb *OpenAIPromptBuilder) getStrictJSONContract() string {
 - 不能用 Markdown 程式碼框
 - content 包含動作和對話內容`
 }
-

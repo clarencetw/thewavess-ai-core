@@ -1422,9 +1422,9 @@ const AdminPages = {
                                     </div>`
                                 }
                             </div>
-                            <div class="ml-4">
-                                <div class="text-sm font-medium text-gray-900">${user.username}</div>
-                                <div class="text-sm text-gray-500">${user.display_name || user.email || 'N/A'}</div>
+                            <div class="ml-4 min-w-0 flex-1">
+                                <div class="text-sm font-medium text-gray-900 break-all">${user.username}</div>
+                                <div class="text-sm text-gray-500 break-all">${user.display_name || user.email || 'N/A'}</div>
                             </div>
                         </div>
                     </td>
@@ -1538,18 +1538,18 @@ const AdminPages = {
                                     <div class="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center mr-3">
                                         <i class="fas fa-user text-blue-600 text-xs"></i>
                                     </div>
-                                    <div>
+                                    <div class="min-w-0 flex-1">
                                         <p class="text-xs text-gray-500">用戶名稱</p>
-                                        <p class="font-medium text-gray-900">${user.username}</p>
+                                        <p class="font-medium text-gray-900 break-all text-sm">${user.username}</p>
                                     </div>
                                 </div>
                                 <div class="flex items-center">
                                     <div class="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center mr-3">
                                         <i class="fas fa-envelope text-green-600 text-xs"></i>
                                     </div>
-                                    <div>
+                                    <div class="min-w-0 flex-1">
                                         <p class="text-xs text-gray-500">電子郵件</p>
-                                        <p class="font-medium text-gray-900">${user.email || 'N/A'}</p>
+                                        <p class="font-medium text-gray-900 break-all text-sm">${user.email || 'N/A'}</p>
                                     </div>
                                 </div>
                             </div>
@@ -1962,7 +1962,6 @@ const AdminPages = {
                 console.log('Chat data:', chat);
                 
                 const relationship = chat.relationship || {};
-                const trustLevel = relationship.trust_level || 0;
                 const affectionLevel = relationship.affection_level || 0;
                 const relationshipStage = relationship.relationship_stage || '初次見面';
                 
@@ -1996,31 +1995,34 @@ const AdminPages = {
                         <div class="text-sm font-medium text-gray-900">#${chat.id}</div>
                         <div class="text-sm text-gray-500">${chat.title || '未命名會話'}</div>
                     </td>
-                    <td class="px-6 py-4">
-                        <div class="text-sm text-gray-900">${chat.user ? (chat.user.display_name || chat.user.username || '未知用戶') : '未知用戶'}</div>
+                    <td class="px-4 py-4">
+                        <div class="text-sm text-gray-900 break-all">${chat.user ? (chat.user.display_name || chat.user.username || '未知用戶') : '未知用戶'}</div>
                     </td>
-                    <td class="px-6 py-4">
-                        <div class="text-sm text-gray-900">${chat.character_name || '未知角色'}</div>
+                    <td class="px-4 py-4">
+                        <div class="text-sm text-gray-900 break-all">${chat.character_name || '未知角色'}</div>
                     </td>
-                    <td class="px-6 py-4">
+                    <td class="px-4 py-4 max-w-32">
                         <div class="space-y-1">
-                            <span class="px-2 py-1 text-xs font-semibold rounded-full ${getRelationshipDisplay(relationshipStage).color}">
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full ${getRelationshipDisplay(relationshipStage).color} block text-center">
                                 ${getRelationshipDisplay(relationshipStage).text}
                             </span>
-                            <div class="text-xs text-gray-500">
-                                信任: ${trustLevel}/100 | 好感: ${affectionLevel}/100
+                            <div class="text-xs text-gray-500 text-center">
+                                好感度:${affectionLevel}
                             </div>
                         </div>
                     </td>
-                    <td class="px-6 py-4">
+                    <td class="px-4 py-4">
                         <span class="px-2 py-1 text-xs font-semibold rounded-full ${chat.status === 'active' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'}">
                             ${chat.status === 'active' ? '進行中' : '已結束'}
                         </span>
                     </td>
-                    <td class="px-6 py-4 text-sm text-gray-900">
+                    <td class="px-4 py-4 text-sm text-gray-900">
                         ${Utils.formatDate(chat.created_at)}
                     </td>
-                    <td class="px-6 py-4 text-sm space-x-2">
+                    <td class="px-4 py-4 text-sm text-gray-900">
+                        ${Utils.formatDate(chat.updated_at || chat.last_message_at || chat.created_at)}
+                    </td>
+                    <td class="px-4 py-4 text-sm space-x-2">
                         <button onclick="AdminPages.chats.viewChatHistory('${chat.id}')" class="text-blue-600 hover:text-blue-800">
                             <i class="fas fa-history"></i> 記錄
                         </button>
@@ -2049,7 +2051,7 @@ const AdminPages = {
             if (tbody) {
                 tbody.innerHTML = `
                     <tr>
-                        <td colspan="6" class="px-6 py-8 text-center">
+                        <td colspan="8" class="px-6 py-8 text-center">
                             <i class="fas fa-exclamation-triangle text-2xl text-red-600 mb-2"></i>
                             <p class="text-red-600">${message}</p>
                         </td>
@@ -2397,11 +2399,14 @@ const AdminPages = {
 
         initSorting() {
             const sortButtons = document.querySelectorAll('#chatsTable th button');
+            console.log('🔍 Chat sort buttons found:', sortButtons.length);
             sortButtons.forEach((button, index) => {
-                const fieldMap = ['title', 'username', 'character_name', 'created_at']; // 對應表格列的字段
+                const fieldMap = ['title', 'username', 'character_name', 'created_at', 'updated_at']; // 對應有排序按鈕的字段
                 const field = fieldMap[index];
+                console.log(`🔗 Binding button ${index} to field: ${field}`);
                 if (field) {
                     button.addEventListener('click', () => {
+                        console.log(`📊 Sorting by field: ${field}`);
                         this.sortByField(field);
                     });
                 }
