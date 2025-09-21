@@ -118,7 +118,7 @@ func (pb *GrokPromptBuilder) GetNSFWGuidance() string {
 func (pb *GrokPromptBuilder) Build() string {
 	sections := []string{
 		pb.getSystemHeader(),
-		pb.GetTimeModeContext(),
+		pb.GetEnvironmentAndRelationshipContext(), // 環境與關係狀態（時間、模式、好感度、心情、關係、親密度、互動指引）
 		pb.GetCharacterCore(),
 		pb.GetCharacterDescription(),
 		pb.GetFemaleAudienceGuidance(),
@@ -196,7 +196,7 @@ func (pb *GrokPromptBuilder) getSystemHeader() string {
 // buildCreativeEnhancements 建構創意增強內容
 func (pb *GrokPromptBuilder) buildCreativeEnhancements() string {
 	if pb.nsfwLevel >= 4 {
-		return `**Grok 言情創意優勢**: 女性向角色劇情專精，60%情感深度 + 40%直接表達，突破常規創造沉浸體驗
+		return `**Grok 言情創意優勢**: 女性向角色劇情專精，60%%情感深度 + 40%%直接表達，突破常規創造沉浸體驗
 
 **言情小說核心技巧**:
 - 角色魅力: 根據角色設定展現相應的言情人設特質與個性魅力

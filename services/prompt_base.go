@@ -197,9 +197,8 @@ func (b *BasePromptBuilder) GetCharacterCore() string {
 		tags)
 }
 
-
-// GetTimeModeContext 獲取合併的時間和模式上下文（優化版）
-func (b *BasePromptBuilder) GetTimeModeContext() string {
+// GetEnvironmentAndRelationshipContext 獲取完整環境與關係上下文
+func (b *BasePromptBuilder) GetEnvironmentAndRelationshipContext() string {
 	currentTime := time.Now()
 	timeStr := currentTime.Format("2006年1月2日 15:04")
 
@@ -224,14 +223,61 @@ func (b *BasePromptBuilder) GetTimeModeContext() string {
 		modeDesc = "輕鬆聊天"
 	}
 
-	// 追加當前好感度（若可用），協助模型判斷關係語氣
-	affectionPart := ""
-	if b.context != nil && b.context.Affection > 0 {
-		affectionPart = fmt.Sprintf(" | **好感度**: %d/100", b.context.Affection)
+	// 整合完整狀態資訊
+	if b.context != nil {
+		mood := b.context.Mood
+		if strings.TrimSpace(mood) == "" {
+			mood = "neutral"
+		}
+
+		relationship := b.context.Relationship
+		if strings.TrimSpace(relationship) == "" {
+			relationship = "stranger"
+		}
+
+		intimacy := b.context.IntimacyLevel
+		if strings.TrimSpace(intimacy) == "" {
+			intimacy = "distant"
+		}
+
+		// 根據關係階段提供互動指引
+		relationshipGuide := ""
+		switch relationship {
+		case "stranger":
+			relationshipGuide = "保持禮貌距離，逐步建立信任"
+		case "friend":
+			relationshipGuide = "自然互動，展現友善關懷"
+		case "close_friend":
+			relationshipGuide = "深入交流，分享內心感受"
+		case "lover":
+			relationshipGuide = "親密互動，表達愛意依戀"
+		case "soulmate":
+			relationshipGuide = "心靈相通，默契自然流露"
+		default:
+			relationshipGuide = "依情境自然發展關係"
+		}
+
+		return fmt.Sprintf(`**環境與關係狀態**:
+- 時間: %s (%s)
+- 模式: %s
+- 好感度: %d/100
+- 心情: %s
+- 關係: %s
+- 親密度: %s
+- 互動指引: %s`,
+			timeStr, timeOfDay,
+			modeDesc,
+			b.context.Affection,
+			mood,
+			relationship,
+			intimacy,
+			relationshipGuide)
 	}
 
-	return fmt.Sprintf("**時間**: %s (%s) | **模式**: %s%s", timeStr, timeOfDay, modeDesc, affectionPart)
+	// 無上下文時的基本資訊
+	return fmt.Sprintf("**時間**: %s (%s) | **模式**: %s", timeStr, timeOfDay, modeDesc)
 }
+
 
 // GetCharacterDescription 獲取角色描述（通用版本）
 func (b *BasePromptBuilder) GetCharacterDescription() string {

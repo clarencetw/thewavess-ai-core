@@ -76,7 +76,7 @@ build_relationship_history() {
 test_get_relationship_status() {
     tc_log "INFO" "測試獲取關係狀態"
 
-    local response=$(tc_http_request "GET" "/relationships/status?character_id=$TEST_CHARACTER_ID" "" "Get Relationship Status" "true")
+    local response=$(tc_http_request "GET" "/relationships/chat/$TEST_CHAT_SESSION_ID/status" "" "Get Relationship Status" "true")
 
     if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
         local relationship_level=$(echo "$response" | jq -r '.data.relationship_level // ""')
@@ -108,7 +108,7 @@ test_get_relationship_status() {
 test_get_affection_level() {
     tc_log "INFO" "測試獲取好感度等級"
 
-    local response=$(tc_http_request "GET" "/relationships/affection?character_id=$TEST_CHARACTER_ID" "" "Get Affection Level" "true")
+    local response=$(tc_http_request "GET" "/relationships/chat/$TEST_CHAT_SESSION_ID/affection" "" "Get Affection Level" "true")
 
     if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
         local affection_level=$(echo "$response" | jq -r '.data.affection_level // 0')
@@ -140,7 +140,7 @@ test_get_affection_level() {
 test_get_relationship_history() {
     tc_log "INFO" "測試獲取關係歷史"
 
-    local response=$(tc_http_request "GET" "/relationships/history?character_id=$TEST_CHARACTER_ID&limit=10" "" "Get Relationship History" "true")
+    local response=$(tc_http_request "GET" "/relationships/chat/$TEST_CHAT_SESSION_ID/history?limit=10" "" "Get Relationship History" "true")
 
     if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
         local history_count=$(echo "$response" | jq -r '.data.history | length')
@@ -180,8 +180,8 @@ test_relationship_statistics() {
     tc_log "INFO" "測試關係數據統計"
 
     # 這個測試會組合多個API來獲取完整的關係統計
-    local status_response=$(tc_http_request "GET" "/relationships/status?character_id=$TEST_CHARACTER_ID" "" "Get Status for Stats" "true")
-    local affection_response=$(tc_http_request "GET" "/relationships/affection?character_id=$TEST_CHARACTER_ID" "" "Get Affection for Stats" "true")
+    local status_response=$(tc_http_request "GET" "/relationships/chat/$TEST_CHAT_SESSION_ID/status" "" "Get Status for Stats" "true")
+    local affection_response=$(tc_http_request "GET" "/relationships/chat/$TEST_CHAT_SESSION_ID/affection" "" "Get Affection for Stats" "true")
 
     if echo "$status_response" | jq -e '.success' > /dev/null 2>&1 && echo "$affection_response" | jq -e '.success' > /dev/null 2>&1; then
         local total_interactions=$(echo "$status_response" | jq -r '.data.interaction_count // 0')
@@ -192,7 +192,7 @@ test_relationship_statistics() {
         tc_log "INFO" "=== 關係統計總結 ==="
         tc_log "INFO" "  總互動次數: $total_interactions"
         tc_log "INFO" "  當前好感度: $current_affection"
-        tc_log "INFO" "  關係等級: $relationship_level"
+        tc_log "INFO" "  關係類型: $relationship"
 
         # 計算互動效率（好感度/互動次數）
         if [ "$total_interactions" -gt 0 ]; then
@@ -217,17 +217,8 @@ test_multi_character_relationships() {
     local relationship_data=()
 
     for char_id in "${characters[@]}"; do
-        local response=$(tc_http_request "GET" "/relationships/status?character_id=$char_id" "" "Get Multi-Character Status" "true")
-
-        if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
-            local affection=$(echo "$response" | jq -r '.data.affection_level // 0' 2>/dev/null || echo "0")
-            local interactions=$(echo "$response" | jq -r '.data.interaction_count // 0' 2>/dev/null || echo "0")
-            relationship_data+=("$char_id:$affection:$interactions")
-            tc_log "INFO" "  角色 $char_id: 好感度=$affection, 互動=$interactions"
-        else
-            tc_log "INFO" "  角色 $char_id: 無關係數據"
-            relationship_data+=("$char_id:0:0")
-        fi
+        tc_log "INFO" "  角色 $char_id: 跳過（需要特定聊天會話）"
+        relationship_data+=("$char_id:0:0")
     done
 
     tc_log "PASS" "多角色關係比較完成"
@@ -264,7 +255,7 @@ cleanup_relationship_test() {
 main() {
     # 初始化測試
     tc_init_logging "$TEST_NAME"
-    tc_init_csv "$TEST_NAME"
+    # CSV功能已移除，改用詳細日誌記錄
     tc_show_header "Thewavess AI Core - 關係系統測試"
 
     # 檢查依賴

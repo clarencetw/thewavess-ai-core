@@ -208,7 +208,6 @@ func (m *Message) ToResponse() *DetailedMessageResponse {
 	return response
 }
 
-
 // CreateChatRequest 創建會話請求
 type CreateChatRequest struct {
 	CharacterID string `json:"character_id" binding:"required"`
@@ -224,8 +223,8 @@ type SendMessageRequest struct {
 // 部分欄位使用前端相容命名，包含發送消息專用的額外欄位
 type SendMessageResponse struct {
 	ChatID         string    `json:"chat_id"`
-	MessageID      string    `json:"message_id"`      // 前端格式：message_id 而非 id
-	Content        string    `json:"content"`         // 前端格式：content 而非 dialogue
+	MessageID      string    `json:"message_id"` // 前端格式：message_id 而非 id
+	Content        string    `json:"content"`    // 前端格式：content 而非 dialogue
 	AIEngine       string    `json:"ai_engine"`
 	NSFWLevel      int       `json:"nsfw_level"`
 	ResponseTimeMs int64     `json:"response_time_ms"` // 統一使用 response_time_ms

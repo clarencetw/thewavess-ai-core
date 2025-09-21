@@ -142,7 +142,7 @@ test_security_audit() {
 main() {
     # 初始化測試
     tc_init_logging "$TEST_NAME"
-    tc_init_csv "$TEST_NAME"
+    # CSV功能已移除，改用詳細日誌記錄
     tc_show_header "Thewavess AI Core - 管理員進階功能測試"
 
     # 檢查依賴

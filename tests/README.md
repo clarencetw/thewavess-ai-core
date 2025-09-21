@@ -4,19 +4,19 @@
 
 完整的測試系統，包含統一測試工具與專門化測試腳本：
 
-```
+```text
 tests/
 ├── 📄 README.md               # 本說明文件
-├── 🧪 test-all.sh             # 統一測試工具 (包含所有核心測試)
+├── 🧪 test-all.sh             # 統一測試工具 (涵蓋核心測試)
 ├── 🔧 test-config.sh          # 配置載入器
-├── 🚀 chat_api_validation.sh  # 聊天API驗證
-├── 🔒 test_mistral_integration.sh # Mistral整合測試
-├── 👤 test_user_profile.sh    # 用戶資料測試 [新增]
-├── 💬 test_chat_advanced.sh   # 聊天進階功能測試 [新增]
-├── 💕 test_relationships.sh   # 關係系統測試 [新增]
-├── 🔍 test_search.sh          # 搜索功能測試 [新增]
-├── 🗣️ test_tts.sh             # TTS功能測試 [新增]
-├── 🔧 test_admin_advanced.sh  # 管理員進階功能測試 [新增，待修復]
+├── 🚀 chat_api_validation.sh  # 聊天 API 驗證腳本
+├── 👤 test_user_profile.sh    # 用戶資料測試
+├── 💬 test_chat_advanced.sh   # 聊天進階功能測試
+├── 🤖 test_dual_engine.sh     # 雙引擎路由測試
+├── 💕 test_relationships.sh   # 關係系統測試
+├── 🔍 test_search.sh          # 搜尋功能測試
+├── 🗣️ test_tts.sh             # TTS 功能測試
+├── 🔧 test_admin_advanced.sh  # 管理員進階功能測試（原型，部分端點待補全）
 └── utils/                     # 工具庫
     ├── test_common.sh         # 核心測試功能 [已增強]
     ├── test_logger.sh         # 日誌系統
@@ -53,9 +53,7 @@ tests/
 
 ### 進階選項
 ```bash
-./tests/test-all.sh --type nsfw --csv     # 執行NSFW測試並生成CSV報告
 ./tests/test-all.sh --quick               # 快速模式 (減少測試案例)
-./tests/test-all.sh --type all --csv      # 執行所有測試並生成詳細報告
 ```
 
 ## 🆕 專門化測試腳本
@@ -102,12 +100,14 @@ tests/
 - ⚠️ **狀態**: 需要有效的TEST_CHARACTER_ID
 
 ### 🔧 管理員進階功能測試 (`test_admin_advanced.sh`)
-- ✅ 系統監控功能
-- ✅ 批量操作測試
-- ✅ 系統配置管理
-- ✅ 備份與還原
-- ✅ 安全審計功能
-- ❌ **狀態**: 語法錯誤，待修復
+- ✅ 基本認證流程驗證
+- ⚠️ **狀態**: 仍為原型腳本，包含尚未實作的管理端點呼叫（執行時將收到對應錯誤）。
+
+### 🤖 雙引擎測試 (`test_dual_engine.sh`)
+- ✅ 驗證 OpenAI ↔ Grok 的路由切換
+- ✅ Sticky 模式與備援路徑
+- ✅ 錯誤處理與重試流程
+- ⚠️ **狀態**: 需有效的 NSFW 語料與金鑰
 
 ## 🎯 核心測試功能 (test-all.sh)
 
@@ -144,26 +144,10 @@ tests/
 
 ### 日誌記錄
 所有測試自動生成時間戳日誌檔案：
-```
+```text
 tests/logs/
 └── unified_test_YYYYMMDD_HHMMSS.log
 ```
-
-### CSV報告 (`--csv` 選項)
-詳細的測試數據報告：
-```
-tests/results/
-└── unified_test_YYYYMMDD_HHMMSS.csv
-```
-
-**CSV欄位包含**：
-- 測試時間戳
-- 測試類型和場景
-- HTTP方法和端點
-- 回應狀態和時間
-- AI引擎類型
-- NSFW等級
-- 測試結果
 
 ## ⚙️ 環境需求
 
@@ -254,8 +238,8 @@ TEST_CHARACTER_ID="character_01"              # 預設測試角色
 1. **多層次測試** - 核心統一測試 + 專門化深度測試
 2. **自動化管理** - 用戶註冊、認證、清理完全自動化
 3. **並行執行安全** - 獨立用戶隔離，避免測試衝突
-4. **完整記錄** - 詳細日誌、CSV報告、錯誤追蹤
-5. **智能容錯** - API失敗自動回報，測試狀態清晰標示
+4. **完整記錄** - 詳細日誌與錯誤追蹤
+5. **智能容錯** - API 失敗自動回報，測試狀態清晰標示
 6. **易於維護** - 模組化結構，單一公用函數庫
 
 ## 📝 使用範例
@@ -281,17 +265,14 @@ TEST_CHARACTER_ID="character_01"              # 預設測試角色
 ```bash
 # 完整測試套件
 ./tests/test-all.sh
-
-# 生成詳細報告
-./tests/test-all.sh --csv
 ```
 
 ### 性能分析
 ```bash
-# NSFW系統準確率測試
-./tests/test-all.sh --type nsfw --csv
+# NSFW 系統準確率測試
+./tests/test-all.sh --type nsfw
 
-# 然後查看 tests/results/ 中的CSV報告
+# 參考 tests/logs/ 下的最新日誌檔案
 ```
 
 ---

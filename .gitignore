@@ -40,6 +40,16 @@ go.work.sum
 .env
 .env.*
 
+# Security and sensitive files
+*.key
+*.pem
+*.cert
+*.p12
+*.crt
+*.csr
+secrets/
+config/secrets/
+
 # Editor/IDE
 .idea/
 .vscode/

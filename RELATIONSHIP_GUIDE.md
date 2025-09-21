@@ -2,53 +2,53 @@
 
 ## 系統概述
 
-本系統採用**AI驅動的關係管理**，通過智能分析對話內容自動維護用戶與角色之間的關係狀態。
+本系統採用**AI驅動的關係管理**，透過分析對話內容即時更新用戶與角色之間的互動狀態。
 
 ### 🎯 核心目標
-- **智能化**：AI自動分析情感變化，無需固定規則
-- **個性化**：根據對話歷史和角色特性動態調整
-- **持久化**：完整記錄關係發展軌跡
-- **可追溯**：詳細的變化歷史和觸發原因
+- **智能化**：AI 自動評估情感變化，無需硬式規則
+- **個性化**：依據對話歷史與角色特性調整反應
+- **持久化**：完整記錄關係發展與情感事件
+- **可追溯**：提供清楚的歷史來源與統計資料
 
 ## 關係模型
 
 ### 📊 核心維度
-- **好感度 (Affection)**：0-100數值，反映情感親密程度
-- **心情狀態 (Mood)**：當前情緒狀態（happy, sad, excited等）
-- **關係類型 (Relationship)**：關係的定性描述
-- **親密等級 (Intimacy Level)**：互動的親密程度
+- **好感度 (Affection)**：0-100 數值，反映情感親密程度
+- **心情狀態 (Mood)**：當前情緒類型（happy、sad、excited…）
+- **關係類型 (Relationship)**：關係的語意描述
+- **親密等級 (Intimacy Level)**：互動的深度層級
 
 ### 🎭 關係等級系統
 | 好感度範圍 | 關係類型 | 親密等級 | 特徵描述 |
-|----------|---------|---------|----------|
-| 0-19 | stranger | distant | 初次見面，保持禮貌距離 |
-| 20-39 | friend | casual | 普通朋友，輕鬆對話 |
-| 40-59 | friend | casual | 好朋友，相互信任 |
-| 60-79 | close | close | 親密朋友，深度交流 |
-| 80-89 | intimate | intimate | 戀人關係，情感深厚 |
-| 90-100 | soulmate | intimate | 靈魂伴侶，心靈相通 |
+| ---------- | -------- | -------- | -------- |
+| 0-19       | stranger | distant  | 初次見面，維持禮貌距離 |
+| 20-39      | friend   | casual   | 普通朋友，輕鬆對話 |
+| 40-59      | friend   | casual   | 好朋友，相互信任 |
+| 60-79      | close    | close    | 親密朋友，能進行深度交流 |
+| 80-89      | intimate | intimate | 戀人關係，情感深厚 |
+| 90-100     | soulmate | intimate | 靈魂伴侶，心靈相通 |
 
 ## 數據庫架構
 
 ### 🗄️ Relationships 表結構
 ```sql
 relationships:
-├── id (string, PK)              # 關係記錄唯一標識
-├── user_id (string, FK)         # 用戶ID
-├── character_id (string, FK)    # 角色ID  
-├── chat_id (string, FK, 可選)   # 會話ID（多會話支持）
-├── affection (int)              # 好感度 0-100
-├── mood (string)                # 當前心情狀態
-├── relationship (string)        # 關係類型
-├── intimacy_level (string)      # 親密等級
-├── total_interactions (int)     # 總互動次數
-├── last_interaction (timestamp) # 最後互動時間
-├── emotion_data (jsonb)         # 情感歷史數據
-├── created_at (timestamp)       # 創建時間
-└── updated_at (timestamp)       # 更新時間
+├── id (string, PK)
+├── user_id (string, FK)
+├── character_id (string, FK)
+├── chat_id (string, FK, 可選)
+├── affection (int)
+├── mood (string)
+├── relationship (string)
+├── intimacy_level (string)
+├── total_interactions (int)
+├── last_interaction (timestamp)
+├── emotion_data (jsonb)
+├── created_at (timestamp)
+└── updated_at (timestamp)
 ```
 
-### 📝 情感數據 (JSONB)
+### 📝 情感歷史 (emotion_data)
 ```json
 {
   "history": [
@@ -62,93 +62,57 @@ relationships:
       "old_mood": "neutral",
       "new_mood": "happy"
     }
-  ],
-  "milestones": {
-    "first_meeting": "2025-08-15T10:30:00Z",
-    "became_friends": "2025-08-20T14:20:00Z",
-    "intimate_relationship": "2025-09-01T16:45:00Z"
-  }
+  ]
 }
 ```
 
-## AI驅動機制
+## API 端點
 
-### 🤖 智能分析流程
-1. **內容解析**：AI分析用戶訊息的情感傾向
-2. **情感評估**：結合對話歷史和角色特性
-3. **變化計算**：生成好感度變化建議（-10到+10）
-4. **狀態更新**：更新關係表和歷史記錄
-5. **里程碑檢查**：檢測關係突破點
+### `GET /api/v1/relationships/chat/{chat_id}/status`
+- **用途**：取得指定對話的即時關係狀態
+- **主要欄位**：`user_id`, `character_id`, `chat_id`, `affection`, `mood`, `mood_intensity`, `mood_description`, `relationship`, `intimacy_level`, `total_interactions`, `last_interaction_at`, `updated_at`
+- **資料來源**：直接使用 `relationships` 表中的即時數據
 
-### 🎨 AI考量因素
-- **對話內容**：關心、讚美、支持 vs 冷漠、批評
-- **語氣情感**：溫暖、興奮、悲傷、憤怒等
-- **互動頻率**：規律互動 vs 長期沉默
-- **歷史軌跡**：過往關係發展模式
-- **角色個性**：不同角色的反應差異
-- **NSFW加成**：親密內容帶來的好感度加成
+### `GET /api/v1/relationships/chat/{chat_id}/affection`
+- **用途**：檢視好感度細節與升級進度
+- **主要欄位**：`current`, `level_name`, `level_tier`, `description`, `next_level_threshold`, `points_to_next`, `updated_at`
+- **計算方式**：依據 affection 數值計算等級與下一門檻，移除任何硬編碼或假資料
 
-## API接口
+### `GET /api/v1/relationships/chat/{chat_id}/history`
+- **用途**：回顧情感變化軌跡
+- **主要欄位**：`current_affection`, `total_interactions`, `history[]`
+  - 每筆歷史紀錄包含：`timestamp`, `trigger_type`, `trigger_content`, `affection_before`, `affection_after`, `affection_change`, `mood_before`, `mood_after`
+- **數據來源**：從 `emotion_data.history` 讀取真實 JSONB 紀錄；若無歷史資料則回傳空陣列
 
-### 🔑 關係查詢端點
-- `GET /api/v1/relationships/chat/{chat_id}/status`
-  - 獲取當前關係狀態
-  - 返回好感度、心情、關係類型、親密等級
-
-- `GET /api/v1/relationships/chat/{chat_id}/affection`
-  - 查詢好感度詳細資訊
-  - 包含數值、變化趨勢、歷史統計
-
-- `GET /api/v1/relationships/chat/{chat_id}/history`
-  - 獲取關係發展歷史
-  - 包含重要事件、里程碑、變化軌跡
-
-## 關係發展特色
+## 系統特色
 
 ### ✨ 智能特性
-1. **動態適應**：根據用戶行為模式自動調整
-2. **個性化反應**：不同角色展現獨特的情感模式
-3. **自然進展**：避免機械化規則，關係發展更真實
-4. **記憶整合**：重要情感事件自動成為長期記憶
+1. **動態適應**：結合 AI 分析與歷史資料調整反應
+2. **個人化反應**：不同角色具備專屬情緒與好感度曲線
+3. **自然進展**：避免固定腳本，追求貼近真人互動
+4. **情感記憶**：重要事件會被寫入 `emotion_data` 以供後續參考
 
-### 🔄 多會話支持
-- **獨立追蹤**：每個會話維護獨立的關係狀態
-- **全局關係**：支持跨會話的關係延續
-- **靈活切換**：可選擇獨立或延續模式
+### 🔄 多會話支援
+- 每個 `chat_id` 擁有獨立的關係狀態
+- 如需跨會話共享，可使用 `chat_id IS NULL` 的全局紀錄
 
 ### 📊 數據洞察
-- **變化軌跡**：完整的關係發展時間線
-- **觸發分析**：了解關係變化的具體原因
-- **里程碑記錄**：重要關係節點的自動識別
+- 透過歷史紀錄掌握好感度變化與觸發因素
+- 利用 `total_interactions` 與 `last_interaction_at` 追蹤互動頻率
 
 ## 性能與監控
 
-### ⚡ 性能優化
-- **JSONB索引**：高效的情感數據查詢
-- **批量更新**：優化的關係狀態更新機制
-- **緩存策略**：減少頻繁的數據庫查詢
+- **JSONB 索引**：確保 emotion_data 查詢效率
+- **批次更新**：在訊息處理流程中一次更新 affection、mood、relationship 等欄位
+- **快照式回應**：所有 handler 立即返回資料庫中的真實數據
 
-### 📈 監控指標
-- 關係更新響應時間（目標 < 100ms）
-- 好感度變化分布統計
-- 關係里程碑達成率
-- 情感歷史記錄完整性
+## 實作重點
 
-## 實施狀態
-
-### ✅ 已實現功能
-- AI驅動的情感分析和好感度計算
-- 完整的關係狀態管理和歷史追蹤
-- 多會話獨立關係支持
-- JSONB格式的靈活數據存儲
-- RESTful API接口
-
-### 🚀 系統優勢
-- 比傳統固定規則更自然和智能
-- 完整的審計追蹤和歷史記錄
-- 高性能的PostgreSQL + JSONB架構
-- 靈活的多會話關係管理
+- 改採**型別化的回應結構**，移除原先的動態 Map 與假資料欄位
+- 直接使用資料庫欄位，避免硬編碼描述或臨時統計
+- 歷史端點僅在 emotion_data 有資料時回傳事件，維持資料可信度
+- 所有時間欄位統一輸出 ISO 8601（RFC3339）格式
 
 ---
 
-*本關係系統基於AI智能分析，提供比傳統規則系統更自然、更個性化的情感體驗。*
+*關係系統透過 AI 與資料庫的緊密整合，提供自然且可追蹤的互動體驗。*

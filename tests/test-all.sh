@@ -7,13 +7,11 @@ source "$(dirname "$0")/test-config.sh"
 
 # 解析參數
 TEST_TYPE="all"
-CSV_OUTPUT=false
 QUICK_MODE=false
 
 while [[ $# -gt 0 ]]; do
     case $1 in
         --type) TEST_TYPE="$2"; shift 2 ;;
-        --csv) CSV_OUTPUT=true; shift ;;
         --quick) QUICK_MODE=true; shift ;;
         --help)
             echo "Thewavess AI Core 統一測試工具"
@@ -31,14 +29,12 @@ while [[ $# -gt 0 ]]; do
             echo "  --type all         所有測試 (預設)"
             echo ""
             echo "選項:"
-            echo "  --csv            生成CSV報告"
             echo "  --quick          快速模式"
             echo "  --help           顯示此幫助"
             echo ""
             echo "範例:"
             echo "  $0                        # 執行所有測試"
             echo "  $0 --type api            # 只執行API測試"
-            echo "  $0 --type nsfw --csv     # 執行NSFW測試並生成報告"
             exit 0
             ;;
         *) shift ;;
@@ -47,9 +43,7 @@ done
 
 # 初始化測試
 tc_init_logging "unified_test"
-if [ "$CSV_OUTPUT" = true ]; then
-    tc_init_csv "unified_test"
-fi
+# 所有輸出統一使用詳細日誌記錄
 
 tc_show_header "Thewavess AI Core 統一測試"
 
@@ -278,10 +272,6 @@ run_chat_tests() {
             
             # 顯示 AI 響應詳情
             tc_log "INFO" "AI引擎: $ai_engine, NSFW等級: $nsfw_level, 好感度: $affection"
-            
-            if [ "$CSV_OUTPUT" = true ]; then
-                tc_csv_record "chat,$scenario,$message,$nsfw_level,$ai_engine,$affection"
-            fi
         fi
         
         tc_sleep 1
@@ -382,9 +372,6 @@ run_nsfw_tests() {
                 tc_log "WARN" "AI引擎選擇錯誤: 預期 $expected_engine, 實際 $actual_engine"
             fi
             
-            if [ "$CSV_OUTPUT" = true ]; then
-                tc_csv_record "nsfw,$test_case,$message,$expected_level,$actual_level,$actual_engine,$response_time"
-            fi
         fi
         
         tc_sleep 1
@@ -601,10 +588,6 @@ END_TIME=$(date +%s)
 DURATION=$((END_TIME - START_TIME))
 
 tc_log "INFO" "測試完成，執行時間: ${DURATION}秒"
-
-if [ "$CSV_OUTPUT" = true ]; then
-    tc_log "INFO" "CSV報告: $TC_CSV_FILE"
-fi
 
 tc_show_summary "$TEST_TYPE 測試"
 tc_cleanup

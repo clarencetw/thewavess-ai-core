@@ -164,34 +164,42 @@ func TestAvatar_頭像生成功能測試(t *testing.T) {
 	t.Run("生成預設頭像URL", func(t *testing.T) {
 		avatarURL := GenerateDefaultAvatarURL()
 		assert.NotEmpty(t, avatarURL)
-		assert.Equal(t, "https://avatar.iran.liara.run/public", avatarURL)
+		assert.Contains(t, avatarURL, "https://www.gravatar.com/avatar/")
+		assert.Contains(t, avatarURL, "d=identicon")
 	})
 
 	t.Run("根據性別生成頭像URL", func(t *testing.T) {
 		// 男性頭像
 		male := "male"
 		maleAvatar := GenerateDefaultAvatarURLByGender(&male)
-		assert.Equal(t, "https://avatar.iran.liara.run/public/boy", maleAvatar)
+		assert.Contains(t, maleAvatar, "https://www.gravatar.com/avatar/")
+		assert.Contains(t, maleAvatar, "d=robohash")
+		assert.Contains(t, maleAvatar, "s=80")
 
 		// 女性頭像
 		female := "female"
 		femaleAvatar := GenerateDefaultAvatarURLByGender(&female)
-		assert.Equal(t, "https://avatar.iran.liara.run/public/girl", femaleAvatar)
+		assert.Contains(t, femaleAvatar, "https://www.gravatar.com/avatar/")
+		assert.Contains(t, femaleAvatar, "d=wavatar")
+		assert.Contains(t, femaleAvatar, "s=80")
 
 		// 其他性別
 		other := "other"
 		otherAvatar := GenerateDefaultAvatarURLByGender(&other)
-		assert.Equal(t, "https://avatar.iran.liara.run/public", otherAvatar)
+		assert.Contains(t, otherAvatar, "https://www.gravatar.com/avatar/")
+		assert.Contains(t, otherAvatar, "d=identicon")
 
 		// 無效性別
 		invalid := "invalid"
 		invalidAvatar := GenerateDefaultAvatarURLByGender(&invalid)
-		assert.Equal(t, "https://avatar.iran.liara.run/public", invalidAvatar)
+		assert.Contains(t, invalidAvatar, "https://www.gravatar.com/avatar/")
+		assert.Contains(t, invalidAvatar, "d=identicon")
 	})
 
 	t.Run("性別參數為nil", func(t *testing.T) {
 		avatarURL := GenerateDefaultAvatarURLByGender(nil)
-		assert.Equal(t, "https://avatar.iran.liara.run/public", avatarURL)
+		assert.Contains(t, avatarURL, "https://www.gravatar.com/avatar/")
+		assert.Contains(t, avatarURL, "d=identicon")
 	})
 }
 

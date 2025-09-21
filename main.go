@@ -183,17 +183,14 @@ func main() {
 	api := router.Group("/api/v1")
 	routes.SetupRoutes(api)
 
+	// Display startup banner
+	displayStartupBanner(dbInitialized)
+
 	// Start server
 	utils.LogServiceEvent("server_starting", map[string]interface{}{
 		"port":               8080,
 		"database_available": dbInitialized,
 	})
-
-	utils.Logger.Info("Starting Thewavess AI Core API server on :8080")
-	utils.Logger.Info("Swagger UI: http://localhost:8080/swagger/index.html")
-	if !dbInitialized {
-		utils.Logger.Warn("⚠️  Warning: Running in database-free mode - some endpoints may not work")
-	}
 
 	if err := http.ListenAndServe(":8080", router); err != nil {
 		utils.Logger.WithError(err).Fatal("Failed to start server")
@@ -252,4 +249,66 @@ func healthCheck(c *gin.Context) {
 
 	// Always return 200 for health check - service is running
 	c.JSON(http.StatusOK, response)
+}
+
+// displayStartupBanner shows essential startup information
+func displayStartupBanner(dbInitialized bool) {
+	banner := `
+████████╗██╗  ██╗███████╗██╗    ██╗ █████╗ ██╗   ██╗███████╗███████╗███████╗
+╚══██╔══╝██║  ██║██╔════╝██║    ██║██╔══██╗██║   ██║██╔════╝██╔════╝██╔════╝
+   ██║   ███████║█████╗  ██║ █╗ ██║███████║██║   ██║█████╗  ███████╗███████╗
+   ██║   ██╔══██║██╔══╝  ██║███╗██║██╔══██║╚██╗ ██╔╝██╔══╝  ╚════██║╚════██║
+   ██║   ██║  ██║███████╗╚███╔███╔╝██║  ██║ ╚████╔╝ ███████╗███████║███████║
+   ╚═╝   ╚═╝  ╚═╝╚══════╝ ╚══╝╚══╝ ╚═╝  ╚═╝  ╚═══╝  ╚══════╝╚══════╝╚══════╝
+                                                    AI Core • 女性向智能對話系統`
+
+	// Print banner
+	utils.Logger.Info(banner)
+
+	// System information
+	shortCommit := GitCommit
+	if len(GitCommit) > 7 {
+		shortCommit = GitCommit[:7]
+	}
+	utils.Logger.WithFields(map[string]interface{}{
+		"version":    Version,
+		"build_time": BuildTime,
+		"git_commit": shortCommit,
+	}).Info("🚀 System Version")
+
+	// Database status
+	dbStatus := "❌ Unavailable"
+	if dbInitialized {
+		dbStatus = "✅ Connected"
+	}
+	utils.Logger.WithField("database", dbStatus).Info("💾 Database Status")
+
+	// AI Engines status
+	openaiKey := os.Getenv("OPENAI_API_KEY")
+	grokKey := os.Getenv("GROK_API_KEY")
+
+	aiEngines := []string{}
+	if openaiKey != "" {
+		aiEngines = append(aiEngines, "OpenAI")
+	}
+	if grokKey != "" {
+		aiEngines = append(aiEngines, "Grok")
+	}
+
+	if len(aiEngines) == 0 {
+		utils.Logger.Info("🤖 AI Engines: ❌ None configured")
+	} else {
+		utils.Logger.WithField("engines", strings.Join(aiEngines, ", ")).Info("🤖 AI Engines: ✅ Ready")
+	}
+
+	// Important URLs
+	utils.Logger.Info("🌐 Server: http://localhost:8080")
+	utils.Logger.Info("📖 API Docs: http://localhost:8080/swagger/index.html")
+	utils.Logger.Info("❤️ Health: http://localhost:8080/health")
+
+	if !dbInitialized {
+		utils.Logger.Warn("⚠️  Database unavailable - running in limited mode")
+	}
+
+	utils.Logger.Info("═══════════════════════════════════════════════════════════════")
 }

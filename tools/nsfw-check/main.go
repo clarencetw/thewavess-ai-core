@@ -8,21 +8,7 @@ import (
 	"github.com/clarencetw/thewavess-ai-core/utils"
 )
 
-type corpusDataEntry struct {
-	ID      string   `json:"id"`
-	Level   int      `json:"level"`
-	Tags    []string `json:"tags"`
-	Locale  string   `json:"locale"`
-	Text    string   `json:"text"`
-	Reason  string   `json:"reason"`
-	Version string   `json:"version,omitempty"`
-}
-
-type embeddingEntry struct {
-	ID        string    `json:"id"`
-	Embedding []float64 `json:"embedding"`
-	Version   string    `json:"version"`
-}
+// Types are defined in nsfw_types.go
 
 func main() {
 	utils.LoadEnv()

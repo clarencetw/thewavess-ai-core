@@ -171,23 +171,23 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		inputCostPer1M = 3.00   // $3.00 per 1M input tokens
 		outputCostPer1M = 15.00 // $15.00 per 1M output tokens
 	case "grok-4-fast-reasoning", "grok-4-fast", "grok-4-fast-reasoning-latest":
-		inputCostPer1M = 0.20   // $0.20 per 1M input tokens
-		outputCostPer1M = 0.50  // $0.50 per 1M output tokens
+		inputCostPer1M = 0.20  // $0.20 per 1M input tokens
+		outputCostPer1M = 0.50 // $0.50 per 1M output tokens
 	case "grok-4-fast-non-reasoning", "grok-4-fast-non-reasoning-latest", "grok-4-mini-non-reasoning-latest":
-		inputCostPer1M = 0.20   // $0.20 per 1M input tokens
-		outputCostPer1M = 0.50  // $0.50 per 1M output tokens
+		inputCostPer1M = 0.20  // $0.20 per 1M input tokens
+		outputCostPer1M = 0.50 // $0.50 per 1M output tokens
 	case "grok-3", "grok-3-latest", "grok-3-beta", "grok-3-fast", "grok-3-fast-latest", "grok-3-fast-beta":
 		inputCostPer1M = 3.00   // $3.00 per 1M input tokens
 		outputCostPer1M = 15.00 // $15.00 per 1M output tokens
 	case "grok-3-mini":
-		inputCostPer1M = 0.30   // $0.30 per 1M input tokens
-		outputCostPer1M = 0.50  // $0.50 per 1M output tokens
+		inputCostPer1M = 0.30  // $0.30 per 1M input tokens
+		outputCostPer1M = 0.50 // $0.50 per 1M output tokens
 	case "grok-2-vision-1212":
 		inputCostPer1M = 2.00   // $2.00 per 1M input tokens
 		outputCostPer1M = 10.00 // $10.00 per 1M output tokens
 	case "grok-code-fast-1":
-		inputCostPer1M = 0.20   // $0.20 per 1M input tokens
-		outputCostPer1M = 1.50  // $1.50 per 1M output tokens
+		inputCostPer1M = 0.20  // $0.20 per 1M input tokens
+		outputCostPer1M = 1.50 // $1.50 per 1M output tokens
 	default:
 		// Default to grok-3 pricing for unknown models
 		inputCostPer1M = 3.00
@@ -257,10 +257,10 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage string, conversati
 
 	// 轉換為 db.CharacterDB 類型
 	dbCharacter := &db.CharacterDB{
-		ID:   character.ID,
-		Name: character.GetName(),
-		Type: string(character.Type),
-		Tags: character.Metadata.Tags,
+		ID:              character.ID,
+		Name:            character.GetName(),
+		Type:            string(character.Type),
+		Tags:            character.Metadata.Tags,
 		UserDescription: character.UserDescription,
 	}
 
@@ -279,28 +279,29 @@ func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage string, conversati
 	}
 
 	// 添加對話歷史
-    if conversationContext != nil {
-        // 僅保留最近2則歷史（舊 -> 新）
-        count := len(conversationContext.RecentMessages)
-        if count > 2 { count = 2 }
-        for i := count - 1; i >= 0; i-- {
-            msg := conversationContext.RecentMessages[i]
-            messages = append(messages, GrokMessage{Role: msg.Role, Content: msg.Content})
-        }
-    }
+	if conversationContext != nil {
+		// 僅保留最近2則歷史（舊 -> 新）
+		count := len(conversationContext.RecentMessages)
+		if count > 2 {
+			count = 2
+		}
+		for i := count - 1; i >= 0; i-- {
+			msg := conversationContext.RecentMessages[i]
+			messages = append(messages, GrokMessage{Role: msg.Role, Content: msg.Content})
+		}
+	}
 
-    // 添加當前用戶消息（避免與歷史最後一則重複）
-    shouldAppendUser := true
-    if conversationContext != nil && len(conversationContext.RecentMessages) > 0 {
-        latest := conversationContext.RecentMessages[0]
-        if latest.Role == "user" && strings.TrimSpace(latest.Content) == strings.TrimSpace(userMessage) {
-            shouldAppendUser = false
-        }
-    }
-    if shouldAppendUser {
-        messages = append(messages, GrokMessage{Role: "user", Content: userMessage})
-    }
+	// 添加當前用戶消息（避免與歷史最後一則重複）
+	shouldAppendUser := true
+	if conversationContext != nil && len(conversationContext.RecentMessages) > 0 {
+		latest := conversationContext.RecentMessages[0]
+		if latest.Role == "user" && strings.TrimSpace(latest.Content) == strings.TrimSpace(userMessage) {
+			shouldAppendUser = false
+		}
+	}
+	if shouldAppendUser {
+		messages = append(messages, GrokMessage{Role: "user", Content: userMessage})
+	}
 
 	return messages
 }
-

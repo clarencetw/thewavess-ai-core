@@ -1,38 +1,49 @@
-# NSFW RAG 指南
+# NSFW RAG 快速參考
 
-本指南說明目前系統採用的 NSFW 語意檢索流程、設定要點，以及語料擴充與 fallback 行為，供維護與擴充時參考。
+> 詳細說明請參閱 [NSFW_GUIDE.md](./NSFW_GUIDE.md)。此文件著重於決策表與快速查詢。
 
-## 架構總覽
-- **分類器**：`services/nsfw_classifier.go` 使用 OpenAI `text-embedding-*` 模型產生向量，於記憶體內用餘弦相似度比對 `configs/nsfw/rag_corpus.json` 語料，輸出 L1~L5 等級與命中 chunk。
-- **聊天服務**：`services/chat_service.go` 在 `analyzeContent` 中取得 RAG 判定，L4/L5 時標記 `ShouldUseGrok` 並觸發 sticky；同時記錄 `rag_chunk:<id>` 與 `reason` 供審查。`IsNSFW` 以 L4 為門檻（只有 Grok 處理高強度內容）。
-- **Fallback**：若 OpenAI 回傳拒絕錯誤或拒絕句（例：「抱歉，我無法協助處理此請求。」），自動切換 Grok 生成並刷新 sticky。
+## 一覽表
+| 主題 | 重點 |
+|------|------|
+| 分級來源 | `services/nsfw_classifier.go` (`ClassifyContent`) |
+| 整合入口 | `ChatService.analyzeContent` / `selectAIEngine` |
+| 黏滯保護 | `markNSFWSticky` 讓 Grok 連線維持 5 分鐘 |
+| 語料資源 | `configs/nsfw/corpus.json` + `configs/nsfw/embeddings.json` |
 
-## 語料格式（`configs/nsfw/rag_corpus.json`）
-每筆語料須包含：
-- `id`：唯一識別碼（建議以用途命名，如 `explicit_penetration`）。
-- `level`：整數 1~5。
-- `tags`：標籤陣列（如 `explicit`, `dirty_talk`, `block`）。
-- `locale`：目前支援 `zh-Hant`、`en`。
-- `text`：核心片段，可含多個詞彙或情境描述。
-- `reason`：分類器輸出的代號，需與程式中使用的阻擋邏輯（如 `illegal_underage`）一致。
-- `version`：版本字串，方便追蹤語料更新。
+## 引擎路由決策表
+| 條件 | 使用引擎 | Sticky 狀態 | 備註 |
+|------|----------|-------------|------|
+| 角色 Tag 含 `nsfw` / `adult` | Grok | 不變 | 角色層級固定視為 NSFW |
+| 會話 Sticky 尚未過期 | Grok | 刷新到期時間 | Sticky TTL 預設 5 分鐘 |
+| 分級 L4 或 L5 | Grok | 標記 Sticky | 同時紀錄命中片段與 reason |
+| OpenAI API 拒絕 / 回傳拒絕語 | Grok | 標記 Sticky | 由 `isOpenAIContentRejection` / `isOpenAIRefusalContent` 偵測 |
+| 分級 L2-L3 | OpenAI | 不變 | 目前預設仍走 OpenAI（保留 Mistral 擴充空間） |
+| 分級 L1 | OpenAI | 不變 | 一般對話 |
 
-> ⚠️ 語料更新須人工審核，並記錄 reviewer / 影響範圍；若新增 `reason`，需確認 `services/chat_service.go` 中的非法判斷是否要同步擴充。
+## `ContentAnalysis` 欄位對照
+| 欄位 | 來源 | 說明 |
+|------|------|------|
+| `IsNSFW` | `level >= 4` | 高強度 NSFW 判斷 |
+| `Intensity` | `ClassificationResult.Level` | 1~5 等級 |
+| `ShouldUseGrok` | `level >= 4` | 提供給呼叫端的快速判斷 |
+| `Categories` | 固定標籤 + `reason` | 例如 `semantic_rag_analysis`, `rag_chunk:xxx`, `illegal_content` |
+| `Confidence` | `ClassificationResult.Confidence` | 0~0.99，相似度分數 |
 
-## 分級與路由
-- L1~L3：視為安全或中等強度對話，預設仍交給 OpenAI（只在 prompt 中保留語料，但不視為 `IsNSFW=true`）。
-- L4~L5：明確露骨內容，`IsNSFW=true`、`ShouldUseGrok=true`，並寫入 sticky map 以維持 Grok 連線 5 分鐘（期間若再次出現 L4/L5 會刷新 TTL）。
-- `illegal_content`：當 `reason` 落在未成年／性暴力／亂倫／獸交等代碼時，自動加入標籤，後續生成層會直接拒絕。
+## 違法內容阻擋表
+| `reason` / `category` | 行為 |
+|-----------------------|------|
+| `illegal_underage`, `illegal_underage_en` | `generatePersonalizedResponse` 直接回覆拒絕訊息 |
+| `bestiality` | 同上 |
+| `sexual_violence_or_incest`, `incest_family_roles`, `incest_step_roles_en` | 同上 |
+| `rape` | 同上 |
 
-## OpenAI Fallback 行為
-- `isOpenAIContentRejection(err)`：以錯誤訊息關鍵字判斷 OpenAI 拒絕，立即切到 Grok。
-- `isOpenAIRefusalContent(responseText)`：成功回應但內容是拒絕語（中英文），也會切換 Grok。可持續更新該列表並加註註解標記已驗證字串。
+## 指令備忘
+| 動作 | 指令 | 說明 |
+|------|------|------|
+| 產生/更新向量 | `make nsfw-embeddings` | 修改 `corpus.json` 後執行 |
+| 檢查語料/向量 | `make nsfw-check` | 確認兩檔案筆數與版本一致 |
+| 查看當前門檻 | `NSFW_RAG_LEVEL_THRESHOLDS` | `.env` 覆寫，預設 `5:0.55,4:0.42,3:0.30,2:0.18,1:0.10` |
+| Sticky TTL | 程式常數 `nsfwStickyTTL` | 目前固定 5 分鐘，需改程式碼調整 |
 
-## 配置與環境變數
-- `NSFW_RAG_CORPUS_PATH`（預設 `configs/nsfw/rag_corpus.json`）
-- `NSFW_RAG_TOP_K`（預設 4）
-- `NSFW_RAG_LEVEL_THRESHOLDS`（預設 `5:0.55,4:0.42,3:0.30,2:0.18,1:0.10`）
-- `NSFW_EMBED_MODEL`（預設 `text-embedding-3-small`）
-- `NSFW_EMBED_TIMEOUT_MS`（預設 2000）
-
-> 系統僅支援 OpenAI 嵌入，若缺少 `OPENAI_API_KEY` 會直接 fatal。語料調整請於 PR 記錄版本與測試內容，方便追溯。
+---
+同步維護本文件與原始程式可避免文件老化；若有行為調整，請優先更新 `NSFW_GUIDE.md` 並回收此處表格。

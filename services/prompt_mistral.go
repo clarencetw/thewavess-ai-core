@@ -22,7 +22,7 @@ func NewMistralPromptBuilder(characterService *CharacterService) *MistralPromptB
 func (pb *MistralPromptBuilder) Build() string {
 	sections := []string{
 		pb.getSystemHeader(),
-		pb.GetTimeModeContext(),
+		pb.GetEnvironmentAndRelationshipContext(), // 環境與關係狀態
 		pb.GetCharacterCore(),
 		pb.GetCharacterDescription(),
 		pb.GetFemaleAudienceGuidance(),

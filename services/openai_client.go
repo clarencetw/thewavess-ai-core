@@ -203,60 +203,60 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	switch string(resp.Model) {
 	// GPT-5 series (Standard tier)
 	case "gpt-5", "gpt-5-chat-latest":
-		inputCostPer1K = 0.00125  // $1.25 per 1M tokens = $0.00125 per 1K tokens
-		outputCostPer1K = 0.01    // $10.00 per 1M tokens = $0.01 per 1K tokens
+		inputCostPer1K = 0.00125 // $1.25 per 1M tokens = $0.00125 per 1K tokens
+		outputCostPer1K = 0.01   // $10.00 per 1M tokens = $0.01 per 1K tokens
 	case "gpt-5-mini":
-		inputCostPer1K = 0.00025  // $0.25 per 1M tokens = $0.00025 per 1K tokens
-		outputCostPer1K = 0.002   // $2.00 per 1M tokens = $0.002 per 1K tokens
+		inputCostPer1K = 0.00025 // $0.25 per 1M tokens = $0.00025 per 1K tokens
+		outputCostPer1K = 0.002  // $2.00 per 1M tokens = $0.002 per 1K tokens
 	case "gpt-5-nano":
-		inputCostPer1K = 0.00005  // $0.05 per 1M tokens = $0.00005 per 1K tokens
-		outputCostPer1K = 0.0004  // $0.40 per 1M tokens = $0.0004 per 1K tokens
+		inputCostPer1K = 0.00005 // $0.05 per 1M tokens = $0.00005 per 1K tokens
+		outputCostPer1K = 0.0004 // $0.40 per 1M tokens = $0.0004 per 1K tokens
 	// GPT-4.1 series (Standard tier)
 	case "gpt-4.1":
-		inputCostPer1K = 0.002    // $2.00 per 1M tokens = $0.002 per 1K tokens
-		outputCostPer1K = 0.008   // $8.00 per 1M tokens = $0.008 per 1K tokens
+		inputCostPer1K = 0.002  // $2.00 per 1M tokens = $0.002 per 1K tokens
+		outputCostPer1K = 0.008 // $8.00 per 1M tokens = $0.008 per 1K tokens
 	case "gpt-4.1-mini":
-		inputCostPer1K = 0.0004   // $0.40 per 1M tokens = $0.0004 per 1K tokens
-		outputCostPer1K = 0.0016  // $1.60 per 1M tokens = $0.0016 per 1K tokens
+		inputCostPer1K = 0.0004  // $0.40 per 1M tokens = $0.0004 per 1K tokens
+		outputCostPer1K = 0.0016 // $1.60 per 1M tokens = $0.0016 per 1K tokens
 	case "gpt-4.1-nano":
-		inputCostPer1K = 0.0001   // $0.10 per 1M tokens = $0.0001 per 1K tokens
-		outputCostPer1K = 0.0004  // $0.40 per 1M tokens = $0.0004 per 1K tokens
+		inputCostPer1K = 0.0001  // $0.10 per 1M tokens = $0.0001 per 1K tokens
+		outputCostPer1K = 0.0004 // $0.40 per 1M tokens = $0.0004 per 1K tokens
 	// O-series models (Standard tier)
 	case "o1":
-		inputCostPer1K = 0.015    // $15.00 per 1M tokens = $0.015 per 1K tokens
-		outputCostPer1K = 0.06    // $60.00 per 1M tokens = $0.06 per 1K tokens
+		inputCostPer1K = 0.015 // $15.00 per 1M tokens = $0.015 per 1K tokens
+		outputCostPer1K = 0.06 // $60.00 per 1M tokens = $0.06 per 1K tokens
 	case "o1-pro":
-		inputCostPer1K = 0.15     // $150.00 per 1M tokens = $0.15 per 1K tokens
-		outputCostPer1K = 0.6     // $600.00 per 1M tokens = $0.6 per 1K tokens
+		inputCostPer1K = 0.15 // $150.00 per 1M tokens = $0.15 per 1K tokens
+		outputCostPer1K = 0.6 // $600.00 per 1M tokens = $0.6 per 1K tokens
 	case "o1-mini":
-		inputCostPer1K = 0.0011   // $1.10 per 1M tokens = $0.0011 per 1K tokens
-		outputCostPer1K = 0.0044  // $4.40 per 1M tokens = $0.0044 per 1K tokens
+		inputCostPer1K = 0.0011  // $1.10 per 1M tokens = $0.0011 per 1K tokens
+		outputCostPer1K = 0.0044 // $4.40 per 1M tokens = $0.0044 per 1K tokens
 	case "o3", "o3-pro", "o3-mini", "o3-deep-research":
 		// Use o3 pricing for all o3 variants
-		inputCostPer1K = 0.002    // $2.00 per 1M tokens = $0.002 per 1K tokens
-		outputCostPer1K = 0.008   // $8.00 per 1M tokens = $0.008 per 1K tokens
+		inputCostPer1K = 0.002  // $2.00 per 1M tokens = $0.002 per 1K tokens
+		outputCostPer1K = 0.008 // $8.00 per 1M tokens = $0.008 per 1K tokens
 	case "o4-mini", "o4-mini-deep-research":
-		inputCostPer1K = 0.0011   // $1.10 per 1M tokens = $0.0011 per 1K tokens
-		outputCostPer1K = 0.0044  // $4.40 per 1M tokens = $0.0044 per 1K tokens
+		inputCostPer1K = 0.0011  // $1.10 per 1M tokens = $0.0011 per 1K tokens
+		outputCostPer1K = 0.0044 // $4.40 per 1M tokens = $0.0044 per 1K tokens
 	// Existing GPT-4o series
 	case "gpt-4o":
-		inputCostPer1K = 0.0025   // $2.50 per 1M tokens = $0.0025 per 1K tokens (Standard tier)
-		outputCostPer1K = 0.01    // $10.00 per 1M tokens = $0.01 per 1K tokens
+		inputCostPer1K = 0.0025 // $2.50 per 1M tokens = $0.0025 per 1K tokens (Standard tier)
+		outputCostPer1K = 0.01  // $10.00 per 1M tokens = $0.01 per 1K tokens
 	case "gpt-4o-mini":
-		inputCostPer1K = 0.00015  // $0.15 per 1M tokens = $0.00015 per 1K tokens (Standard tier)
-		outputCostPer1K = 0.0006  // $0.60 per 1M tokens = $0.0006 per 1K tokens
+		inputCostPer1K = 0.00015 // $0.15 per 1M tokens = $0.00015 per 1K tokens (Standard tier)
+		outputCostPer1K = 0.0006 // $0.60 per 1M tokens = $0.0006 per 1K tokens
 	case "gpt-4", "gpt-4-0613", "gpt-4-0314":
-		inputCostPer1K = 0.03     // $30.00 per 1M tokens = $0.03 per 1K tokens (Standard tier)
-		outputCostPer1K = 0.06    // $60.00 per 1M tokens = $0.06 per 1K tokens
+		inputCostPer1K = 0.03  // $30.00 per 1M tokens = $0.03 per 1K tokens (Standard tier)
+		outputCostPer1K = 0.06 // $60.00 per 1M tokens = $0.06 per 1K tokens
 	case "gpt-3.5-turbo", "gpt-3.5-turbo-0125":
-		inputCostPer1K = 0.0005   // $0.50 per 1M tokens = $0.0005 per 1K tokens (Standard tier)
-		outputCostPer1K = 0.0015  // $1.50 per 1M tokens = $0.0015 per 1K tokens
+		inputCostPer1K = 0.0005  // $0.50 per 1M tokens = $0.0005 per 1K tokens (Standard tier)
+		outputCostPer1K = 0.0015 // $1.50 per 1M tokens = $0.0015 per 1K tokens
 	case "gpt-4-turbo", "gpt-4-turbo-2024-04-09":
-		inputCostPer1K = 0.01     // $10.00 per 1M tokens = $0.01 per 1K tokens (Standard tier)
-		outputCostPer1K = 0.03    // $30.00 per 1M tokens = $0.03 per 1K tokens
+		inputCostPer1K = 0.01  // $10.00 per 1M tokens = $0.01 per 1K tokens (Standard tier)
+		outputCostPer1K = 0.03 // $30.00 per 1M tokens = $0.03 per 1K tokens
 	default:
-		inputCostPer1K = 0.001    // Default input estimate
-		outputCostPer1K = 0.002   // Default output estimate
+		inputCostPer1K = 0.001  // Default input estimate
+		outputCostPer1K = 0.002 // Default output estimate
 	}
 
 	inputCost := float64(promptTokens) * inputCostPer1K / 1000
@@ -265,20 +265,20 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 
 	// 記錄API響應信息，包含詳細的 token 使用和成本分解
 	logFields := map[string]interface{}{
-		"service":           "openai",
-		"response_id":       resp.ID,
-		"model":             string(resp.Model),
-		"object":            string(resp.Object),
-		"created":           resp.Created,
-		"prompt_tokens":     resp.Usage.PromptTokens,
-		"completion_tokens": resp.Usage.CompletionTokens,
-		"total_tokens":      resp.Usage.TotalTokens,
-		"input_cost_usd":    fmt.Sprintf("$%.6f", inputCost),
-		"output_cost_usd":   fmt.Sprintf("$%.6f", outputCost),
-		"total_cost_usd":    fmt.Sprintf("$%.6f", costEstimate),
-		"input_rate_per_1k": fmt.Sprintf("$%.6f", inputCostPer1K),
+		"service":            "openai",
+		"response_id":        resp.ID,
+		"model":              string(resp.Model),
+		"object":             string(resp.Object),
+		"created":            resp.Created,
+		"prompt_tokens":      resp.Usage.PromptTokens,
+		"completion_tokens":  resp.Usage.CompletionTokens,
+		"total_tokens":       resp.Usage.TotalTokens,
+		"input_cost_usd":     fmt.Sprintf("$%.6f", inputCost),
+		"output_cost_usd":    fmt.Sprintf("$%.6f", outputCost),
+		"total_cost_usd":     fmt.Sprintf("$%.6f", costEstimate),
+		"input_rate_per_1k":  fmt.Sprintf("$%.6f", inputCostPer1K),
 		"output_rate_per_1k": fmt.Sprintf("$%.6f", outputCostPer1K),
-		"choices_count":     len(resp.Choices),
+		"choices_count":      len(resp.Choices),
 	}
 
 	// 加入 finish_reason 和內容過濾相關資訊
@@ -376,27 +376,29 @@ func (c *OpenAIClient) BuildCharacterPrompt(characterID, userMessage string, con
 	}
 
 	// 添加對話歷史（最近幾條）
-    if conversationContext != nil {
-        // 僅保留最近2則歷史（舊 -> 新）
-        count := len(conversationContext.RecentMessages)
-        if count > 2 { count = 2 }
-        for i := count - 1; i >= 0; i-- {
-            msg := conversationContext.RecentMessages[i]
-            messages = append(messages, OpenAIMessage{Role: msg.Role, Content: msg.Content})
-        }
-    }
+	if conversationContext != nil {
+		// 僅保留最近2則歷史（舊 -> 新）
+		count := len(conversationContext.RecentMessages)
+		if count > 2 {
+			count = 2
+		}
+		for i := count - 1; i >= 0; i-- {
+			msg := conversationContext.RecentMessages[i]
+			messages = append(messages, OpenAIMessage{Role: msg.Role, Content: msg.Content})
+		}
+	}
 
-    // 添加當前用戶消息（避免與歷史的最後一則用戶訊息重複）
-    shouldAppendUser := true
-    if conversationContext != nil && len(conversationContext.RecentMessages) > 0 {
-        latest := conversationContext.RecentMessages[0] // 最新在前
-        if latest.Role == "user" && strings.TrimSpace(latest.Content) == strings.TrimSpace(userMessage) {
-            shouldAppendUser = false
-        }
-    }
-    if shouldAppendUser {
-        messages = append(messages, OpenAIMessage{Role: "user", Content: userMessage})
-    }
+	// 添加當前用戶消息（避免與歷史的最後一則用戶訊息重複）
+	shouldAppendUser := true
+	if conversationContext != nil && len(conversationContext.RecentMessages) > 0 {
+		latest := conversationContext.RecentMessages[0] // 最新在前
+		if latest.Role == "user" && strings.TrimSpace(latest.Content) == strings.TrimSpace(userMessage) {
+			shouldAppendUser = false
+		}
+	}
+	if shouldAppendUser {
+		messages = append(messages, OpenAIMessage{Role: "user", Content: userMessage})
+	}
 
 	return messages
 }

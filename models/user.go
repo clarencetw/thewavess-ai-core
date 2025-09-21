@@ -4,8 +4,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Automattic/go-gravatar"
 	"github.com/clarencetw/thewavess-ai-core/models/db"
-	"github.com/clarencetw/thewavess-ai-core/pkg/gravatar"
 )
 
 // User 用戶領域模型
@@ -30,8 +30,6 @@ type User struct {
 	// 關聯
 	Chats []*Chat `json:"chats,omitempty"`
 }
-
-
 
 // UserResponse 用戶響應（隱藏敏感信息）
 type UserResponse struct {
@@ -151,7 +149,11 @@ func (u *User) ToResponse() *UserResponse {
 	}
 
 	if (resp.AvatarURL == nil || strings.TrimSpace(*resp.AvatarURL) == "") && strings.TrimSpace(u.Email) != "" {
-		defaultURL := gravatar.URL(u.Email, 256)
+		g := gravatar.NewGravatarFromEmail(u.Email)
+		g.Size = 256
+		g.Default = "identicon"
+		g.Rating = "pg"
+		defaultURL := g.GetURL()
 		resp.AvatarURL = &defaultURL
 	}
 

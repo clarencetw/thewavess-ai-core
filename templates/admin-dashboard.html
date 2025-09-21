@@ -12,6 +12,9 @@
             <button onclick="AdminPages.dashboard.toggleAlerts()" id="alertsBtn" class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors">
                 <i class="fas fa-bell mr-2"></i><span class="hidden sm:inline">警報</span><span class="sm:hidden">警報</span> <span id="alertsCount" class="ml-1 px-2 py-1 text-xs bg-yellow-500 rounded-full">0</span>
             </button>
+            <button onclick="AdminPages.dashboard.refreshAlerts(true)" class="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors">
+                <i class="fas fa-heartbeat mr-2"></i><span class="hidden sm:inline">即時檢查</span><span class="sm:hidden">檢查</span>
+            </button>
             <button onclick="AdminPages.dashboard.reload()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
                 <i class="fas fa-sync-alt mr-2"></i><span class="hidden sm:inline">重新整理</span><span class="sm:hidden">重新整理</span>
             </button>
@@ -27,9 +30,12 @@
             <h3 class="text-lg font-medium text-yellow-900">
                 <i class="fas fa-exclamation-triangle mr-2"></i>系統警報
             </h3>
-            <button onclick="AdminPages.dashboard.clearAlerts()" class="text-sm text-yellow-700 hover:text-yellow-900">
-                清除所有警報
-            </button>
+            <div class="flex flex-col items-end space-y-1 sm:flex-row sm:space-y-0 sm:space-x-4">
+                <span id="alertsLastUpdated" class="text-xs sm:text-sm text-yellow-700">最後更新：尚未更新</span>
+                <button onclick="AdminPages.dashboard.clearAlerts()" class="text-sm text-yellow-700 hover:text-yellow-900">
+                    清除所有警報
+                </button>
+            </div>
         </div>
         <div id="alertsList" class="space-y-3">
             <!-- Dynamic alerts will be loaded here -->
@@ -39,6 +45,21 @@
     <!-- Statistics Cards -->
     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4 gap-6" id="statsGrid">
         <!-- Dynamic content will be loaded here -->
+    </div>
+
+    <!-- AI Engine Overview -->
+    <div class="bg-white rounded-lg shadow-sm border border-gray-200">
+        <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between">
+            <h3 class="text-lg font-medium text-gray-900">
+                <i class="fas fa-robot text-cyan-600 mr-2"></i>AI 引擎概況
+            </h3>
+            <span id="aiOverviewSummary" class="text-sm text-gray-500 mt-2 sm:mt-0">載入中...</span>
+        </div>
+        <div class="p-6 bg-gray-50">
+            <div id="aiConfigGrid" class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+                <!-- Dynamic content -->
+            </div>
+        </div>
     </div>
 
     <!-- System Monitoring -->

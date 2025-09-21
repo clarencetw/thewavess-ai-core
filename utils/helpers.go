@@ -3,6 +3,7 @@ package utils
 import (
 	"time"
 
+	"github.com/Automattic/go-gravatar"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -60,25 +61,49 @@ func CalculateAgeFromBirthDate(birthDate *time.Time) (age int, isAdult bool) {
 	return age, isAdult
 }
 
-// GenerateDefaultAvatarURL 生成預設頭像URL（隨機）
+// GenerateDefaultAvatarURL 生成預設頭像URL（使用 Gravatar）
 func GenerateDefaultAvatarURL() string {
-	return "https://avatar.iran.liara.run/public"
+	// 使用預設 email 生成 identicon 風格頭像
+	g := gravatar.NewGravatarFromEmail("default@example.com")
+	g.Default = "identicon"
+	g.Size = 80
+	g.Rating = "pg"
+	return g.GetURL()
 }
 
-// GenerateDefaultAvatarURLByGender 根據性別生成預設頭像URL
+// GenerateDefaultAvatarURLByGender 根據性別生成預設頭像URL（使用 Gravatar）
 func GenerateDefaultAvatarURLByGender(gender *string) string {
-	if gender == nil {
-		return GenerateDefaultAvatarURL() // 隨機選擇
+	// 使用不同的預設 email 為不同性別生成不同風格的頭像
+	baseEmail := "default@example.com"
+
+	if gender != nil {
+		switch *gender {
+		case "male":
+			baseEmail = "male@example.com"
+		case "female":
+			baseEmail = "female@example.com"
+		}
 	}
 
-	switch *gender {
-	case "male":
-		return "https://avatar.iran.liara.run/public/boy"
-	case "female":
-		return "https://avatar.iran.liara.run/public/girl"
-	default:
-		return GenerateDefaultAvatarURL() // 其他性別隨機選擇
+	// 根據性別設定不同的預設頭像風格
+	g := gravatar.NewGravatarFromEmail(baseEmail)
+	g.Size = 80
+	g.Rating = "pg"
+
+	if gender != nil {
+		switch *gender {
+		case "male":
+			g.Default = "robohash" // 機器人風格適合男性
+		case "female":
+			g.Default = "wavatar"  // 面部風格適合女性
+		default:
+			g.Default = "identicon" // 幾何圖案適合其他
+		}
+	} else {
+		g.Default = "identicon"
 	}
+
+	return g.GetURL()
 }
 
 // Min 返回兩個整數中的較小值

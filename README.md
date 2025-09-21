@@ -1,68 +1,42 @@
 # 🤖 Thewavess AI Core
 
-—
+## 1. 專案摘要
+| 項目 | 說明 |
+|------|------|
+| 核心定位 | 女性向情感聊天後端，支援 AI 雙引擎（OpenAI + Grok）與 5 級 NSFW 語意檢測 |
+| 架構 | Go 1.23 · Gin · Bun · PostgreSQL |
+| API 狀態 | 57 / 57 端點完成，詳見 [API_PROGRESS.md](./API_PROGRESS.md) |
+| 測試狀態 | Shell 整合測試 24/24 (`./tests/test-all.sh`) |
+| 重要文件 | 架構：[ARCHITECTURE.md](./ARCHITECTURE.md) · 部署：[DEPLOYMENT.md](./DEPLOYMENT.md) · 配置：[CONFIGURATION.md](./CONFIGURATION.md) |
 
-## 重要說明
+## 2. 快速開始
+| 步驟 | 指令 | 說明 |
+|------|------|------|
+| 安裝依賴 | `make install` | 安裝 Go 模組與 swagger 工具 |
+| 複製設定 | `cp .env.example .env` | 至少填寫 `OPENAI_API_KEY`、資料庫連線、`JWT_SECRET` |
+| 資料庫初始化 | `make db-setup` 或 `make fresh-start` | 建立資料表並載入 fixtures（含預設管理員/角色）|
+| 啟動服務 | `make dev` | 生成 Swagger 並啟動 API（預設 8080）|
+| 全套測試 | `./tests/test-all.sh` | 執行 24 項整合測試 |
 
-- 端點、狀態與可用性以下列來源為準：
-  - API 進度與可用性：[API_PROGRESS.md](./API_PROGRESS.md)
-  - 即時 API 參考：/swagger/index.html（自動生成）
-  - 統一測試工具：[tests/test-all.sh](./tests/test-all.sh)
-- 本 README 移除舊版的功能宣稱與過時端點清單，僅保留經驗證的快速使用資訊。
-
-—
-
-## 快速開始
-
-環境需求：
-- Go 1.23+
-- PostgreSQL（必需；用於數據存儲）
-- OpenAI API Key（必填）；Grok/TTS API Key（可選）
-
-步驟：
-```bash
-make install
-cp .env.example .env     # 至少設定 OPENAI_API_KEY
-make fresh-start         # 完整設置：清理+安裝+資料庫+fixtures
-make dev                 # 生成 Swagger 並啟動服務
-
-# 可選：驗證系統運行狀態
-./tests/test-all.sh      # 執行完整測試套件 (24個測試項目，100%通過率)
-# 或執行專門化測試：
-./tests/test_user_profile.sh     # 用戶資料管理測試
-./tests/test_chat_advanced.sh    # 聊天進階功能測試
-```
-
-預設端點：
+常用端點：
 - Web UI: http://localhost:8080/
 - Swagger: http://localhost:8080/swagger/index.html
-- Health: http://localhost:8080/health
-- BasePath: /api/v1
+- 健康檢查: http://localhost:8080/health
+- BasePath: `/api/v1`
 
-—
-
-## 快速 API 範例
-
-註冊與登入：
+## 3. 基礎 API 範例
 ```bash
+# 註冊
 curl -sS -X POST http://localhost:8080/api/v1/auth/register \
   -H 'Content-Type: application/json' \
   -d '{"username":"testuser","email":"test@example.com","password":"Test123456!"}'
 
+# 登入
 curl -sS -X POST http://localhost:8080/api/v1/auth/login \
   -H 'Content-Type: application/json' \
   -d '{"username":"testuser","password":"Test123456!"}'
-```
 
-取得個人資料（需 Bearer Token）：
-```bash
-curl -H "Authorization: Bearer <TOKEN>" \
-  http://localhost:8080/api/v1/user/profile
-```
-
-建立聊天會話並發送訊息：
-```bash
-# 建立會話（以實際角色 ID 為準）
+# 建立對話
 curl -sS -X POST http://localhost:8080/api/v1/chats \
   -H 'Authorization: Bearer <TOKEN>' \
   -H 'Content-Type: application/json' \
@@ -75,72 +49,56 @@ curl -sS -X POST http://localhost:8080/api/v1/chats/<CHAT_ID>/messages \
   -d '{"message":"你好！"}'
 ```
 
-更多端點與狀態說明請見 [API_PROGRESS.md](./API_PROGRESS.md) 或 Swagger。
+## 4. 目錄總覽
+| 目錄 | 內容 |
+|------|------|
+| `handlers/` | HTTP Handler：auth、user、chat、character、relationships、search、monitor 等 |
+| `services/` | 核心服務：chat、nsfw、character、tts、openai/grok 客戶端、prompt builder |
+| `routes/` | 路由註冊（共 57 條 API）|
+| `models/` | 資料模型與 API 響應結構 (`models/db` 為 Bun ORM 定義) |
+| `cmd/bun/` | Bun 遷移與 fixtures 工具 |
+| `tests/` | Shell 整合測試與共用腳本 |
+| `public/` | 靜態頁面 / Swagger UI |
 
-—
+## 5. 常用 Make 指令
+| 指令 | 功能 |
+|------|------|
+| `make dev` | 生成 Swagger 並啟動 API |
+| `make fresh-start` | 清理 → 安裝 → 遷移 → Fixtures |
+| `make quick-setup` | 只執行遷移與 fixtures |
+| `make build` | 編譯可執行檔 (`bin/thewavess-ai-core`) |
+| `make docker-build` | 建置 Docker 映像 |
+| `make test` | 執行 Go 單元測試 |
 
-## 專案結構（重點目錄）
+## 6. 環境變數速覽
+| 類別 | 是否必填 | 主要變數 |
+|------|----------|-----------|
+| AI 金鑰 | ✅ | `OPENAI_API_KEY`（若需 L4/L5 內容，補 `GROK_API_KEY`）|
+| 資料庫 | ✅ | `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME` |
+| JWT | ✅ | `JWT_SECRET`（管理端可另設 `ADMIN_JWT_SECRET`）|
+| 伺服器 | 建議 | `PORT`, `GIN_MODE`, `LOG_LEVEL`, `API_HOST` |
+| NSFW RAG | 建議 | `NSFW_CORPUS_DATA_PATH`, `NSFW_CORPUS_EMBEDDING_PATH`, `NSFW_RAG_LEVEL_THRESHOLDS` |
+| 其他 | 選擇性 | `TTS_API_KEY`, `MISTRAL_API_KEY`（目前保留介面）|
 
-```
-handlers/   HTTP handlers（auth、user、chat、character、monitor 等）
-services/   核心服務（chat、nsfw、emotion、tts、openai/grok 客戶端）
-routes/     路由註冊（routes.go）
-models/     資料模型
-database/   Bun 遷移與工具（cmd/bun）
-middleware/ 認證、日誌、CORS
-utils/      日誌、錯誤、JWT、輔助工具
-public/     靜態頁與 Swagger UI 入口
-bin/        編譯輸出
-```
+詳見 [CONFIGURATION.md](./CONFIGURATION.md) 與 `.env.example`。
 
-—
-
-## 常用指令
-
-基本指令：
-```bash
-make install      # 安裝依賴與 swag  
-make dev          # 生成 Swagger 並啟動
-make fresh-start  # 完整重建（推薦首次使用）
-make quick-setup  # 快速設置（資料庫+fixtures）
-```
-
-> 📋 完整指令說明請參考 [DEVELOPMENT.md](./DEVELOPMENT.md)
-
-—
-
-## 設定與環境變數
-
-請參考 .env.example，至少設定：
-- OPENAI_API_KEY（必填）
-- DB_*（若連線資料庫）
-- GROK_API_KEY / TTS_API_KEY（可選）
-
-—
-
-## 文件與指南
-
-### 核心文檔
-- 入門指南：[GETTING_STARTED.md](./GETTING_STARTED.md)
-- 系統架構：[ARCHITECTURE.md](./ARCHITECTURE.md)
-- 開發流程：[DEVELOPMENT.md](./DEVELOPMENT.md)
-- 環境設定：[CONFIGURATION.md](./CONFIGURATION.md)
-- API 與進度：[API_PROGRESS.md](./API_PROGRESS.md)（權威來源）
-- 完整 API 參考：[Swagger UI](http://localhost:8080/swagger/index.html)
-- 規格與設計：[SPEC.md](./SPEC.md)
-
-### 系統指南
-- 角色系統：[CHARACTER_GUIDE.md](./CHARACTER_GUIDE.md)
-- 關係系統：[RELATIONSHIP_GUIDE.md](./RELATIONSHIP_GUIDE.md)
-- 好感度系統：[AFFECTION_GUIDE.md](./AFFECTION_GUIDE.md)
-- 聊天模式：[CHAT_MODES.md](./CHAT_MODES.md)
-- NSFW 設計指南：[NSFW_GUIDE.md](./NSFW_GUIDE.md)
-
-### 操作指南
-- 部署指引：[DEPLOYMENT.md](./DEPLOYMENT.md)
-- 監控指南：[MONITORING_GUIDE.md](./MONITORING_GUIDE.md)
-
-### 開發工具
-- AI 代理配置：[AGENTS.md](./AGENTS.md)
-- Claude 使用指南：[CLAUDE.md](./CLAUDE.md)
-- 測試系統說明：[tests/README.md](./tests/README.md)
+## 7. 延伸指南
+| 文件 | 說明 |
+|------|------|
+| [ADMIN_SYSTEM.md](ADMIN_SYSTEM.md) | 管理端權限、端點與安全設定 |
+| [AFFECTION_GUIDE.md](AFFECTION_GUIDE.md) | 好感度欄位與更新流程總覽 |
+| [AGENTS.md](AGENTS.md) | 協助 AI 代理（如 Claude）理解專案規範 |
+| [API_PROGRESS.md](API_PROGRESS.md) | 57 條 API 狀態與權限列表 |
+| [ARCHITECTURE.md](ARCHITECTURE.md) | 系統架構、模組對應與技術棧 |
+| [CHARACTER_GUIDE.md](CHARACTER_GUIDE.md) | 角色資料模型、設計建議與範例 |
+| [CHAT_MODES.md](CHAT_MODES.md) | chat / novel 模式差異與使用方式 |
+| [CLAUDE.md](CLAUDE.md) | Claude 代理作業指引 |
+| [CONFIGURATION.md](CONFIGURATION.md) | 環境變數設定表與流程 |
+| [DEPLOYMENT.md](DEPLOYMENT.md) | 部署步驟、端點檢查與排錯 |
+| [DEVELOPMENT.md](DEVELOPMENT.md) | 開發流程、常用指令與測試範圍 |
+| [GETTING_STARTED.md](GETTING_STARTED.md) | 快速入門教學與基礎 API 範例 |
+| [MONITORING_GUIDE.md](MONITORING_GUIDE.md) | 監控指標、健康檢查與告警建議 |
+| [NSFW_GUIDE.md](NSFW_GUIDE.md) | NSFW RAG 辨識與路由決策詳解 |
+| [NSFW_RAG_GUIDE.md](NSFW_RAG_GUIDE.md) | NSFW 系統快速參考表 |
+| [RELATIONSHIP_GUIDE.md](RELATIONSHIP_GUIDE.md) | 關係狀態 / 歷史 API 資料說明 |
+| [SPEC.md](SPEC.md) | 產品規格與功能定位 |

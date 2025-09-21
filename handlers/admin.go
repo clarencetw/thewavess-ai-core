@@ -3,6 +3,7 @@ package handlers
 import (
 	"context"
 	"fmt"
+	"math"
 	"net/http"
 	"runtime"
 	"strconv"
@@ -100,32 +101,68 @@ func GetAdminStats(c *gin.Context) {
 		openaiRequests24h, grokRequests24h, otherRequests24h         int
 	)
 
-	todayStart := time.Now().Truncate(24 * time.Hour)
-	weekStart := time.Now().AddDate(0, 0, -7)
-	last24h := time.Now().Add(-24 * time.Hour)
+	// 使用產品主要時區，確保「今日」等統計符合營運期望的日界線
+	timezoneName := utils.GetEnvWithDefault("APP_TIMEZONE", "Asia/Taipei")
+	loc, err := time.LoadLocation(timezoneName)
+	if err != nil {
+		loc = time.Local
+	}
+	nowInLoc := time.Now().In(loc)
+	todayStartLocal := time.Date(nowInLoc.Year(), nowInLoc.Month(), nowInLoc.Day(), 0, 0, 0, 0, loc)
+	todayStart := todayStartLocal.UTC()
+	weekStart := todayStart.AddDate(0, 0, -7)
+	last24h := time.Now().UTC().Add(-24 * time.Hour)
 
 	if dbConn != nil {
-		// 用戶統計
-		totalUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).Count(ctx)
-		todayUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).
-			Where("created_at >= ?", todayStart).Count(ctx)
-		weekUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).
-			Where("created_at >= ?", weekStart).Count(ctx)
-		activeUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).
-			Where("last_login_at >= ? AND status = ?", weekStart, "active").Count(ctx)
-		blockedUsers, _ = dbConn.NewSelect().Model((*db.UserDB)(nil)).
-			Where("status = ?", "banned").Count(ctx)
+		// 用戶統計（排除已軟刪除帳號）
+		baseUserQuery := dbConn.NewSelect().Model((*db.UserDB)(nil)).Where("deleted_at IS NULL")
+		if totalUsers, err = baseUserQuery.Clone().Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count total users")
+		}
+		if todayUsers, err = baseUserQuery.Clone().Where("created_at >= ?", todayStart).Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count today users")
+		}
+		if weekUsers, err = baseUserQuery.Clone().Where("created_at >= ?", weekStart).Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count week users")
+		}
+		if activeUsers, err = baseUserQuery.Clone().
+			Where("last_login_at >= ?", weekStart).
+			Where("status = ?", "active").
+			Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count active users")
+		}
+		if blockedUsers, err = baseUserQuery.Clone().
+			Where("status = ?", "banned").
+			Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count blocked users")
+		}
 
 		// 角色、聊天、訊息
-		totalCharacters, _ = dbConn.NewSelect().Model((*db.CharacterDB)(nil)).
-			Where("is_active = ?", true).Count(ctx)
-		totalSessions, _ = dbConn.NewSelect().Model((*db.ChatDB)(nil)).
-			Where("status != ?", "deleted").Count(ctx)
-		todaySessions, _ = dbConn.NewSelect().Model((*db.ChatDB)(nil)).
-			Where("created_at >= ? AND status != ?", todayStart, "deleted").Count(ctx)
-		totalMessages, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).Count(ctx)
-		todayMessages, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
-			Where("created_at >= ?", todayStart).Count(ctx)
+		if totalCharacters, err = dbConn.NewSelect().Model((*db.CharacterDB)(nil)).
+			Where("is_active = ?", true).
+			Where("deleted_at IS NULL").
+			Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count characters")
+		}
+		if totalSessions, err = dbConn.NewSelect().Model((*db.ChatDB)(nil)).
+			Where("status != ?", "deleted").
+			Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count chat sessions")
+		}
+		if todaySessions, err = dbConn.NewSelect().Model((*db.ChatDB)(nil)).
+			Where("created_at >= ?", todayStart).
+			Where("status != ?", "deleted").
+			Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count today chat sessions")
+		}
+		if totalMessages, err = dbConn.NewSelect().Model((*db.MessageDB)(nil)).Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count total messages")
+		}
+		if todayMessages, err = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
+			Where("created_at >= ?", todayStart).
+			Count(ctx); err != nil {
+			utils.Logger.WithError(err).Warn("Failed to count today messages")
+		}
 
 		// AI 引擎使用統計
 		openaiRequests, _ = dbConn.NewSelect().Model((*db.MessageDB)(nil)).
@@ -165,6 +202,12 @@ func GetAdminStats(c *gin.Context) {
 	totalAIRequests := openaiRequests + grokRequests + otherRequests
 	totalAIRequests24h := openaiRequests24h + grokRequests24h + otherRequests24h
 
+	var openaiPercentage, grokPercentage float64
+	if totalAIRequests > 0 {
+		openaiPercentage = math.Round((float64(openaiRequests)/float64(totalAIRequests))*100*100) / 100
+		grokPercentage = math.Round((float64(grokRequests)/float64(totalAIRequests))*100*100) / 100
+	}
+
 	aiEngines := gin.H{
 		"total_requests":  totalAIRequests,
 		"openai_requests": openaiRequests,
@@ -174,12 +217,52 @@ func GetAdminStats(c *gin.Context) {
 			"openai": openaiRequests24h,
 			"grok":   grokRequests24h,
 		},
+		"breakdown": gin.H{
+			"openai": gin.H{
+				"requests":   openaiRequests,
+				"percentage": openaiPercentage,
+				"last_24h":   openaiRequests24h,
+			},
+			"grok": gin.H{
+				"requests":   grokRequests,
+				"percentage": grokPercentage,
+				"last_24h":   grokRequests24h,
+			},
+		},
 	}
 	if otherRequests > 0 {
 		aiEngines["other_requests"] = otherRequests
 	}
 	if otherRequests24h > 0 {
 		aiEngines["last_24h"].(gin.H)["other"] = otherRequests24h
+	}
+
+	aiConfig := gin.H{
+		"openai": gin.H{
+			"model":       utils.GetEnvWithDefault("OPENAI_MODEL", "gpt-4o"),
+			"temperature": utils.GetEnvFloatWithDefault("OPENAI_TEMPERATURE", 0.8),
+			"max_tokens":  utils.GetEnvIntWithDefault("OPENAI_MAX_TOKENS", 1200),
+			"base_url":    utils.GetEnvWithDefault("OPENAI_API_URL", "https://api.openai.com/v1"),
+			"enabled":     utils.GetEnvWithDefault("OPENAI_API_KEY", "") != "",
+		},
+		"grok": gin.H{
+			"model":       utils.GetEnvWithDefault("GROK_MODEL", "grok-3"),
+			"temperature": utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.9),
+			"max_tokens":  utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 2000),
+			"base_url":    utils.GetEnvWithDefault("GROK_API_URL", "https://api.x.ai/v1"),
+			"enabled":     utils.GetEnvWithDefault("GROK_API_KEY", "") != "",
+		},
+	}
+
+	mistralModel := utils.GetEnvWithDefault("MISTRAL_MODEL", "")
+	if mistralModel != "" || utils.GetEnvWithDefault("MISTRAL_API_KEY", "") != "" {
+		aiConfig["mistral"] = gin.H{
+			"model":       mistralModel,
+			"temperature": utils.GetEnvFloatWithDefault("MISTRAL_TEMPERATURE", 0.8),
+			"max_tokens":  utils.GetEnvIntWithDefault("MISTRAL_MAX_TOKENS", 1200),
+			"base_url":    utils.GetEnvWithDefault("MISTRAL_API_URL", ""),
+			"enabled":     utils.GetEnvWithDefault("MISTRAL_API_KEY", "") != "",
+		}
 	}
 
 	// 構建完整的統計響應
@@ -234,10 +317,11 @@ func GetAdminStats(c *gin.Context) {
 			"goroutines":       goroutines,
 		},
 		"ai_engines": aiEngines,
+		"ai_config":  aiConfig,
 
 		// 時間戳
 		"last_updated": time.Now(),
-		"timezone":     "Asia/Taipei",
+		"timezone":     timezoneName,
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
@@ -1205,8 +1289,8 @@ func AdminSearchChats(c *gin.Context) {
 	characterID := c.Query("character_id") // 角色過濾
 	dateFrom := c.Query("date_from")       // 日期範圍
 	dateTo := c.Query("date_to")
-	sortBy := c.Query("sort_by")           // 排序字段
-	sortOrder := c.Query("sort_order")     // 排序方向
+	sortBy := c.Query("sort_by")                               // 排序字段
+	sortOrder := c.Query("sort_order")                         // 排序方向
 	includeUserInfo := c.Query("include_user_info") != "false" // 默認包含用戶信息
 
 	// 解析分頁參數
@@ -1330,7 +1414,7 @@ func adminSearchChatSessions(ctx context.Context, query, userIDFilter, character
 	}
 
 	// 處理排序
-	orderClause := "c.created_at DESC" // 默認排序
+	orderClause := "c.updated_at DESC" // 默認以最近更新排序
 	if sortBy != "" {
 		validSortFields := map[string]string{
 			"title":          "c.title",
@@ -1888,12 +1972,12 @@ func AdminGetCharacters(c *gin.Context) {
 	orderClause := "updated_at DESC" // 默認排序
 	if sortBy != "" {
 		validSortFields := map[string]string{
-			"name":        "name",
-			"type":        "type",
-			"status":      "is_active",
-			"creator":     "created_by",
-			"popularity":  "popularity",
-			"updated_at":  "updated_at",
+			"name":       "name",
+			"type":       "type",
+			"status":     "is_active",
+			"creator":    "created_by",
+			"popularity": "popularity",
+			"updated_at": "updated_at",
 		}
 
 		if field, valid := validSortFields[sortBy]; valid {

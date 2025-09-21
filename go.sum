@@ -1,3 +1,5 @@
+github.com/Automattic/go-gravatar v0.0.0-20210818030622-453d3c921ea3 h1:C40DqF60Q+rjeJImLNZ2yb9akBtl9TjR0ms03H2/YhY=
+github.com/Automattic/go-gravatar v0.0.0-20210818030622-453d3c921ea3/go.mod h1:IOraOPALsWGPecKDL9pikFF0oXO2cra/zk05hMlmJac=
 github.com/KyleBanks/depth v1.2.1 h1:5h8fQADFrWtarTdtDudMmGsC7GPbOAu6RVB3ffsVFHc=
 github.com/KyleBanks/depth v1.2.1/go.mod h1:jzSb9d0L43HxTQfT+oSA1EEp2q+ne2uh6XgeJcm8brE=
 github.com/PuerkitoBio/purell v1.1.1 h1:WEQqlqaGbrPkxLJWfBwQmfEAE1Z7ONdDLqrN38tNFfI=

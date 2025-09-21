@@ -104,36 +104,41 @@ test_global_chat_search() {
     return 0
 }
 
-# 測試角色搜索
-test_character_search() {
-    tc_log "INFO" "測試角色搜索"
+# 測試全域搜索（包含角色）
+test_global_search() {
+    tc_log "INFO" "測試全域搜索"
 
-    # 搜索角色名稱和描述
-    local search_terms=("艾莉" "溫柔" "可愛" "智慧")
+    # 搜索包含聊天和角色的全域搜索
+    local search_terms=("測試" "學習" "人工智能")
 
     for term in "${search_terms[@]}"; do
-        tc_log "INFO" "搜索角色關鍵字: $term"
+        tc_log "INFO" "全域搜索關鍵字: $term"
 
-        local response=$(tc_http_request "GET" "/search/characters?q=$term" "" "Search Characters: $term" "true")
+        local response=$(tc_http_request "GET" "/search/global?q=$term" "" "Global Search: $term" "true")
 
         if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
-            local results_count=$(echo "$response" | jq -r '.data.results | length')
-            local total_count=$(echo "$response" | jq -r '.data.total_count // 0')
+            local total_results=$(echo "$response" | jq -r '.data.total_results // 0')
+            local chat_count=$(echo "$response" | jq -r '.data.results.chats.count // 0')
+            local character_count=$(echo "$response" | jq -r '.data.results.characters.count // 0')
 
-            tc_log "PASS" "角色搜索成功 - 關鍵字: $term"
-            tc_log "INFO" "  結果數量: $results_count"
-            tc_log "INFO" "  總匹配數: $total_count"
+            tc_log "PASS" "全域搜索成功 - 關鍵字: $term"
+            tc_log "INFO" "  總結果數: $total_results"
+            tc_log "INFO" "  聊天結果: $chat_count"
+            tc_log "INFO" "  角色結果: $character_count"
 
-            # 檢查角色結果結構
-            if [ "$results_count" -gt 0 ]; then
-                local first_character_name=$(echo "$response" | jq -r '.data.results[0].name // ""')
-                local first_character_description=$(echo "$response" | jq -r '.data.results[0].description // ""')
+            # 檢查聊天結果
+            if [ "$chat_count" -gt 0 ]; then
+                local first_chat_title=$(echo "$response" | jq -r '.data.results.chats.results[0].title // ""')
+                tc_log "INFO" "  第一個聊天: $first_chat_title"
+            fi
 
-                tc_log "INFO" "  第一個結果: $first_character_name"
-                tc_log "INFO" "  描述長度: ${#first_character_description} 字元"
+            # 檢查角色結果
+            if [ "$character_count" -gt 0 ]; then
+                local first_character_name=$(echo "$response" | jq -r '.data.results.characters.results[0].name // ""')
+                tc_log "INFO" "  第一個角色: $first_character_name"
             fi
         else
-            tc_log "FAIL" "角色搜索失敗 - 關鍵字: $term"
+            tc_log "FAIL" "全域搜索失敗 - 關鍵字: $term"
             return 1
         fi
 
@@ -217,32 +222,29 @@ test_advanced_search_filters() {
     return 0
 }
 
-# 測試搜索建議和自動完成
-test_search_suggestions() {
-    tc_log "INFO" "測試搜索建議"
+# 測試搜索篩選功能
+test_search_with_filters() {
+    tc_log "INFO" "測試搜索篩選功能"
 
-    # 測試搜索建議API
-    local suggestion_terms=("人工" "學習" "技術")
+    # 測試不同的篩選條件
+    local response=$(tc_http_request "GET" "/search/chats?q=測試&limit=5" "" "Search with Limit Filter" "true")
 
-    for term in "${suggestion_terms[@]}"; do
-        local response=$(tc_http_request "GET" "/search/suggestions?q=$term" "" "Get Search Suggestions: $term" "true")
+    if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
+        local results_count=$(echo "$response" | jq -r '.data.results | length')
+        tc_log "PASS" "限制數量篩選成功"
+        tc_log "INFO" "  返回結果數: $results_count (應該 <= 5)"
 
-        if echo "$response" | jq -e '.success' > /dev/null 2>&1; then
-            local suggestions_count=$(echo "$response" | jq -r '.data.suggestions | length')
-            tc_log "PASS" "搜索建議成功 - 關鍵字: $term"
-            tc_log "INFO" "  建議數量: $suggestions_count"
-
-            # 顯示前幾個建議
-            if [ "$suggestions_count" -gt 0 ]; then
-                local first_suggestion=$(echo "$response" | jq -r '.data.suggestions[0] // ""')
-                tc_log "INFO" "  第一個建議: $first_suggestion"
-            fi
+        # 驗證返回結果不超過限制
+        if [ "$results_count" -le 5 ]; then
+            tc_log "PASS" "結果數量符合限制"
         else
-            tc_log "WARN" "搜索建議失敗或不支援 - 關鍵字: $term"
+            tc_log "FAIL" "結果數量超過限制"
+            return 1
         fi
-
-        sleep 1
-    done
+    else
+        tc_log "FAIL" "搜索篩選失敗"
+        return 1
+    fi
 
     return 0
 }
@@ -301,7 +303,7 @@ cleanup_search_test() {
 main() {
     # 初始化測試
     tc_init_logging "$TEST_NAME"
-    tc_init_csv "$TEST_NAME"
+    # CSV功能已移除，改用詳細日誌記錄
     tc_show_header "Thewavess AI Core - 全域搜索功能測試"
 
     # 檢查依賴
@@ -346,10 +348,10 @@ main() {
 
     sleep 2
 
-    if test_character_search; then
-        test_results+=("角色搜索:PASS")
+    if test_global_search; then
+        test_results+=("全域搜索:PASS")
     else
-        test_results+=("角色搜索:FAIL")
+        test_results+=("全域搜索:FAIL")
     fi
 
     sleep 2
@@ -370,10 +372,10 @@ main() {
 
     sleep 2
 
-    if test_search_suggestions; then
-        test_results+=("搜索建議:PASS")
+    if test_search_with_filters; then
+        test_results+=("搜索篩選:PASS")
     else
-        test_results+=("搜索建議:FAIL")
+        test_results+=("搜索篩選:FAIL")
     fi
 
     sleep 2

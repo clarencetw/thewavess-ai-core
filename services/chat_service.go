@@ -2,7 +2,9 @@ package services
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"strings"
@@ -125,6 +127,9 @@ type ConversationContext struct {
 	RecentMessages []ChatMessage `json:"recent_messages"` // 統一的記憶來源
 	Affection      int           `json:"affection"`       // 好感度 0-100
 	ChatMode       string        `json:"chat_mode"`       // 聊天模式
+	Mood           string        `json:"mood"`
+	Relationship   string        `json:"relationship"`
+	IntimacyLevel  string        `json:"intimacy_level"`
 }
 
 var (
@@ -235,6 +240,9 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 		RecentMessages: []ChatMessage{}, // 新會話沒有歷史消息
 		Affection:      50,              // 預設好感度
 		ChatMode:       "casual",
+		Mood:           "neutral",
+		Relationship:   "stranger",
+		IntimacyLevel:  "distant",
 	}
 
 	// 4. 生成歡迎消息（使用基本NSFW分析，因為是歡迎消息）
@@ -274,7 +282,7 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 		Affection:    50,
 		AIEngine:     "openai",
 		NSFWLevel:    1,
-		Confidence:   1.0,                      // 歡迎消息固定信心度
+		Confidence:   1.0, // 歡迎消息固定信心度
 		ResponseTime: time.Since(startTime),
 	}, nil
 }
@@ -331,8 +339,13 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		return nil, fmt.Errorf("failed to generate personalized response: %w", err)
 	}
 
-	// 7. 更新好感度
+	// 7. 更新關係狀態（包含好感度、心情、關係、親密度）
 	newAffection := s.updateAffection(conversationContext.Affection, response)
+	err = s.updateRelationshipState(ctx, request, response, newAffection)
+	if err != nil {
+		utils.Logger.WithError(err).Error("更新關係狀態失敗")
+		// 不中斷流程，繼續處理
+	}
 
 	// 8. 保存 AI 回應（智能 NSFW 等級記錄）
 	err = s.saveAssistantMessageToDB(ctx, request, messageID, response, newAffection, selectedEngine, analysis, time.Since(startTime))
@@ -429,11 +442,16 @@ func (s *ChatService) analyzeContent(message string) (*ContentAnalysis, error) {
 // buildFemaleOrientedContext 構建對話上下文數據
 // 收集好感度和對話歷史，組裝給 AI 使用的上下文結構
 func (s *ChatService) buildFemaleOrientedContext(ctx context.Context, request *ProcessMessageRequest) (*ConversationContext, error) {
-	// 1. 從 relationships 表獲取好感度數值（0-100）
-	affection, err := s.getAffectionFromDB(ctx, request.UserID, request.CharacterID, request.ChatID)
+	// 1. 從 relationships 表獲取當前關係狀態
+	relationshipState, err := s.getOrCreateRelationshipState(ctx, request.UserID, request.CharacterID, request.ChatID)
 	if err != nil {
-		utils.Logger.WithError(err).Warn("獲取好感度失敗，使用默認值")
-		affection = 50 // 默認中性好感度，確保系統穩定性
+		utils.Logger.WithError(err).Warn("獲取關係狀態失敗，使用默認值")
+		relationshipState = &db.RelationshipDB{
+			Affection:     50,
+			Mood:          "neutral",
+			Relationship:  "stranger",
+			IntimacyLevel: "distant",
+		}
 	}
 
 	// 2. 從 messages 表獲取最近對話記憶（限制 5 條，控制 AI 上下文大小）
@@ -445,17 +463,20 @@ func (s *ChatService) buildFemaleOrientedContext(ctx context.Context, request *P
 
 	// 3. 組裝標準化對話上下文數據結構
 	return &ConversationContext{
-		ChatID:         request.ChatID,      // 會話識別碼
-		UserID:         request.UserID,      // 用戶識別碼
-		CharacterID:    request.CharacterID, // 角色識別碼
-		RecentMessages: recentMemories,      // 最近對話記憶（最多 5 條）
-		Affection:      affection,           // 當前好感度（0-100）
-		ChatMode:       request.ChatMode,    // 聊天模式設定
+		ChatID:         request.ChatID,             // 會話識別碼
+		UserID:         request.UserID,             // 用戶識別碼
+		CharacterID:    request.CharacterID,        // 角色識別碼
+		RecentMessages: recentMemories,             // 最近對話記憶（最多 5 條）
+		Affection:      relationshipState.Affection, // 當前好感度（0-100）
+		ChatMode:       request.ChatMode,           // 聊天模式設定
+		Mood:           relationshipState.Mood,
+		Relationship:   relationshipState.Relationship,
+		IntimacyLevel:  relationshipState.IntimacyLevel,
 	}, nil
 }
 
-// getAffectionFromDB 從 relationships 表獲取好感度
-func (s *ChatService) getAffectionFromDB(ctx context.Context, userID, characterID, chatID string) (int, error) {
+// getOrCreateRelationshipState 讀取或建立最新的關係狀態
+func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, characterID, chatID string) (*db.RelationshipDB, error) {
 	var relationship db.RelationshipDB
 
 	err := s.db.NewSelect().
@@ -463,39 +484,44 @@ func (s *ChatService) getAffectionFromDB(ctx context.Context, userID, characterI
 		Where("user_id = ? AND character_id = ? AND chat_id = ?", userID, characterID, chatID).
 		Scan(ctx)
 
-	if err != nil {
-		// 如果關係記錄不存在，創建一個新的
-		newRelationship := &db.RelationshipDB{
-			ID:            utils.GenerateRelationshipID(),
-			UserID:        userID,
-			CharacterID:   characterID,
-			ChatID:        &chatID, // 直接設置 ChatID 指標
-			Affection:     50,      // 默認好感度
-			Mood:          "neutral",
-			Relationship:  "stranger",
-			IntimacyLevel: "distant",
-		}
-
-		_, insertErr := s.db.NewInsert().
-			Model(newRelationship).
-			Exec(ctx)
-
-		if insertErr != nil {
-			utils.Logger.WithError(insertErr).Error("創建新關係記錄失敗")
-			return 50, nil
-		}
-
-		utils.Logger.WithFields(map[string]interface{}{
-			"user_id":      userID,
-			"character_id": characterID,
-			"chat_id":      chatID,
-			"affection":    50,
-		}).Info("創建新的用戶-角色關係記錄")
-
-		return 50, nil
+	if err == nil {
+		return &relationship, nil
 	}
 
-	return relationship.Affection, nil
+	if !errors.Is(err, sql.ErrNoRows) {
+		return nil, err
+	}
+
+	newRelationship := &db.RelationshipDB{
+		ID:            utils.GenerateRelationshipID(),
+		UserID:        userID,
+		CharacterID:   characterID,
+		ChatID:        &chatID,
+		Affection:     50,
+		Mood:          "neutral",
+		Relationship:  "stranger",
+		IntimacyLevel: "distant",
+	}
+
+	_, insertErr := s.db.NewInsert().
+		Model(newRelationship).
+		Exec(ctx)
+
+	if insertErr != nil {
+		return nil, fmt.Errorf("創建新關係記錄失敗: %w", insertErr)
+	}
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"user_id":      userID,
+		"character_id": characterID,
+		"chat_id":      chatID,
+		"affection":    newRelationship.Affection,
+		"mood":         newRelationship.Mood,
+		"relationship": newRelationship.Relationship,
+		"intimacy":     newRelationship.IntimacyLevel,
+	}).Info("創建新的用戶-角色關係記錄")
+
+	return newRelationship, nil
 }
 
 // getRecentMemories 已移除：統一使用資料庫查詢，失敗時返回空歷史
@@ -1461,6 +1487,61 @@ func (s *ChatService) updateAffection(currentAffection int, response *CharacterR
 	}
 
 	return newAffection
+}
+
+// updateRelationshipState 更新關係狀態（mood, relationship, intimacy_level）
+func (s *ChatService) updateRelationshipState(ctx context.Context, request *ProcessMessageRequest, response *CharacterResponseData, newAffection int) error {
+	// 準備更新資料
+	updateFields := map[string]interface{}{
+		"affection":   newAffection,
+		"updated_at": time.Now(),
+	}
+
+	// 只有在 AI 成功處理 JSON 並返回有效值時才更新這些欄位
+	if response != nil && response.JSONProcessed {
+		// 更新心情
+		if response.Mood != "" && response.Mood != "unchanged" {
+			updateFields["mood"] = response.Mood
+		}
+
+		// 更新關係階段
+		if response.Relationship != "" && response.Relationship != "unchanged" {
+			updateFields["relationship"] = response.Relationship
+		}
+
+		// 更新親密度
+		if response.IntimacyLevel != "" && response.IntimacyLevel != "unchanged" {
+			updateFields["intimacy_level"] = response.IntimacyLevel
+		}
+	}
+
+	// 執行更新
+	query := s.db.NewUpdate().
+		Model((*db.RelationshipDB)(nil)).
+		Where("user_id = ? AND character_id = ? AND chat_id = ?",
+			request.UserID, request.CharacterID, request.ChatID)
+
+	// 動態設置更新欄位
+	for field, value := range updateFields {
+		query = query.Set(fmt.Sprintf("%s = ?", field), value)
+	}
+
+	_, err := query.Exec(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to update relationship state: %w", err)
+	}
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"user_id":        request.UserID,
+		"character_id":   request.CharacterID,
+		"chat_id":        request.ChatID,
+		"new_affection":  newAffection,
+		"mood":           updateFields["mood"],
+		"relationship":   updateFields["relationship"],
+		"intimacy_level": updateFields["intimacy_level"],
+	}).Debug("關係狀態已更新")
+
+	return nil
 }
 
 // saveUserMessageToDB 先保存用戶消息（以便上下文讀取包含本輪）

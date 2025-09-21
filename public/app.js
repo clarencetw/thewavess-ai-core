@@ -327,7 +327,7 @@ const Utils = {
         return date.toLocaleDateString('zh-TW', options) + ' ' + 
                date.toLocaleTimeString('zh-TW', { hour12: false });
     },
-    
+
     // 防抖函數
     debounce(func, wait) {
         let timeout;
@@ -414,6 +414,12 @@ const Utils = {
                 } else if (card.changeText) {
                     changeDisplay = `<p class="text-sm text-gray-500 mt-1">${card.changeText}</p>`;
                 }
+            }
+
+            if (Array.isArray(card.customLines) && card.customLines.length > 0) {
+                changeDisplay += card.customLines.map(line => `
+                    <p class="text-sm text-gray-500 mt-1">${line}</p>
+                `).join('');
             }
 
             return `
@@ -638,6 +644,7 @@ const AdminPages = {
         },
         alerts: [],
         alertsVisible: false,
+        lastAlertCheck: null,
         alertThresholds: {
             goroutines: 100,  // 超過100個goroutines發出警告
             memoryMB: 500,    // 超過500MB發出警告
@@ -652,6 +659,7 @@ const AdminPages = {
             await this.loadPerformanceMetrics();
             await this.loadExtendedSystemInfo();
             await this.loadRecentActivity();
+            await this.refreshAlerts();
         },
 
         async reload() {
@@ -681,11 +689,34 @@ const AdminPages = {
                     this.loadSystemStatus();
                     this.loadPerformanceMetrics();
                     this.loadExtendedSystemInfo();
-                    this.checkSystemAlerts();
+                    this.refreshAlerts().catch(error => {
+                        console.error('自動更新警報失敗:', error);
+                    });
                 }, 30000); // 每30秒更新一次
                 btn.innerHTML = '<i class="fas fa-pause mr-2"></i>停止更新';
                 btn.className = btn.className.replace('bg-green-600', 'bg-red-600').replace('hover:bg-green-700', 'hover:bg-red-700');
                 console.log('▶️ 自動更新已啟動 (30秒間隔)');
+                this.refreshAlerts().catch(error => {
+                    console.error('初始化自動更新警報失敗:', error);
+                });
+            }
+        },
+
+        async refreshAlerts(showNotification = false) {
+            try {
+                const success = await this.checkSystemAlerts();
+                if (showNotification) {
+                    if (success) {
+                        Utils.showAlert('系統指標已更新');
+                    } else {
+                        Utils.showAlert('系統警報更新失敗', 'error');
+                    }
+                }
+            } catch (error) {
+                console.error('更新系統警報時發生錯誤:', error);
+                if (showNotification) {
+                    Utils.showAlert('系統警報更新失敗', 'error');
+                }
             }
         },
 
@@ -696,12 +727,15 @@ const AdminPages = {
                 const response = await API.admin.getStats();
                 if (response.success) {
                     this.renderStats(response.data);
+                    this.renderAIOverview(response.data.ai_engines, response.data.ai_config);
                 } else {
                     AdminPages.common.showError('statsGrid', '統計資料載入失敗');
+                    this.renderAIOverview(null, null);
                 }
             } catch (error) {
                 console.error('載入統計資料失敗:', error);
                 AdminPages.common.showError('statsGrid', '統計資料載入失敗');
+                this.renderAIOverview(null, null);
             }
         },
 
@@ -710,7 +744,7 @@ const AdminPages = {
             if (!container) return;
             
             console.log('Admin stats received:', stats); // Debug log
-            
+
             const cards = [
                 {
                     title: '總用戶數',
@@ -771,16 +805,6 @@ const AdminPages = {
                     isMemory: true
                 },
                 {
-                    title: 'AI 引擎使用',
-                    value: this.calculateAIEngineUsage(stats),
-                    icon: 'fas fa-brain',
-                    color: 'cyan',
-                    change: stats.ai_engines?.total_requests || 0,
-                    changeText: '總請求數',
-                    isAIEngine: true,
-                    aiEngineData: stats.ai_engines
-                },
-                {
                     title: '回應時間',
                     value: stats.avg_response_time || '0ms',
                     icon: 'fas fa-tachometer-alt',
@@ -795,26 +819,117 @@ const AdminPages = {
             container.innerHTML = Utils.renderStatsCards(cards);
         },
 
-        calculateAIEngineUsage(stats) {
-            const engines = stats.ai_engines;
-            if (!engines) return '未知';
+        renderAIOverview(aiStats, aiConfig) {
+            const container = document.getElementById('aiConfigGrid');
+            const summary = document.getElementById('aiOverviewSummary');
 
-            const openai = engines.openai_requests || 0;
-            const grok = engines.grok_requests || 0;
-            const total = openai + grok;
-
-            if (total === 0) return '無使用';
-
-            // 顯示主要使用的引擎
-            if (openai > grok) {
-                const percentage = Math.round((openai / total) * 100);
-                return `OpenAI ${percentage}%`;
-            } else if (grok > openai) {
-                const percentage = Math.round((grok / total) * 100);
-                return `Grok ${percentage}%`;
-            } else {
-                return '平均使用';
+            if (summary) {
+                summary.textContent = aiStats
+                    ? `總請求 ${Number(aiStats.total_requests || 0).toLocaleString()} ｜ 近 24 小時 ${Number(aiStats.last_24h?.total || 0).toLocaleString()}`
+                    : '尚未取得 AI 引擎資料';
             }
+
+            if (!container) return;
+
+            const breakdown = aiStats?.breakdown || {};
+            const config = aiConfig || {};
+
+            const engineKeys = new Set([
+                ...Object.keys(breakdown || {}),
+                ...Object.keys(config || {})
+            ]);
+
+            if (engineKeys.size === 0) {
+                container.innerHTML = '<p class="text-sm text-gray-500">尚未取得 AI 引擎資料</p>';
+                return;
+            }
+
+            const escape = Utils.escapeHtml ? Utils.escapeHtml.bind(Utils) : (value) => value;
+            const formatNumber = (value) => (typeof value === 'number' && !Number.isNaN(value) ? value.toLocaleString() : '0');
+            const formatPercentage = (value) => (typeof value === 'number' && !Number.isNaN(value) ? value.toFixed(1) : '0.0');
+
+            const displayConfig = {
+                openai: { label: 'OpenAI', icon: 'fas fa-brain', color: 'text-blue-600' },
+                grok: { label: 'Grok', icon: 'fas fa-rocket', color: 'text-orange-500' },
+                mistral: { label: 'Mistral', icon: 'fas fa-wind', color: 'text-purple-500' }
+            };
+
+            container.innerHTML = Array.from(engineKeys).map((engineKey) => {
+                const meta = displayConfig[engineKey] || { label: engineKey, icon: 'fas fa-microchip', color: 'text-gray-500' };
+                const stats = breakdown[engineKey] || {};
+                const conf = config[engineKey] || {};
+
+                const model = escape(String(conf.model ?? '未設定'));
+                const temperature = typeof conf.temperature === 'number' && !Number.isNaN(conf.temperature)
+                    ? conf.temperature.toFixed(2)
+                    : (conf.temperature ?? '—');
+                const maxTokens = typeof conf.max_tokens === 'number' && !Number.isNaN(conf.max_tokens)
+                    ? conf.max_tokens.toLocaleString()
+                    : (conf.max_tokens ?? '—');
+                const baseURL = conf.base_url ? escape(String(conf.base_url)) : '預設端點';
+                const enabled = typeof conf.enabled === 'boolean' ? conf.enabled : (stats.requests || 0) > 0;
+
+                const requests = stats.requests ?? 0;
+                const last24h = stats.last_24h ?? 0;
+                const percentage = stats.percentage ?? 0;
+
+                const enabledBadge = enabled ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700';
+
+                return `
+                    <div class="bg-white border border-gray-200 rounded-lg p-6 shadow-sm">
+                        <div class="flex items-center justify-between mb-4">
+                            <div class="flex items-center space-x-3">
+                                <span class="${meta.color}">
+                                    <i class="${meta.icon} text-xl"></i>
+                                </span>
+                                <div>
+                                    <p class="text-lg font-semibold text-gray-900">${escape(meta.label)}</p>
+                                    <p class="text-xs text-gray-500 uppercase tracking-wide">${escape(engineKey)}</p>
+                                </div>
+                            </div>
+                            <span class="text-xs px-2 py-1 rounded-full ${enabledBadge}">
+                                ${enabled ? '已啟用' : '未啟用'}
+                            </span>
+                        </div>
+                        <dl class="space-y-2 text-sm text-gray-700 border-b border-gray-100 pb-4 mb-4">
+                            <div class="flex justify-between">
+                                <dt class="font-medium text-gray-600">模型</dt>
+                                <dd class="font-mono text-gray-900">${model}</dd>
+                            </div>
+                            <div class="flex justify-between">
+                                <dt class="font-medium text-gray-600">溫度</dt>
+                                <dd class="font-mono text-gray-900">${temperature}</dd>
+                            </div>
+                            <div class="flex justify-between">
+                                <dt class="font-medium text-gray-600">最大 Tokens</dt>
+                                <dd class="font-mono text-gray-900">${maxTokens}</dd>
+                            </div>
+                            <div class="flex justify-between">
+                                <dt class="font-medium text-gray-600">API Endpoint</dt>
+                                <dd class="font-mono text-gray-900 truncate" title="${baseURL}">${baseURL}</dd>
+                            </div>
+                        </dl>
+                        <div class="grid grid-cols-2 gap-y-3 text-sm text-gray-700">
+                            <div>
+                                <p class="text-xs text-gray-500">總請求</p>
+                                <p class="font-semibold text-gray-900">${formatNumber(requests)}</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">佔比</p>
+                                <p class="font-semibold text-gray-900">${formatPercentage(percentage)}%</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">近 24 小時</p>
+                                <p class="font-semibold text-gray-900">${formatNumber(last24h)}</p>
+                            </div>
+                            <div>
+                                <p class="text-xs text-gray-500">總請求 (全部)</p>
+                                <p class="font-semibold text-gray-900">${formatNumber(aiStats?.total_requests || 0)}</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
         },
 
         async loadSystemStatus() {
@@ -1093,6 +1208,7 @@ const AdminPages = {
             
             if (this.alertsVisible) {
                 panel.classList.remove('hidden');
+                this.updateAlertsLastChecked();
                 this.loadAlerts();
             } else {
                 panel.classList.add('hidden');
@@ -1104,9 +1220,29 @@ const AdminPages = {
                 const response = await API.monitor.getStats();
                 if (response.success) {
                     this.analyzeSystemMetrics(response.data);
+                    this.lastAlertCheck = new Date();
+                    this.updateAlertsLastChecked();
+                    if (this.alertsVisible) {
+                        this.loadAlerts();
+                    }
+                    return true;
+                } else {
+                    console.warn('系統警報檢查失敗:', response.message);
                 }
             } catch (error) {
                 console.error('檢查系統警報失敗:', error);
+            }
+            return false;
+        },
+
+        updateAlertsLastChecked() {
+            const label = document.getElementById('alertsLastUpdated');
+            if (!label) return;
+
+            if (this.lastAlertCheck) {
+                label.textContent = `最後更新：${Utils.formatDate(this.lastAlertCheck)}`;
+            } else {
+                label.textContent = '最後更新：尚未更新';
             }
         },
 
@@ -1311,7 +1447,7 @@ const AdminPages = {
         currentPage: 1,
         pageSize: 20,
         searchQuery: '',
-        sortBy: 'created_at',
+        sortBy: 'updated_at',
         sortOrder: 'desc',
 
         async init() {
@@ -1399,6 +1535,12 @@ const AdminPages = {
         renderUsersTable(data) {
             const tbody = document.getElementById('usersTableBody');
             if (!tbody || !data.users) return;
+
+            const countEl = document.getElementById('usersCount');
+            if (countEl) {
+                const totalUsers = data.pagination?.total_count ?? data.users.length ?? 0;
+                countEl.textContent = totalUsers.toLocaleString();
+            }
 
             if (data.users.length === 0) {
                 Utils.showById('usersTableEmpty');
@@ -1935,7 +2077,7 @@ const AdminPages = {
                 if (response.success) {
                     this.currentData = response.data;
                     this.renderChatsTable(response.data);
-                    this.renderPagination(response.pagination);
+                    this.renderPagination(response.data);
                 } else {
                     this.showChatsError(response.message || '聊天記錄載入失敗');
                 }
@@ -1950,6 +2092,12 @@ const AdminPages = {
         renderChatsTable(data) {
             const tbody = document.getElementById('chatsTableBody');
             if (!tbody || !data.chats) return;
+
+            const countEl = document.getElementById('chatsCount');
+            if (countEl) {
+                const totalChats = data.total_found ?? data.pagination?.total_count ?? data.chats.length ?? 0;
+                countEl.textContent = totalChats.toLocaleString();
+            }
             
             if (data.chats.length === 0) {
                 Utils.showById('chatsTableEmpty');
@@ -1957,6 +2105,7 @@ const AdminPages = {
                 return;
             }
             
+            Utils.hideById('chatsTableEmpty');
             tbody.innerHTML = data.chats.map(chat => {
                 // Debug logging to check data structure
                 console.log('Chat data:', chat);
@@ -1964,7 +2113,7 @@ const AdminPages = {
                 const relationship = chat.relationship || {};
                 const affectionLevel = relationship.affection_level || 0;
                 const relationshipStage = relationship.relationship_stage || '初次見面';
-                
+
                 // 關係狀態顏色和顯示文字 - 與 AI prompt 中定義的關係狀態一致
                 // AI 定義: stranger, friend, close_friend, lover, soulmate
                 const getRelationshipDisplay = (stage) => {
@@ -1988,7 +2137,61 @@ const AdminPages = {
                             return { text: '初次見面', color: 'bg-gray-100 text-gray-800' };
                     }
                 };
-                
+
+                const getMoodDisplay = (mood) => {
+                    switch(mood) {
+                        case 'happy':
+                            return { text: '開心', color: 'bg-yellow-100 text-yellow-800' };
+                        case 'excited':
+                            return { text: '興奮', color: 'bg-orange-100 text-orange-800' };
+                        case 'shy':
+                            return { text: '害羞', color: 'bg-pink-100 text-pink-700' };
+                        case 'romantic':
+                            return { text: '浪漫', color: 'bg-rose-100 text-rose-700' };
+                        case 'passionate':
+                            return { text: '熱情', color: 'bg-red-100 text-red-700' };
+                        case 'pleased':
+                            return { text: '滿足', color: 'bg-green-100 text-green-700' };
+                        case 'loving':
+                            return { text: '充滿愛', color: 'bg-fuchsia-100 text-fuchsia-700' };
+                        case 'friendly':
+                            return { text: '友善', color: 'bg-blue-100 text-blue-700' };
+                        case 'polite':
+                            return { text: '禮貌', color: 'bg-indigo-100 text-indigo-700' };
+                        case 'concerned':
+                            return { text: '擔心', color: 'bg-amber-100 text-amber-700' };
+                        case 'annoyed':
+                            return { text: '不悅', color: 'bg-amber-200 text-amber-800' };
+                        case 'upset':
+                            return { text: '難過', color: 'bg-red-200 text-red-800' };
+                        case 'disappointed':
+                            return { text: '失望', color: 'bg-gray-200 text-gray-700' };
+                        case 'neutral':
+                        default:
+                            return { text: '平靜', color: 'bg-gray-100 text-gray-700' };
+                    }
+                };
+
+                const getIntimacyDisplay = (level) => {
+                    switch(level) {
+                        case 'friendly':
+                            return { text: '友好', color: 'bg-blue-100 text-blue-700' };
+                        case 'close':
+                            return { text: '親近', color: 'bg-green-100 text-green-700' };
+                        case 'intimate':
+                            return { text: '親密', color: 'bg-pink-100 text-pink-700' };
+                        case 'deeply_intimate':
+                            return { text: '深度親密', color: 'bg-purple-100 text-purple-700' };
+                        case 'distant':
+                        default:
+                            return { text: '疏遠', color: 'bg-gray-100 text-gray-700' };
+                    }
+                };
+
+                const stageBadge = getRelationshipDisplay(relationshipStage);
+                const moodBadge = getMoodDisplay(relationship.mood);
+                const intimacyBadge = getIntimacyDisplay(relationship.intimacy_level);
+
                 return `
                 <tr class="hover:bg-gray-50">
                     <td class="px-6 py-4">
@@ -2003,11 +2206,19 @@ const AdminPages = {
                     </td>
                     <td class="px-4 py-4 max-w-32">
                         <div class="space-y-1">
-                            <span class="px-2 py-1 text-xs font-semibold rounded-full ${getRelationshipDisplay(relationshipStage).color} block text-center">
-                                ${getRelationshipDisplay(relationshipStage).text}
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full ${stageBadge.color} block text-center">
+                                ${stageBadge.text}
                             </span>
                             <div class="text-xs text-gray-500 text-center">
                                 好感度:${affectionLevel}
+                            </div>
+                            <div class="flex flex-wrap justify-center gap-1">
+                                <span class="px-2 py-1 text-[10px] font-medium rounded-full ${moodBadge.color}">
+                                    ${moodBadge.text}
+                                </span>
+                                <span class="px-2 py-1 text-[10px] font-medium rounded-full ${intimacyBadge.color}">
+                                    ${intimacyBadge.text}
+                                </span>
                             </div>
                         </div>
                     </td>
@@ -2035,10 +2246,20 @@ const AdminPages = {
             }).join('');
         },
 
-        renderPagination(pagination) {
+        renderPagination(data) {
             const container = document.getElementById('chatsPagination');
-            if (!container || !pagination) return;
-            
+            if (!container) return;
+
+            const pagination = data?.pagination || {
+                current_page: data?.current_page,
+                total_pages: data?.total_pages
+            };
+
+            if (!pagination?.current_page || !pagination?.total_pages || pagination.total_pages <= 1) {
+                container.innerHTML = '';
+                return;
+            }
+
             container.innerHTML = AdminPages.common.createPagination(
                 pagination.current_page,
                 pagination.total_pages,
@@ -2512,7 +2733,7 @@ const AdminPages = {
                 const response = await API.get('/admin/characters', { params });
                 
                 if (response.success) {
-                    this.renderCharacters(response.data.characters);
+                    this.renderCharacters(response.data);
                     this.renderPagination(response.data.pagination);
                     this.renderStats(response.data.stats);
                 } else {
@@ -2550,11 +2771,20 @@ const AdminPages = {
             `).join('');
         },
 
-        renderCharacters(characters) {
+        renderCharacters(data) {
             const tbody = document.getElementById('charactersTableBody');
             if (!tbody) return;
 
-            if (!characters || characters.length === 0) {
+            const characters = data?.characters || [];
+
+            const countEl = document.getElementById('charactersCount');
+            if (countEl) {
+                const totalCharacters = data?.pagination?.total_count ?? characters.length ?? 0;
+                countEl.textContent = totalCharacters.toLocaleString();
+            }
+
+            if (characters.length === 0) {
+                Utils.showById('charactersTableEmpty');
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="7" class="px-6 py-8 text-center">
@@ -2566,6 +2796,7 @@ const AdminPages = {
                 return;
             }
 
+            Utils.hideById('charactersTableEmpty');
             tbody.innerHTML = characters.map(char => `
                 <tr class="hover:bg-gray-50 ${char.deleted_at ? 'bg-red-50 opacity-75' : ''}">
                     <td class="px-6 py-4">

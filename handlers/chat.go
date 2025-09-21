@@ -1163,4 +1163,3 @@ func RegenerateResponse(c *gin.Context) {
 		Data:    regenerateResponse,
 	})
 }
-

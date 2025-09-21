@@ -374,9 +374,9 @@ func loadRAGCorpus(corpusPath, embeddingPath string) ([]ragCorpusEntry, error) {
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
-		"total_entries":      len(mergedEntries),
+		"total_entries":        len(mergedEntries),
 		"entries_with_vectors": len(embeddingMap),
-		"corpus_path":        corpusPath,
+		"corpus_path":          corpusPath,
 	}).Info("NSFW 語料庫載入完成")
 
 	return mergedEntries, nil
@@ -439,7 +439,6 @@ func cosineSimilarity(a, b []float32) float64 {
 	}
 	return dot / (math.Sqrt(normA) * math.Sqrt(normB))
 }
-
 
 var defaultThresholds = map[int]float64{
 	5: 0.55,

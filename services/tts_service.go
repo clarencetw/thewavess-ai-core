@@ -12,7 +12,7 @@ import (
 
 // TTSService TTS 服務
 type TTSService struct {
-	client openai.Client
+	client    openai.Client
 	hasAPIKey bool
 }
 
@@ -50,7 +50,7 @@ func NewTTSService() *TTSService {
 	}
 
 	return &TTSService{
-		client: client,
+		client:    client,
 		hasAPIKey: apiKey != "",
 	}
 }
@@ -73,11 +73,11 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 
 	// 使用官方 OpenAI Go SDK 調用 TTS API
 	resp, err := s.client.Audio.Speech.New(ctx, openai.AudioSpeechNewParams{
-		Model: openai.SpeechModelTTS1,
-		Input: text,
-		Voice: s.mapVoiceToOpenAI(voice),
+		Model:          openai.SpeechModelTTS1,
+		Input:          text,
+		Voice:          s.mapVoiceToOpenAI(voice),
 		ResponseFormat: openai.AudioSpeechNewParamsResponseFormatMP3,
-		Speed: openai.Float(speed),
+		Speed:          openai.Float(speed),
 	})
 	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{

@@ -3,7 +3,7 @@
 ## Project Structure & Module Organization
 - `handlers/` hosts HTTP entry points for chat, emotion, user, and character flows.
 - Core business logic lives in `services/`, including routing, memory, NSFW checks, TTS, and AI client adapters.
-- API wiring is centralized in `routes/routes.go` (~47 endpoints); Bun models sit in `models/db/` with JSONB payload fields.
+- API wiring is centralized in `routes/routes.go` (~57 endpoints); Bun models sit in `models/db/` with JSONB payload fields.
 - Middleware, utilities, and JWT helpers reside in `middleware/` and `utils/`; migrations run via `cmd/bun/`. Tests accompany source files as `*_test.go`, with broader scripts in `tests/`.
 
 ## Build, Test, and Development Commands
@@ -11,7 +11,7 @@
 - `make run` starts `main.go` with hot reload; use during iterative development.
 - `make build` produces the `bin/thewavess-ai-core` binary for deployment.
 - `make test` executes `go test -v ./...` across all packages.
-- `make docs` and `make docs-serve` regenerate and serve Swagger specs.
+- `make docs` regenerates Swagger specs.
 - Database lifecycle: `make db-setup`, `make migrate`, `make migrate-status`, `make migrate-down`.
 
 ## Coding Style & Naming Conventions

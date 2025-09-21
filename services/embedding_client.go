@@ -98,20 +98,20 @@ func (c *OpenAIEmbeddingClient) EmbedText(ctx context.Context, input string) ([]
 	case string(openai.EmbeddingModelTextEmbedding3Large):
 		costEstimate = float64(totalTokens) * 0.00013 // $0.13 per 1M tokens = $0.00013 per 1K tokens
 	case string(openai.EmbeddingModelTextEmbeddingAda002):
-		costEstimate = float64(totalTokens) * 0.0001  // $0.10 per 1M tokens = $0.0001 per 1K tokens
+		costEstimate = float64(totalTokens) * 0.0001 // $0.10 per 1M tokens = $0.0001 per 1K tokens
 	default:
 		costEstimate = float64(totalTokens) * 0.00002 // Default to 3-small pricing
 	}
 
 	// 記錄 embedding API 使用資訊
 	utils.Logger.WithFields(map[string]interface{}{
-		"service":        "openai_embeddings",
-		"model":          string(c.model),
-		"input_chars":    len(input),
-		"total_tokens":   totalTokens,
-		"cost_usd":       fmt.Sprintf("$%.8f", costEstimate),
-		"vector_dims":    len(resp.Data[0].Embedding),
-		"purpose":        "nsfw_classification",
+		"service":      "openai_embeddings",
+		"model":        string(c.model),
+		"input_chars":  len(input),
+		"total_tokens": totalTokens,
+		"cost_usd":     fmt.Sprintf("$%.8f", costEstimate),
+		"vector_dims":  len(resp.Data[0].Embedding),
+		"purpose":      "nsfw_classification",
 	}).Info("OpenAI embedding request completed")
 
 	raw := resp.Data[0].Embedding

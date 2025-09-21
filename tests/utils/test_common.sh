@@ -35,7 +35,7 @@ TC_TEST_COUNT=0
 TC_PASS_COUNT=0
 TC_FAIL_COUNT=0
 TC_LOG_FILE=""
-TC_CSV_FILE=""
+# CSV功能已移除，使用詳細日誌替代
 
 # 角色配置
 TC_CHARACTERS=("character_01" "character_02" "character_03")
@@ -129,9 +129,12 @@ tc_http_request() {
     local custom_token="${7:-}"
     
     TC_TEST_COUNT=$((TC_TEST_COUNT + 1))
-    
+
     tc_log "INFO" "[Test $TC_TEST_COUNT] $description"
     tc_log "INFO" "  Method: $method | Endpoint: $endpoint"
+
+    # 記錄請求開始
+    tc_log_request_start "$method" "$endpoint" "$description" "$data"
     
     # 準備認證標頭
     local auth_token="$TC_JWT_TOKEN"
@@ -198,37 +201,41 @@ tc_http_request() {
     esac
     
     local end_time=$(date +%s.%N)
-    local response_time=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
-    
+    local response_time_seconds=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0")
+    local response_time_ms=$(echo "$response_time_seconds * 1000" | bc -l 2>/dev/null | cut -d. -f1)
+
     # 解析回應
     local status_code=$(echo "$response" | tail -n1)
     local body=$(echo "$response" | sed '$d')
-    
+
+    # 記錄API響應結束
+    tc_log_response_end "$status_code" "$response_time_ms" "$body" "$(echo "$expected_status" | grep -q "$status_code" && echo "true" || echo "false")"
+
     # 驗證狀態碼
     if echo "$expected_status" | grep -q "$status_code"; then
         TC_PASS_COUNT=$((TC_PASS_COUNT + 1))
-        tc_log "PASS" "Test passed (Status: $status_code, Time: ${response_time}s)"
-        
-        # 記錄CSV數據
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),$description,$method,$endpoint,$status_code,$response_time,true,system,0,success"
-        
+        tc_log "PASS" "Test passed (Status: $status_code, Time: ${response_time_ms}ms)"
+
+        # 記錄詳細測試日誌
+        tc_log_detailed "SUCCESS" "$method $endpoint" "$status_code" "$response_time_ms" "$description"
+
         # 記錄回應（限制長度）
-        if [ ${#body} -gt 300 ]; then
-            tc_log "INFO" "  Response: ${body:0:300}..."
+        if [ ${#body} -gt 200 ]; then
+            tc_log "INFO" "  Response: ${body:0:200}..."
         else
             tc_log "INFO" "  Response: $body"
         fi
-        
+
         echo "$body"
         return 0
     else
         TC_FAIL_COUNT=$((TC_FAIL_COUNT + 1))
         tc_log "FAIL" "Test failed (Status: $status_code, Expected: $expected_status)"
         tc_log "ERROR" "  Response: $body"
-        
-        # 記錄CSV數據（失敗）
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),$description,$method,$endpoint,$status_code,$response_time,false,system,0,failed"
-        
+
+        # 記錄詳細錯誤日誌
+        tc_log_detailed "FAILED" "$method $endpoint" "$status_code" "$response_time_ms" "$description" "$body"
+
         echo "$body"
         return 1
     fi
@@ -458,66 +465,89 @@ tc_send_message() {
 }
 
 # ================================
-# CSV報告和結果記錄
+# 詳細日誌記錄系統
 # ================================
 
-# 初始化CSV報告
-tc_init_csv() {
-    local test_name="${1:-test}"
-    local timestamp=$(date +%Y%m%d_%H%M%S)
-    local csv_dir="$(dirname "$0")/results"
-    
-    mkdir -p "$csv_dir"
-    TC_CSV_FILE="$csv_dir/${test_name}_results_${timestamp}.csv"
-    
-    # CSV標頭
-    echo "timestamp,test_name,method,endpoint,status_code,response_time,success,engine,nsfw_level,notes" > "$TC_CSV_FILE"
-    tc_log "INFO" "CSV report initialized: $TC_CSV_FILE"
+# 詳細日誌記錄函數
+tc_log_detailed() {
+    local status="$1"       # SUCCESS, FAILED, INFO, WARN
+    local request="$2"      # 請求信息 (如 "POST /api/v1/chats")
+    local http_code="$3"    # HTTP 狀態碼
+    local response_time="$4" # 響應時間
+    local description="$5"  # 測試描述
+    local response_preview="$6" # 響應預覽（可選）
+
+    local timestamp=$(date '+%Y-%m-%d %H:%M:%S')
+    local separator="----------------------------------------"
+
+    # 寫入日誌文件
+    if [ -n "$TC_LOG_FILE" ]; then
+        {
+            echo "$separator"
+            echo "[$timestamp] $status: $description"
+            echo "Request: $request"
+            echo "HTTP Code: $http_code"
+            echo "Response Time: ${response_time}ms"
+            if [ -n "$response_preview" ] && [ "$status" = "FAILED" ]; then
+                echo "Response Preview:"
+                echo "$response_preview"
+            fi
+            echo "$separator"
+            echo ""
+        } >> "$TC_LOG_FILE"
+    fi
+
+    # 也記錄到控制台（簡化版）
+    case "$status" in
+        "SUCCESS") tc_log "PASS" "$description (${response_time}ms)" ;;
+        "FAILED")  tc_log "FAIL" "$description (HTTP $http_code, ${response_time}ms)" ;;
+        "INFO")    tc_log "INFO" "$description" ;;
+        "WARN")    tc_log "WARN" "$description" ;;
+    esac
 }
 
-# 記錄CSV數據（改進版本，處理特殊字符）
-tc_csv_record() {
-    if [ -n "$TC_CSV_FILE" ]; then
-        local data="$@"
-        # 處理包含逗號、引號或換行的欄位
-        # 將整行按逗號分割並逐一處理
-        local result=""
-        local in_quotes=false
-        local current_field=""
-        local i
+# 記錄API請求開始
+tc_log_request_start() {
+    local method="$1"
+    local endpoint="$2"
+    local description="$3"
+    local data="$4"
 
-        for (( i=0; i<${#data}; i++ )); do
-            local char="${data:$i:1}"
-
-            if [ "$char" = '"' ]; then
-                if [ "$in_quotes" = true ]; then
-                    in_quotes=false
-                else
-                    in_quotes=true
-                fi
-                current_field="${current_field}${char}"
-            elif [ "$char" = ',' ] && [ "$in_quotes" = false ]; then
-                # 欄位結束，檢查是否需要加引號
-                if [[ "$current_field" == *","* ]] || [[ "$current_field" == *'"'* ]] || [[ "$current_field" == *$'\n'* ]]; then
-                    # 轉義引號並用引號包裹
-                    current_field="${current_field//\"/\"\"}"
-                    current_field="\"${current_field}\""
-                fi
-                result="${result}${current_field},"
-                current_field=""
-            else
-                current_field="${current_field}${char}"
+    if [ -n "$TC_LOG_FILE" ]; then
+        {
+            echo ">>> API REQUEST START <<<"
+            echo "Description: $description"
+            echo "Method: $method"
+            echo "Endpoint: $endpoint"
+            echo "Timestamp: $(date '+%Y-%m-%d %H:%M:%S')"
+            if [ -n "$data" ] && [ "$data" != "null" ]; then
+                echo "Request Data:"
+                echo "$data" | jq . 2>/dev/null || echo "$data"
             fi
-        done
+            echo ""
+        } >> "$TC_LOG_FILE"
+    fi
+}
 
-        # 處理最後一個欄位
-        if [[ "$current_field" == *","* ]] || [[ "$current_field" == *'"'* ]] || [[ "$current_field" == *$'\n'* ]]; then
-            current_field="${current_field//\"/\"\"}"
-            current_field="\"${current_field}\""
-        fi
-        result="${result}${current_field}"
+# 記錄API響應結果
+tc_log_response_end() {
+    local http_code="$1"
+    local response_time="$2"
+    local response_body="$3"
+    local success="$4"
 
-        echo "$result" >> "$TC_CSV_FILE"
+    if [ -n "$TC_LOG_FILE" ]; then
+        {
+            echo "<<< API RESPONSE END <<<"
+            echo "HTTP Code: $http_code"
+            echo "Response Time: ${response_time}ms"
+            echo "Success: $success"
+            echo "Response Body:"
+            echo "$response_body" | jq . 2>/dev/null || echo "$response_body"
+            echo ""
+            echo "=================================================="
+            echo ""
+        } >> "$TC_LOG_FILE"
     fi
 }
 
@@ -573,10 +603,6 @@ tc_show_summary() {
     echo -e "${TC_BLUE}   Total Tests: $TC_TEST_COUNT${TC_NC}"
     echo -e "${TC_GREEN}   Passed: $TC_PASS_COUNT${TC_NC}"
     echo -e "${TC_RED}   Failed: $TC_FAIL_COUNT${TC_NC}"
-    
-    if [ -n "$TC_CSV_FILE" ]; then
-        echo -e "${TC_CYAN}   CSV Report: $TC_CSV_FILE${TC_NC}"
-    fi
     
     if [ -n "$TC_LOG_FILE" ]; then
         echo -e "${TC_CYAN}   Log File: $TC_LOG_FILE${TC_NC}"
@@ -1285,11 +1311,11 @@ tc_test_soft_delete_comprehensive() {
         test_passed=$((test_passed + 1))
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),soft_delete_user,POST,/auth/register+login+delete,200,$duration,true,system,0,用戶軟刪除測試通過"
+        tc_log_detailed "SUCCESS" "POST /auth/register+login+delete" "200" "$duration" "用戶軟刪除測試通過"
     else
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),soft_delete_user,POST,/auth/register+login+delete,500,$duration,false,system,0,用戶軟刪除測試失敗"
+        tc_log_detailed "FAILED" "POST /auth/register+login+delete" "500" "$duration" "用戶軟刪除測試失敗"
     fi
     
     # 測試2: 角色軟刪除
@@ -1299,11 +1325,11 @@ tc_test_soft_delete_comprehensive() {
         test_passed=$((test_passed + 1))
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),soft_delete_character,POST,/character+DELETE,200,$duration,true,system,0,角色軟刪除測試通過"
+        tc_log_detailed "SUCCESS" "POST /character+DELETE" "200" "$duration" "角色軟刪除測試通過"
     else
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),soft_delete_character,POST,/character+DELETE,500,$duration,false,system,0,角色軟刪除測試失敗"
+        tc_log_detailed "FAILED" "POST /character+DELETE" "500" "$duration" "角色軟刪除測試失敗"
     fi
     
     # 測試3: 管理員統計API
@@ -1313,11 +1339,11 @@ tc_test_soft_delete_comprehensive() {
         test_passed=$((test_passed + 1))
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),admin_stats_filter,GET,/admin/stats,200,$duration,true,system,0,管理員統計API過濾測試通過"
+        tc_log_detailed "SUCCESS" "GET /admin/stats" "200" "$duration" "管理員統計API過濾測試通過"
     else
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),admin_stats_filter,GET,/admin/stats,500,$duration,false,system,0,管理員統計API過濾測試失敗"
+        tc_log_detailed "FAILED" "GET /admin/stats" "500" "$duration" "管理員統計API過濾測試失敗"
     fi
     
     # 測試4: 公開API過濾
@@ -1327,11 +1353,11 @@ tc_test_soft_delete_comprehensive() {
         test_passed=$((test_passed + 1))
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),public_api_filter,GET,/character/list+search,200,$duration,true,system,0,公開API過濾測試通過"
+        tc_log_detailed "SUCCESS" "GET /character/list+search" "200" "$duration" "公開API過濾測試通過"
     else
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),public_api_filter,GET,/character/list+search,500,$duration,false,system,0,公開API過濾測試失敗"
+        tc_log_detailed "FAILED" "GET /character/list+search" "500" "$duration" "公開API過濾測試失敗"
     fi
     
     # 測試5: 角色恢復功能
@@ -1341,11 +1367,11 @@ tc_test_soft_delete_comprehensive() {
         test_passed=$((test_passed + 1))
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),character_restore,POST,/admin/characters/restore,200,$duration,true,system,0,角色恢復功能測試通過"
+        tc_log_detailed "SUCCESS" "POST /admin/characters/restore" "200" "$duration" "角色恢復功能測試通過"
     else
         end_time=$(date +%s.%N)
         duration=$(echo "$end_time - $start_time" | bc -l 2>/dev/null || echo "0.0")
-        tc_csv_record "$(date '+%Y-%m-%d %H:%M:%S'),character_restore,POST,/admin/characters/restore,500,$duration,false,system,0,角色恢復功能測試失敗"
+        tc_log_detailed "FAILED" "POST /admin/characters/restore" "500" "$duration" "角色恢復功能測試失敗"
     fi
     
     tc_log "INFO" "軟刪除功能測試完成: $test_passed/$total_tests 通過"

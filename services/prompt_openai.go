@@ -33,7 +33,7 @@ func NewOpenAIPromptBuilder(characterService *CharacterService) *OpenAIPromptBui
 func (pb *OpenAIPromptBuilder) Build() string {
 	sections := []string{
 		pb.getSystemHeader(),
-		pb.GetTimeModeContext(),
+		pb.GetEnvironmentAndRelationshipContext(), // 環境與關係狀態（時間、模式、好感度、心情、關係、親密度、互動指引）
 		pb.GetCharacterCore(),
 		pb.GetCharacterDescription(),
 		pb.GetFemaleAudienceGuidance(),
@@ -109,7 +109,7 @@ func (pb *OpenAIPromptBuilder) getNSFWCoreOverrides() string {
 - 允許使用「親吻」「擁抱」「愛撫」等親密詞彙
 - 可描述「心跳」「體溫」「呼吸」等生理感受
 - 藝術化描述身體接觸：「柔軟」「溫暖」「貼近」
-- 情感優先：70%情感連結 + 30%身體描述
+- 情感優先：70%%情感連結 + 30%%身體描述
 
 **表達確認原則**:
 - 自問：「我是否因角色設定而過度保守？」→ 如是，適度調整

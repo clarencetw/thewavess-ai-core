@@ -14,8 +14,8 @@ import (
 
 // MistralClient Mistral AI API 客戶端
 type MistralClient struct {
-    client *mistral.MistralClient
-    config *MistralConfig
+	client *mistral.MistralClient
+	config *MistralConfig
 }
 
 // MistralConfig Mistral 配置
@@ -59,7 +59,6 @@ func NewMistralClient() *MistralClient {
 
 	client := mistral.NewMistralClientDefault(apiKey)
 
-
 	return &MistralClient{
 		client: client,
 		config: config,
@@ -74,16 +73,16 @@ func (mc *MistralClient) GenerateResponse(ctx context.Context, systemPrompt, use
 
 	startTime := time.Now()
 
-    utils.Logger.WithFields(logrus.Fields{
-        "service":          "mistral",
-        "model":            mc.config.Model,
-        "max_tokens":       mc.config.MaxTokens,
-        "temperature":      mc.config.Temperature,
-        "user":             userID,
-        "messages_count":   2,
-        "system_length":    len(systemPrompt),
-        "user_length":      len(userMessage),
-    }).Info("Mistral API request started")
+	utils.Logger.WithFields(logrus.Fields{
+		"service":        "mistral",
+		"model":          mc.config.Model,
+		"max_tokens":     mc.config.MaxTokens,
+		"temperature":    mc.config.Temperature,
+		"user":           userID,
+		"messages_count": 2,
+		"system_length":  len(systemPrompt),
+		"user_length":    len(userMessage),
+	}).Info("Mistral API request started")
 
 	// 開發模式下詳細記錄 prompt 內容
 	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
@@ -160,9 +159,9 @@ func (mc *MistralClient) GenerateResponse(ctx context.Context, systemPrompt, use
 		Content:   content,
 		RequestID: response.ID,
 		Metadata: map[string]interface{}{
-			"model":        response.Model,
-			"created":      response.Created,
-			"duration_ms":  duration.Milliseconds(),
+			"model":       response.Model,
+			"created":     response.Created,
+			"duration_ms": duration.Milliseconds(),
 			"finish_reason": func() string {
 				if len(response.Choices) > 0 {
 					return string(response.Choices[0].FinishReason)
@@ -223,7 +222,6 @@ func (mc *MistralClient) GenerateResponse(ctx context.Context, systemPrompt, use
 	return mistralResponse, nil
 }
 
-
 // IsContentRejection 檢查是否為 Mistral 內容拒絕錯誤
 func (mc *MistralClient) IsContentRejection(err error) bool {
 	if err == nil {
@@ -268,13 +266,13 @@ func (mc *MistralClient) GetModelInfo() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"available":    true,
-		"model":        mc.config.Model,
-		"max_tokens":   mc.config.MaxTokens,
-		"temperature":  mc.config.Temperature,
-		"top_p":        mc.config.TopP,
-		"supports":     []string{"chat", "moderate_nsfw", "multilingual"},
-		"description":  "Mistral AI 中等模型 - 適合處理進階 NSFW 內容",
+		"available":   true,
+		"model":       mc.config.Model,
+		"max_tokens":  mc.config.MaxTokens,
+		"temperature": mc.config.Temperature,
+		"top_p":       mc.config.TopP,
+		"supports":    []string{"chat", "moderate_nsfw", "multilingual"},
+		"description": "Mistral AI 中等模型 - 適合處理進階 NSFW 內容",
 	}
 }
 
