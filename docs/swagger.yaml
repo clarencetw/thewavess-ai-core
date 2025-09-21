@@ -1,0 +1,3705 @@
+basePath: /api/v1
+definitions:
+  handlers.AdminLogsResponse:
+    properties:
+      limit:
+        type: integer
+      logs:
+        items:
+          $ref: '#/definitions/models.SystemLog'
+        type: array
+      page:
+        type: integer
+      total:
+        type: integer
+    type: object
+  handlers.AdminStatsResponse:
+    properties:
+      active_users:
+        example: "42"
+        type: string
+      avg_response_time:
+        example: 125ms
+        type: string
+      db_connections:
+        example: 8/20
+        type: string
+      error_rate:
+        example: 0.02%
+        type: string
+      go_routines:
+        example: "45"
+        type: string
+      memory_usage:
+        example: 256MB
+        type: string
+      total_requests:
+        example: 1,234,567
+        type: string
+      uptime:
+        example: 15天 8小時 32分鐘
+        type: string
+    type: object
+  handlers.AffectionHistoryEntry:
+    properties:
+      affection_after:
+        type: integer
+      affection_before:
+        type: integer
+      affection_change:
+        type: integer
+      mood_after:
+        type: string
+      mood_before:
+        type: string
+      timestamp:
+        type: string
+      trigger_content:
+        type: string
+      trigger_type:
+        type: string
+    type: object
+  handlers.AffectionLevelResponse:
+    properties:
+      character_id:
+        type: string
+      chat_id:
+        type: string
+      current:
+        type: integer
+      description:
+        type: string
+      level_name:
+        type: string
+      level_tier:
+        type: integer
+      next_level_threshold:
+        type: integer
+      points_to_next:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handlers.DatabaseInfo:
+    properties:
+      connected:
+        type: boolean
+      ping_latency:
+        type: string
+      status:
+        type: string
+      type:
+        type: string
+    type: object
+  handlers.GenerateTTSRequest:
+    properties:
+      character_id:
+        example: character_01
+        type: string
+      speed:
+        example: 1
+        type: number
+      text:
+        example: 你好，今天過得怎麼樣？
+        type: string
+      voice:
+        example: voice_001
+        type: string
+    required:
+    - text
+    type: object
+  handlers.HealthResponse:
+    properties:
+      message:
+        type: string
+      services:
+        additionalProperties:
+          type: string
+        type: object
+      status:
+        type: string
+      timestamp:
+        type: string
+      uptime:
+        type: string
+      version:
+        type: string
+    type: object
+  handlers.RelationshipHistoryResponse:
+    properties:
+      character_id:
+        type: string
+      character_name:
+        type: string
+      chat_id:
+        type: string
+      current_affection:
+        type: integer
+      history:
+        items:
+          $ref: '#/definitions/handlers.AffectionHistoryEntry'
+        type: array
+      total_interactions:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handlers.RelationshipStatusResponse:
+    properties:
+      affection:
+        type: integer
+      character_id:
+        type: string
+      chat_id:
+        type: string
+      intimacy_level:
+        type: string
+      last_interaction_at:
+        type: string
+      mood:
+        type: string
+      mood_description:
+        type: string
+      mood_intensity:
+        type: integer
+      relationship:
+        type: string
+      total_interactions:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  handlers.RuntimeInfo:
+    properties:
+      gc_count:
+        type: integer
+      goroutines:
+        type: integer
+      last_gc:
+        type: string
+      memory_usage:
+        type: string
+      next_gc:
+        type: string
+    type: object
+  handlers.ServicesStatus:
+    properties:
+      grok:
+        type: string
+      openai:
+        type: string
+      tts:
+        type: string
+    type: object
+  handlers.SystemInfo:
+    properties:
+      architecture:
+        type: string
+      go_version:
+        type: string
+      num_cpu:
+        type: integer
+      os:
+        type: string
+    type: object
+  handlers.SystemStatsResponse:
+    properties:
+      database:
+        $ref: '#/definitions/handlers.DatabaseInfo'
+      runtime:
+        $ref: '#/definitions/handlers.RuntimeInfo'
+      services:
+        $ref: '#/definitions/handlers.ServicesStatus'
+      status:
+        type: string
+      system:
+        $ref: '#/definitions/handlers.SystemInfo'
+      timestamp:
+        type: string
+    type: object
+  models.APIError:
+    properties:
+      code:
+        example: INVALID_REQUEST
+        type: string
+      details:
+        example: 用戶名稱不能為空
+        type: string
+      message:
+        example: 請求參數無效
+        type: string
+    type: object
+  models.APIResponse:
+    properties:
+      data: {}
+      error:
+        $ref: '#/definitions/models.APIError'
+      message:
+        example: 操作成功
+        type: string
+      success:
+        example: true
+        type: boolean
+    type: object
+  models.Admin:
+    properties:
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      id:
+        type: string
+      last_login_at:
+        type: string
+      notes:
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      role:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+  models.AdminCharacterUpdateRequest:
+    properties:
+      avatar_url:
+        type: string
+      is_active:
+        type: boolean
+      is_public:
+        type: boolean
+      locale:
+        enum:
+        - zh-TW
+        - en-US
+        - ja-JP
+        type: string
+      name:
+        maxLength: 100
+        minLength: 1
+        type: string
+      popularity:
+        maximum: 100
+        minimum: 0
+        type: integer
+      tags:
+        items:
+          type: string
+        type: array
+      type:
+        enum:
+        - dominant
+        - gentle
+        - playful
+        - mystery
+        - reliable
+        type: string
+      user_description:
+        type: string
+    type: object
+  models.AdminCreateRequest:
+    properties:
+      display_name:
+        type: string
+      email:
+        type: string
+      notes:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      permissions:
+        items:
+          type: string
+        type: array
+      role:
+        enum:
+        - super_admin
+        - admin
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - role
+    - username
+    type: object
+  models.AdminListResponse:
+    properties:
+      admins:
+        items:
+          $ref: '#/definitions/models.Admin'
+        type: array
+      pagination:
+        $ref: '#/definitions/models.PaginationResponse'
+    type: object
+  models.AdminLoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  models.AdminLoginResponse:
+    properties:
+      access_token:
+        type: string
+      admin:
+        $ref: '#/definitions/models.Admin'
+      expires_in:
+        type: integer
+      token_type:
+        type: string
+    type: object
+  models.AdminPasswordUpdateRequest:
+    properties:
+      new_password:
+        minLength: 8
+        type: string
+    required:
+    - new_password
+    type: object
+  models.AdminUserUpdateRequest:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      birth_date:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      gender:
+        enum:
+        - male
+        - female
+        - other
+        type: string
+      is_adult:
+        type: boolean
+      is_verified:
+        type: boolean
+      nickname:
+        type: string
+      status:
+        enum:
+        - active
+        - inactive
+        - suspended
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    type: object
+  models.CharacterCreateRequest:
+    properties:
+      locale:
+        $ref: '#/definitions/models.Locale'
+      metadata:
+        allOf:
+        - $ref: '#/definitions/models.CharacterMetadataRequest'
+        description: 可選的基本配置
+      name:
+        maxLength: 50
+        minLength: 1
+        type: string
+      type:
+        $ref: '#/definitions/models.CharacterType'
+      user_description:
+        description: 角色描述
+        type: string
+    required:
+    - locale
+    - name
+    - type
+    type: object
+  models.CharacterListResponse:
+    properties:
+      characters:
+        items:
+          $ref: '#/definitions/models.CharacterResponse'
+        type: array
+      pagination:
+        $ref: '#/definitions/models.PaginationResponse'
+    type: object
+  models.CharacterMetadataRequest:
+    properties:
+      avatar_url:
+        type: string
+      popularity:
+        maximum: 100
+        minimum: 0
+        type: integer
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
+  models.CharacterMetadataResponse:
+    properties:
+      avatar_url:
+        type: string
+      popularity:
+        type: integer
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
+  models.CharacterResponse:
+    properties:
+      created_at:
+        type: string
+      id:
+        type: string
+      is_active:
+        type: boolean
+      metadata:
+        $ref: '#/definitions/models.CharacterMetadataResponse'
+      name:
+        type: string
+      type:
+        $ref: '#/definitions/models.CharacterType'
+      updated_at:
+        type: string
+      user_description:
+        type: string
+    type: object
+  models.CharacterType:
+    enum:
+    - dominant
+    - gentle
+    - playful
+    - mystery
+    - reliable
+    type: string
+    x-enum-comments:
+      CharacterTypeDominant: 霸道型（如霸道總裁）
+      CharacterTypeGentle: 溫柔型（如溫柔醫生）
+      CharacterTypeMystery: 神秘型
+      CharacterTypePlayful: 活潑型
+      CharacterTypeReliable: 可靠型
+    x-enum-descriptions:
+    - 霸道型（如霸道總裁）
+    - 溫柔型（如溫柔醫生）
+    - 活潑型
+    - 神秘型
+    - 可靠型
+    x-enum-varnames:
+    - CharacterTypeDominant
+    - CharacterTypeGentle
+    - CharacterTypePlayful
+    - CharacterTypeMystery
+    - CharacterTypeReliable
+  models.CharacterUpdateRequest:
+    properties:
+      is_active:
+        type: boolean
+      metadata:
+        $ref: '#/definitions/models.CharacterMetadataRequest'
+      name:
+        maxLength: 50
+        minLength: 1
+        type: string
+      type:
+        $ref: '#/definitions/models.CharacterType'
+      user_description:
+        type: string
+    type: object
+  models.ChatListResponse:
+    properties:
+      chats:
+        description: 會話列表
+        items:
+          $ref: '#/definitions/models.ChatResponse'
+        type: array
+      pagination:
+        allOf:
+        - $ref: '#/definitions/models.PaginationResponse'
+        description: 分頁信息
+    type: object
+  models.ChatResponse:
+    properties:
+      character:
+        $ref: '#/definitions/models.CharacterResponse'
+      character_id:
+        type: string
+      chat_mode:
+        type: string
+      created_at:
+        type: string
+      id:
+        type: string
+      last_message:
+        $ref: '#/definitions/models.MessageResponse'
+      last_message_at:
+        type: string
+      message_count:
+        type: integer
+      status:
+        type: string
+      title:
+        type: string
+      total_characters:
+        type: integer
+      updated_at:
+        type: string
+      user_id:
+        type: string
+    type: object
+  models.CreateChatRequest:
+    properties:
+      character_id:
+        type: string
+      title:
+        type: string
+    required:
+    - character_id
+    type: object
+  models.DetailedMessageResponse:
+    properties:
+      action:
+        type: string
+      ai_engine:
+        type: string
+      chat_id:
+        type: string
+      created_at:
+        type: string
+      dialogue:
+        type: string
+      emotional_state:
+        additionalProperties: true
+        type: object
+      id:
+        type: string
+      is_regenerated:
+        type: boolean
+      nsfw_level:
+        type: integer
+      regeneration_reason:
+        type: string
+      response_time_ms:
+        type: integer
+      role:
+        type: string
+      scene_description:
+        type: string
+    type: object
+  models.Locale:
+    enum:
+    - zh-TW
+    type: string
+    x-enum-comments:
+      LocaleChinese: 繁體中文
+    x-enum-descriptions:
+    - 繁體中文
+    x-enum-varnames:
+    - LocaleChinese
+  models.LoginRequest:
+    properties:
+      password:
+        type: string
+      username:
+        description: 用戶名
+        type: string
+    required:
+    - password
+    - username
+    type: object
+  models.LoginResponse:
+    properties:
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token:
+        type: string
+      token_type:
+        type: string
+      user:
+        $ref: '#/definitions/models.UserResponse'
+    type: object
+  models.LogoutRequest:
+    properties:
+      token:
+        type: string
+    type: object
+  models.MessageHistoryResponse:
+    properties:
+      chat_id:
+        description: 會話ID
+        type: string
+      messages:
+        description: 消息歷史列表
+        items:
+          $ref: '#/definitions/models.DetailedMessageResponse'
+        type: array
+      pagination:
+        allOf:
+        - $ref: '#/definitions/models.PaginationResponse'
+        description: 分頁信息
+    type: object
+  models.MessageResponse:
+    properties:
+      action:
+        type: string
+      ai_engine:
+        type: string
+      chat_id:
+        type: string
+      created_at:
+        type: string
+      dialogue:
+        type: string
+      emotional_state:
+        additionalProperties: true
+        type: object
+      id:
+        type: string
+      nsfw_level:
+        type: integer
+      response_time_ms:
+        type: integer
+      role:
+        type: string
+      scene_description:
+        type: string
+    type: object
+  models.PaginationResponse:
+    properties:
+      has_next:
+        example: true
+        type: boolean
+      has_prev:
+        example: false
+        type: boolean
+      page:
+        example: 1
+        type: integer
+      page_size:
+        example: 20
+        type: integer
+      total_count:
+        example: 100
+        type: integer
+      total_pages:
+        example: 10
+        type: integer
+    type: object
+  models.RefreshTokenRequest:
+    properties:
+      refresh_token:
+        type: string
+    required:
+    - refresh_token
+    type: object
+  models.RefreshTokenResponse:
+    properties:
+      expires_in:
+        type: integer
+      refresh_token:
+        type: string
+      token:
+        type: string
+      token_type:
+        type: string
+    type: object
+  models.RegenerateMessageResponse:
+    properties:
+      message:
+        allOf:
+        - $ref: '#/definitions/models.DetailedMessageResponse'
+        description: 新生成的消息內容
+      previous_message_id:
+        description: 被替換的原消息ID
+        type: string
+      regenerated:
+        description: 重新生成標記，固定為 true
+        type: boolean
+    type: object
+  models.RegisterRequest:
+    properties:
+      birth_date:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      gender:
+        enum:
+        - male
+        - female
+        - other
+        type: string
+      nickname:
+        type: string
+      password:
+        minLength: 8
+        type: string
+      username:
+        maxLength: 50
+        minLength: 3
+        type: string
+    required:
+    - email
+    - password
+    - username
+    type: object
+  models.SendMessageRequest:
+    properties:
+      message:
+        maxLength: 2000
+        type: string
+    required:
+    - message
+    type: object
+  models.SendMessageResponse:
+    properties:
+      affection:
+        description: SendMessage 專用欄位
+        type: integer
+      ai_engine:
+        type: string
+      chat_id:
+        type: string
+      chat_mode:
+        description: 對話模式："chat" 或 "novel"
+        type: string
+      confidence:
+        description: NSFW 分級信心度
+        type: number
+      content:
+        description: 前端格式：content 而非 dialogue
+        type: string
+      message_id:
+        description: 前端格式：message_id 而非 id
+        type: string
+      nsfw_level:
+        type: integer
+      response_time_ms:
+        description: 統一使用 response_time_ms
+        type: integer
+      timestamp:
+        description: 響應時間戳
+        type: string
+    type: object
+  models.SystemLog:
+    properties:
+      data:
+        additionalProperties: true
+        type: object
+      id:
+        example: 1
+        type: integer
+      level:
+        example: info
+        type: string
+      message:
+        example: 系統啟動完成
+        type: string
+      timestamp:
+        example: "2023-01-01T00:00:00Z"
+        type: string
+    type: object
+  models.UpdateProfileRequest:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      birth_date:
+        type: string
+      display_name:
+        type: string
+      gender:
+        type: string
+      nickname:
+        type: string
+    type: object
+  models.UserResponse:
+    properties:
+      avatar_url:
+        type: string
+      bio:
+        type: string
+      birth_date:
+        type: string
+      created_at:
+        type: string
+      display_name:
+        type: string
+      email:
+        type: string
+      gender:
+        type: string
+      id:
+        type: string
+      is_adult:
+        type: boolean
+      is_verified:
+        type: boolean
+      last_login_at:
+        type: string
+      nickname:
+        type: string
+      status:
+        type: string
+      updated_at:
+        type: string
+      username:
+        type: string
+    type: object
+host: localhost:8080
+info:
+  contact:
+    email: api@thewavess.ai
+    name: Thewavess AI Core Team
+    url: https://thewavess.ai
+  description: 女性向 AI 互動應用後端服務，提供智能對話、互動小說、情感陪伴等功能
+  license:
+    name: Proprietary
+    url: https://thewavess.ai/license
+  termsOfService: https://thewavess.ai/terms
+  title: Thewavess AI Core API
+  version: "1.0"
+paths:
+  /admin/admins:
+    get:
+      consumes:
+      - application/json
+      description: 支援分頁和篩選（需系統管理員權限）
+      parameters:
+      - default: 1
+        description: 頁數
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每頁數量
+        in: query
+        name: page_size
+        type: integer
+      - description: 角色篩選
+        in: query
+        name: role
+        type: string
+      - description: 狀態篩選
+        in: query
+        name: status
+        type: string
+      - description: 搜尋
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.AdminListResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "403":
+          description: 權限不足
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 伺服器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 獲取管理員列表
+      tags:
+      - 管理員管理
+    post:
+      consumes:
+      - application/json
+      description: 創建新的管理員帳號（需要超級管理員權限）
+      parameters:
+      - description: 管理員資訊
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AdminCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 創建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Admin'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "403":
+          description: 權限不足
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "409":
+          description: 管理員已存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 伺服器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 創建管理員
+      tags:
+      - 管理員管理
+  /admin/auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 管理員身份認證登入
+      parameters:
+      - description: 登入資訊
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AdminLoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登入成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.AdminLoginResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 認證失敗
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 伺服器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      summary: 管理員登入
+      tags:
+      - 管理員認證
+  /admin/character/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: 管理員更新角色的啟用/停用狀態
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 狀態更新請求
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            is_active:
+              type: boolean
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  properties:
+                    character_id:
+                      type: string
+                    is_active:
+                      type: boolean
+                  type: object
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 更新角色狀態
+      tags:
+      - Admin
+  /admin/characters:
+    get:
+      consumes:
+      - application/json
+      description: 管理員用：包含追蹤信息和軟刪除狀態的角色列表
+      parameters:
+      - default: 1
+        description: 頁碼
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: 每頁數量
+        in: query
+        name: limit
+        type: integer
+      - description: 狀態篩選
+        enum:
+        - active
+        - inactive
+        - all
+        in: query
+        name: status
+        type: string
+      - description: 創建者篩選
+        in: query
+        name: created_by
+        type: string
+      - description: 角色類型篩選
+        enum:
+        - system
+        - user
+        - all
+        in: query
+        name: type
+        type: string
+      - default: false
+        description: 是否包含已刪除
+        in: query
+        name: include_deleted
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 角色列表
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 服務器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 獲取角色列表
+      tags:
+      - 管理員 - 角色管理
+  /admin/characters/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 管理員用：包含創建歷史的角色詳細信息
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 角色詳情
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 服務器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 獲取角色詳情
+      tags:
+      - 管理員 - 角色管理
+    put:
+      consumes:
+      - application/json
+      description: 管理員用：更新指定角色的信息
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 更新請求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AdminCharacterUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 服務器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 更新角色
+      tags:
+      - 管理員 - 角色管理
+  /admin/characters/{id}/permanent:
+    delete:
+      consumes:
+      - application/json
+      description: 管理員用：永久刪除角色（不可恢復）
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 刪除成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: 請求參數錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 服務器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 永久刪除角色
+      tags:
+      - 管理員 - 角色管理
+  /admin/characters/{id}/restore:
+    post:
+      consumes:
+      - application/json
+      description: 管理員用：恢復已軟刪除的角色
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 恢復成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: 請求參數錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "404":
+          description: 角色不存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 服務器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 恢復角色
+      tags:
+      - 管理員 - 角色管理
+  /admin/chats/{chat_id}/history:
+    get:
+      consumes:
+      - application/json
+      description: 管理員用：獲取聊天記錄，無需用戶認證
+      parameters:
+      - description: 聊天會話ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      - default: 1
+        description: 頁碼
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: 每頁數量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "403":
+          description: 權限不足
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 聊天會話不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 服務器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取聊天記錄
+      tags:
+      - Admin
+  /admin/chats/search:
+    get:
+      consumes:
+      - application/json
+      description: 管理員用：支援全局搜尋和空查詢的聊天記錄
+      parameters:
+      - description: 搜尋關鍵詞（空值則返回所有記錄）
+        in: query
+        name: query
+        type: string
+      - description: 特定用戶ID過濾
+        in: query
+        name: user_id
+        type: string
+      - description: 角色ID過濾
+        in: query
+        name: character_id
+        type: string
+      - description: 開始日期
+        in: query
+        name: date_from
+        type: string
+      - description: 結束日期
+        in: query
+        name: date_to
+        type: string
+      - default: 1
+        description: 頁碼
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: 每頁數量
+        in: query
+        name: limit
+        type: integer
+      - default: true
+        description: 是否包含用戶信息
+        in: query
+        name: include_user_info
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜尋成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "403":
+          description: 權限不足
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 服務器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 搜尋聊天記錄
+      tags:
+      - Admin
+  /admin/logs:
+    get:
+      consumes:
+      - application/json
+      description: 獲取系統運行日誌，支持分頁和級別篩選
+      parameters:
+      - default: 1
+        description: 頁碼
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: 每頁數量
+        in: query
+        name: limit
+        type: integer
+      - description: 日誌級別
+        enum:
+        - debug
+        - info
+        - warning
+        - error
+        - all
+        in: query
+        name: level
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 日誌數據
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.AdminLogsResponse'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 服務器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 獲取系統日誌
+      tags:
+      - 管理系統
+  /admin/profile:
+    get:
+      consumes:
+      - application/json
+      description: 獲取當前登入管理員的個人資料
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.Admin'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "404":
+          description: 管理員不存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 伺服器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 獲取管理員資料
+      tags:
+      - 管理員認證
+  /admin/stats:
+    get:
+      consumes:
+      - application/json
+      description: 獲取系統運行統計信息，包括運行時間、請求數量、錯誤率等
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 統計數據
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.AdminStatsResponse'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "500":
+          description: 服務器錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 獲取系統統計數據
+      tags:
+      - 管理系統
+  /admin/users:
+    get:
+      consumes:
+      - application/json
+      description: 管理員用：支援分頁和篩選的用戶列表
+      parameters:
+      - default: 1
+        description: 頁碼
+        in: query
+        name: page
+        type: integer
+      - default: 10
+        description: 每頁數量
+        in: query
+        name: limit
+        type: integer
+      - description: 用戶狀態篩選
+        enum:
+        - active
+        - inactive
+        - banned
+        in: query
+        name: status
+        type: string
+      - description: 搜索關鍵字（用戶名、郵箱）
+        in: query
+        name: search
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "403":
+          description: 權限不足
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取用戶列表
+      tags:
+      - Admin
+  /admin/users/{id}:
+    get:
+      consumes:
+      - application/json
+      description: 管理員查看指定用戶詳細資訊
+      parameters:
+      - description: 用戶ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 用戶詳情
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserResponse'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "404":
+          description: 用戶不存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 獲取用戶詳情
+      tags:
+      - 管理員 - 用戶管理
+    put:
+      consumes:
+      - application/json
+      description: 管理員用：更新指定用戶的資料信息
+      parameters:
+      - description: 用戶ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 更新資料
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.AdminUserUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "403":
+          description: 權限不足
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 用戶不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 更新用戶資料
+      tags:
+      - Admin
+  /admin/users/{id}/password:
+    put:
+      consumes:
+      - application/json
+      description: 管理員用：重置指定用戶的密碼
+      parameters:
+      - description: 用戶ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 新密碼
+        in: body
+        name: password
+        required: true
+        schema:
+          $ref: '#/definitions/models.AdminPasswordUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "403":
+          description: 權限不足
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 用戶不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 重置用戶密碼
+      tags:
+      - Admin
+  /admin/users/{id}/status:
+    put:
+      consumes:
+      - application/json
+      description: 管理員更新用戶狀態（封鎖/解封）
+      parameters:
+      - description: 用戶ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 狀態更新請求
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            status:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: 請求參數錯誤
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "404":
+          description: 用戶不存在
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 更新用戶狀態
+      tags:
+      - 管理員 - 用戶管理
+  /auth/login:
+    post:
+      consumes:
+      - application/json
+      description: 驗證用戶並返回 JWT Token
+      parameters:
+      - description: 登入憑證 (username/password)
+        in: body
+        name: credentials
+        required: true
+        schema:
+          $ref: '#/definitions/models.LoginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登入成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.LoginResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 認證失敗
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 用戶登入
+      tags:
+      - User
+  /auth/logout:
+    post:
+      consumes:
+      - application/json
+      description: 登出當前用戶，使 JWT Token 失效（客戶端處理）
+      parameters:
+      - description: 登出請求
+        in: body
+        name: logout
+        schema:
+          $ref: '#/definitions/models.LogoutRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 登出成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 用戶登出
+      tags:
+      - User
+  /auth/refresh:
+    post:
+      consumes:
+      - application/json
+      description: 使用 Refresh Token 獲取新的 Access Token
+      parameters:
+      - description: 刷新令牌請求
+        in: body
+        name: refresh
+        required: true
+        schema:
+          $ref: '#/definitions/models.RefreshTokenRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 刷新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.RefreshTokenResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: Token 無效
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 刷新訪問令牌
+      tags:
+      - User
+  /auth/register:
+    post:
+      consumes:
+      - application/json
+      description: 創建新用戶帳號，支援性別、生日、暱稱等完整個人資料
+      parameters:
+      - description: 註冊信息
+        in: body
+        name: user
+        required: true
+        schema:
+          $ref: '#/definitions/models.RegisterRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 註冊成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "409":
+          description: 用戶已存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 用戶註冊
+      tags:
+      - User
+  /character:
+    post:
+      consumes:
+      - application/json
+      description: 創建新的AI角色。參數說明：name(角色名稱，1-50個字符，必填)，type(角色類型，必填：dominant=霸道型、gentle=溫柔型、playful=活潑型、mystery=神秘型、reliable=可靠型)，locale(語言區域，固定zh-TW繁體中文，必填)，user_description(用戶自由描述角色的詳細內容，選填)，metadata(角色元數據，選填：avatar_url=頭像圖片URL、tags=角色標籤陣列如[霸總,腹黑,現代]、popularity=人氣值0-100)
+      parameters:
+      - description: 角色創建請求：name(角色名稱，必填)，type(角色類型，必填)，locale(語言區域zh-TW，必填)，user_description(角色描述，選填)，metadata(元數據：avatar_url頭像URL、tags標籤陣列、popularity人氣值0-100，均為選填)
+        in: body
+        name: character
+        required: true
+        schema:
+          $ref: '#/definitions/models.CharacterCreateRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 創建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.CharacterResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "403":
+          description: 禁止訪問
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 創建角色
+      tags:
+      - Character
+  /character/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 刪除指定角色（系統預設角色無法刪除）
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 刪除成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "403":
+          description: 禁止訪問或系統角色保護
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 角色不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 刪除角色
+      tags:
+      - Character
+    get:
+      consumes:
+      - application/json
+      description: 根據ID獲取角色詳細信息
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.CharacterResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 角色不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 獲取角色詳情
+      tags:
+      - Character
+    put:
+      consumes:
+      - application/json
+      description: 更新指定角色的信息
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: 角色更新信息
+        in: body
+        name: character
+        required: true
+        schema:
+          $ref: '#/definitions/models.CharacterUpdateRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.CharacterResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "403":
+          description: 禁止訪問
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 角色不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 更新角色
+      tags:
+      - Character
+  /character/{id}/profile:
+    get:
+      consumes:
+      - application/json
+      description: 獲取指定角色的詳細檔案信息
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 角色不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取角色檔案
+      tags:
+      - Character
+  /character/{id}/stats:
+    get:
+      consumes:
+      - application/json
+      description: 獲取指定角色的使用統計信息
+      parameters:
+      - description: 角色ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 角色不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 獲取角色統計
+      tags:
+      - Character
+  /character/list:
+    get:
+      consumes:
+      - application/json
+      description: 支援分頁、篩選和排序的角色列表
+      parameters:
+      - default: 1
+        description: 頁數
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每頁數量
+        in: query
+        name: page_size
+        type: integer
+      - description: 角色類型 (dominant/gentle/playful/mystery/reliable)
+        in: query
+        name: type
+        type: string
+      - description: 是否啟用
+        in: query
+        name: is_active
+        type: boolean
+      - collectionFormat: csv
+        description: 標籤篩選
+        in: query
+        items:
+          type: string
+        name: tags
+        type: array
+      - description: 搜尋角色名稱或描述
+        in: query
+        name: search
+        type: string
+      - default: created_at
+        description: 排序欄位
+        in: query
+        name: sort_by
+        type: string
+      - default: desc
+        description: 排序方向 (asc/desc)
+        in: query
+        name: sort_order
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.CharacterListResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 獲取角色列表
+      tags:
+      - Character
+  /character/search:
+    get:
+      consumes:
+      - application/json
+      description: 根據關鍵詞搜尋角色
+      parameters:
+      - description: 搜尋關鍵詞
+        in: query
+        name: q
+        required: true
+        type: string
+      - default: 10
+        description: 結果數量限制
+        in: query
+        maximum: 50
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜尋成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 搜尋角色
+      tags:
+      - Character
+  /chats:
+    get:
+      consumes:
+      - application/json
+      description: 支援分頁和角色篩選的會話列表
+      parameters:
+      - default: 1
+        description: 頁碼
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每頁數量
+        in: query
+        name: limit
+        type: integer
+      - description: 會話狀態篩選
+        in: query
+        name: status
+        type: string
+      - description: 角色ID篩選
+        in: query
+        name: character_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ChatListResponse'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取會話列表
+      tags:
+      - Chat
+    post:
+      consumes:
+      - application/json
+      description: 創建新的聊天會話
+      parameters:
+      - description: 聊天信息
+        in: body
+        name: chat
+        required: true
+        schema:
+          $ref: '#/definitions/models.CreateChatRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 創建成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ChatResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 創建聊天會話
+      tags:
+      - Chat
+  /chats/{chat_id}:
+    delete:
+      consumes:
+      - application/json
+      description: 軟刪除聊天會話
+      parameters:
+      - description: 會話ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 刪除成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 會話不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 刪除聊天會話
+      tags:
+      - Chat
+    get:
+      consumes:
+      - application/json
+      description: 特定聊天會話的詳細信息
+      parameters:
+      - description: 會話ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.ChatResponse'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 會話不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取會話詳情
+      tags:
+      - Chat
+  /chats/{chat_id}/export:
+    get:
+      consumes:
+      - application/json
+      description: 匯出聊天會話的完整記錄
+      parameters:
+      - description: 會話ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      - default: json
+        description: 匯出格式
+        enum:
+        - json
+        - txt
+        - pdf
+        in: query
+        name: format
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 匯出成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 會話不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 匯出會話記錄
+      tags:
+      - Chat
+  /chats/{chat_id}/history:
+    get:
+      consumes:
+      - application/json
+      description: 獲取聊天會話的消息歷史
+      parameters:
+      - description: 會話ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      - default: 1
+        description: 頁碼
+        in: query
+        name: page
+        type: integer
+      - default: 50
+        description: 每頁數量
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.MessageHistoryResponse'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 會話不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取聊天歷史
+      tags:
+      - Chat
+  /chats/{chat_id}/messages:
+    post:
+      consumes:
+      - application/json
+      description: 發送新消息到指定的聊天會話
+      parameters:
+      - description: 會話ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      - description: 消息內容
+        in: body
+        name: message
+        required: true
+        schema:
+          $ref: '#/definitions/models.SendMessageRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: 發送成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.SendMessageResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 發送聊天消息
+      tags:
+      - Chat
+  /chats/{chat_id}/messages/{message_id}/regenerate:
+    post:
+      consumes:
+      - application/json
+      description: 重新生成指定消息的 AI 回應
+      parameters:
+      - description: 會話ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      - description: 消息ID
+        in: path
+        name: message_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 生成成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.RegenerateMessageResponse'
+              type: object
+        "400":
+          description: 請求錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 消息不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 重新生成回應
+      tags:
+      - Chat
+  /chats/{chat_id}/mode:
+    put:
+      consumes:
+      - application/json
+      description: 切換聊天會話的對話模式，支援兩種模式：chat（簡潔對話）和 novel（小說敘述）。不同模式會影響 AI 的回應風格和提示詞策略。
+      parameters:
+      - description: 會話ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      - description: '模式設定。mode: ''chat'' | ''novel'''
+        in: body
+        name: request
+        required: true
+        schema:
+          properties:
+            mode:
+              type: string
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 切換成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  properties:
+                    chat_id:
+                      type: string
+                    current_mode:
+                      type: string
+                    mode_description:
+                      type: string
+                    previous_mode:
+                      type: string
+                    updated_at:
+                      type: string
+                    user_id:
+                      type: string
+                  type: object
+              type: object
+        "400":
+          description: 請求錯誤或無效的模式
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 會話不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 切換會話模式
+      tags:
+      - Chat
+  /monitor/health:
+    get:
+      consumes:
+      - application/json
+      description: 檢查系統整體健康狀態，包括服務運行時間、資料庫連接狀態等基本信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系統健康
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.HealthResponse'
+              type: object
+        "500":
+          description: 內部服務器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "503":
+          description: 系統服務降級
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.HealthResponse'
+              type: object
+      summary: 系統健康檢查
+      tags:
+      - Monitor
+  /monitor/live:
+    get:
+      consumes:
+      - application/json
+      description: 檢查服務是否仍在運行，用於確認應用程式進程存活狀態，適用於Kubernetes liveness probe
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 服務存活
+          schema:
+            properties:
+              alive:
+                type: boolean
+              timestamp:
+                type: string
+              uptime:
+                type: string
+            type: object
+        "500":
+          description: 存活檢查失敗
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 服務存活檢查
+      tags:
+      - Monitor
+  /monitor/metrics:
+    get:
+      consumes:
+      - application/json
+      description: 以Prometheus格式輸出系統監控指標，包括運行時間、記憶體使用量、Goroutine數量、GC統計等
+      produces:
+      - text/plain
+      responses:
+        "200":
+          description: Prometheus格式的監控指標
+          schema:
+            type: string
+        "500":
+          description: 獲取指標失敗
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 獲取Prometheus監控指標
+      tags:
+      - Monitor
+  /monitor/ready:
+    get:
+      consumes:
+      - application/json
+      description: 檢查服務是否已就緒可以接受流量，驗證關鍵依賴項（資料庫、AI引擎配置）是否正常，適用於Kubernetes readiness
+        probe
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 服務已就緒
+          schema:
+            properties:
+              ready:
+                type: boolean
+              services:
+                type: object
+              timestamp:
+                type: string
+            type: object
+        "500":
+          description: 就緒檢查失敗
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "503":
+          description: 服務未就緒
+          schema:
+            properties:
+              ready:
+                type: boolean
+              services:
+                type: object
+              timestamp:
+                type: string
+            type: object
+      summary: 服務就緒檢查
+      tags:
+      - Monitor
+  /monitor/stats:
+    get:
+      consumes:
+      - application/json
+      description: 獲取系統詳細運行狀態，包括硬體信息、記憶體使用、資料庫狀態、外部服務配置等完整監控信息
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.SystemStatsResponse'
+              type: object
+        "500":
+          description: 獲取系統狀態失敗
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 獲取系統詳細狀態
+      tags:
+      - Monitor
+  /relationships/chat/{chat_id}/affection:
+    get:
+      consumes:
+      - application/json
+      description: 獲取指定聊天中角色對用戶的好感度數據
+      parameters:
+      - description: 聊天ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.AffectionLevelResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取好感度
+      tags:
+      - Relationships
+  /relationships/chat/{chat_id}/history:
+    get:
+      consumes:
+      - application/json
+      description: 獲取指定聊天中角色好感度變化歷史記錄
+      parameters:
+      - description: 聊天ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.RelationshipHistoryResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取好感度歷史
+      tags:
+      - Relationships
+  /relationships/chat/{chat_id}/status:
+    get:
+      consumes:
+      - application/json
+      description: 獲取指定聊天中角色的情感狀態
+      parameters:
+      - description: 聊天ID
+        in: path
+        name: chat_id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/handlers.RelationshipStatusResponse'
+              type: object
+        "400":
+          description: Bad Request
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: Unauthorized
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取情感狀態
+      tags:
+      - Relationships
+  /search/chats:
+    get:
+      consumes:
+      - application/json
+      description: 用戶搜尋自己的對話歷史記錄
+      parameters:
+      - description: 搜尋關鍵詞
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: 角色ID過濾
+        in: query
+        name: character_id
+        type: string
+      - description: 開始日期
+        in: query
+        name: date_from
+        type: string
+      - description: 結束日期
+        in: query
+        name: date_to
+        type: string
+      - default: 1
+        description: 頁碼
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每頁數量
+        in: query
+        name: limit
+        type: integer
+      - description: 結果偏移量（可選，優先於 page）
+        in: query
+        name: offset
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜尋成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 搜尋對話
+      tags:
+      - Search
+  /search/global:
+    get:
+      consumes:
+      - application/json
+      description: 在所有內容中搜尋（對話、角色、記憶等）
+      parameters:
+      - description: 搜尋關鍵詞
+        in: query
+        name: q
+        required: true
+        type: string
+      - description: 內容類型過濾
+        in: query
+        name: type
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 搜尋成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      security:
+      - BearerAuth: []
+      summary: 全局搜尋
+      tags:
+      - Search
+  /status:
+    get:
+      consumes:
+      - application/json
+      description: 獲取系統運行狀態和健康檢查資訊
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 系統狀態
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 獲取系統狀態
+      tags:
+      - System
+  /tts/generate:
+    post:
+      consumes:
+      - application/json
+      description: 將文字轉換為語音
+      parameters:
+      - description: TTS生成請求
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handlers.GenerateTTSRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 生成成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: 請求錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 生成語音
+      tags:
+      - TTS
+  /tts/voices:
+    get:
+      consumes:
+      - application/json
+      description: 獲取可用的語音選項列表
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+      summary: 獲取語音列表
+      tags:
+      - TTS
+  /user/account:
+    delete:
+      consumes:
+      - application/json
+      description: 永久刪除用戶帳號和相關數據
+      parameters:
+      - description: 確認刪除
+        in: body
+        name: confirm
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 刪除成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: 請求錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 刪除用戶帳號
+      tags:
+      - User
+  /user/avatar:
+    post:
+      consumes:
+      - application/json
+      description: 通過URL設置用戶頭像
+      parameters:
+      - description: 頭像URL
+        in: body
+        name: avatar
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 設置成功
+          schema:
+            $ref: '#/definitions/models.APIResponse'
+        "400":
+          description: 請求錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 設置用戶頭像
+      tags:
+      - User
+  /user/profile:
+    get:
+      consumes:
+      - application/json
+      description: 獲取當前用戶的詳細資料
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 獲取成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserResponse'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "404":
+          description: 用戶不存在
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 獲取用戶資料
+      tags:
+      - User
+    put:
+      consumes:
+      - application/json
+      description: 更新用戶基本資料
+      parameters:
+      - description: 用戶資料
+        in: body
+        name: profile
+        required: true
+        schema:
+          $ref: '#/definitions/models.UpdateProfileRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 更新成功
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.UserResponse'
+              type: object
+        "400":
+          description: 請求參數錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+        "401":
+          description: 未授權
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      security:
+      - BearerAuth: []
+      summary: 更新用戶資料
+      tags:
+      - User
+  /version:
+    get:
+      consumes:
+      - application/json
+      description: 獲取當前 API 的版本和構建資訊
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: 版本資訊
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                data:
+                  type: object
+              type: object
+        "500":
+          description: 伺服器錯誤
+          schema:
+            allOf:
+            - $ref: '#/definitions/models.APIResponse'
+            - properties:
+                error:
+                  $ref: '#/definitions/models.APIError'
+              type: object
+      summary: 獲取 API 版本資訊
+      tags:
+      - System
+schemes:
+- http
+- https
+securityDefinitions:
+  BearerAuth:
+    description: '請輸入 ''Bearer '' + JWT token，例如: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...'
+    in: header
+    name: Authorization
+    type: apiKey
+swagger: "2.0"

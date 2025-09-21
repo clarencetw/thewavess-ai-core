@@ -55,8 +55,9 @@ config/secrets/
 .vscode/
 .claude/
 
-# Generated documentation (auto-regenerated)
-docs/
+# Generated documentation (auto-regenerated, but keep API docs)
+# Note: Keep docs/ for Swagger API documentation
+# docs/
 
 # Temporary files
 *.tmp
