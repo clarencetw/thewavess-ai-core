@@ -10,10 +10,10 @@
         </div>
         <div class="flex flex-col space-y-2 sm:flex-row sm:space-y-0 sm:space-x-2">
             <button onclick="AdminPages.dashboard.toggleAlerts()" id="alertsBtn" class="px-4 py-2 bg-yellow-600 text-white rounded-md hover:bg-yellow-700 transition-colors">
-                <i class="fas fa-bell mr-2"></i><span class="hidden sm:inline">警報</span><span class="sm:hidden">警報</span> <span id="alertsCount" class="ml-1 px-2 py-1 text-xs bg-yellow-500 rounded-full">0</span>
+                <i class="fas fa-exclamation-triangle mr-2"></i><span class="hidden sm:inline">警報</span><span class="sm:hidden">警報</span> <span id="alertsCount" class="ml-1 px-2 py-1 text-xs bg-yellow-500 rounded-full">0</span>
             </button>
             <button onclick="AdminPages.dashboard.refreshAlerts(true)" class="px-4 py-2 bg-orange-600 text-white rounded-md hover:bg-orange-700 transition-colors">
-                <i class="fas fa-heartbeat mr-2"></i><span class="hidden sm:inline">即時檢查</span><span class="sm:hidden">檢查</span>
+                <i class="fas fa-stethoscope mr-2"></i><span class="hidden sm:inline">健康檢查</span><span class="sm:hidden">檢查</span>
             </button>
             <button onclick="AdminPages.dashboard.reload()" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors">
                 <i class="fas fa-sync-alt mr-2"></i><span class="hidden sm:inline">重新整理</span><span class="sm:hidden">重新整理</span>
@@ -49,13 +49,15 @@
 
     <!-- AI Engine Overview -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200">
-        <div class="px-6 py-4 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center sm:justify-between">
-            <h3 class="text-lg font-medium text-gray-900">
-                <i class="fas fa-robot text-cyan-600 mr-2"></i>AI 引擎概況
-            </h3>
-            <span id="aiOverviewSummary" class="text-sm text-gray-500 mt-2 sm:mt-0">載入中...</span>
+        <div class="px-6 py-4 border-b border-gray-200">
+            <div class="flex justify-between items-center">
+                <h3 class="text-lg font-medium text-gray-900">
+                    <i class="fas fa-brain text-blue-600 mr-2"></i>AI 引擎概況
+                </h3>
+                <span id="aiOverviewSummary" class="text-sm text-gray-500">載入中...</span>
+            </div>
         </div>
-        <div class="p-6 bg-gray-50">
+        <div class="p-6">
             <div id="aiConfigGrid" class="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
                 <!-- Dynamic content -->
             </div>
@@ -68,7 +70,7 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200 flex justify-between items-center">
                 <h3 class="text-lg font-medium text-gray-900">
-                    <i class="fas fa-server text-blue-600 mr-2"></i>系統狀態
+                    <i class="fas fa-server text-green-600 mr-2"></i>系統狀態
                 </h3>
                 <div id="systemStatusIndicator" class="px-2 py-1 text-xs rounded-full bg-gray-100 text-gray-800">
                     載入中...
@@ -83,7 +85,7 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h3 class="text-lg font-medium text-gray-900">
-                    <i class="fas fa-tachometer-alt text-purple-600 mr-2"></i>性能指標
+                    <i class="fas fa-chart-line text-purple-600 mr-2"></i>性能指標
                 </h3>
             </div>
             <div class="p-6" id="performanceMetrics">
@@ -95,7 +97,7 @@
         <div class="bg-white rounded-lg shadow-sm border border-gray-200">
             <div class="px-6 py-4 border-b border-gray-200">
                 <h3 class="text-lg font-medium text-gray-900">
-                    <i class="fas fa-clock text-green-600 mr-2"></i>最近活動
+                    <i class="fas fa-history text-orange-600 mr-2"></i>最近活動
                 </h3>
             </div>
             <div class="p-6" id="recentActivity">
@@ -103,7 +105,6 @@
             </div>
         </div>
     </div>
-
 
     <!-- Extended System Information -->
     <div class="bg-white rounded-lg shadow-sm border border-gray-200">
