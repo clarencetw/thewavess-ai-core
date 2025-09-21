@@ -1671,7 +1671,7 @@ func adminGetChatMessages(ctx context.Context, chatID string, page, limit int) (
 		return nil, 0, nil, fmt.Errorf("database connection unavailable")
 	}
 
-	// 首先驗證聊天會話是否存在並獲取會話信息
+	// 驗證聊天會話是否存在
 	var session db.ChatDB
 	err := database.NewSelect().
 		Model(&session).
@@ -1760,6 +1760,8 @@ func adminGetChatMessages(ctx context.Context, chatID string, page, limit int) (
 			"scene_description": msg.SceneDescription,
 			"action":            msg.Action,
 			"nsfw_level":        msg.NSFWLevel,
+			"ai_engine":         msg.AIEngine,
+			"response_time_ms":  msg.ResponseTimeMs,
 			"created_at":        msg.CreatedAt,
 		}
 	}

@@ -2364,13 +2364,20 @@ const AdminPages = {
                 return sum + text.length;
             }, 0);
             
+            // 獲取關係狀態信息
+            const latestMessage = state.allMessages.find(m => m.role === 'assistant') || {};
+            const affection = latestMessage.affection || sessionInfo.affection || 50;
+            const relationship = latestMessage.relationship || sessionInfo.relationship || 'stranger';
+            const mood = latestMessage.mood || sessionInfo.mood || 'neutral';
+            const intimacyLevel = latestMessage.intimacy_level || sessionInfo.intimacy_level || 'distant';
+
             content.innerHTML = `
                 <!-- 聊天會話信息 -->
                 <div class="bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg p-4 mb-4 border">
                     <h4 class="text-sm font-medium text-gray-900 mb-3 flex items-center">
                         <i class="fas fa-comments mr-2 text-blue-600"></i>聊天會話詳情
                     </h4>
-                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div class="bg-white rounded-lg p-3 border">
                             <div class="flex items-center mb-2">
                                 <i class="fas fa-user mr-2 text-blue-600"></i>
@@ -2384,7 +2391,7 @@ const AdminPages = {
                         </div>
                         <div class="bg-white rounded-lg p-3 border">
                             <div class="flex items-center mb-2">
-                                <i class="fas fa-robot mr-2 text-purple-600"></i>
+                                <i class="fas fa-brain mr-2 text-purple-600"></i>
                                 <span class="font-medium text-gray-900">角色信息</span>
                             </div>
                             <div class="text-sm space-y-1">
@@ -2393,6 +2400,27 @@ const AdminPages = {
                                     <strong>${character.name || '未知角色'}</strong>
                                 </div>
                                 <div><strong>ID:</strong> <code class="bg-gray-100 px-1 rounded text-xs">${character.id || '未知'}</code></div>
+                            </div>
+                        </div>
+                        <div class="bg-white rounded-lg p-3 border">
+                            <div class="flex items-center mb-2">
+                                <i class="fas fa-heart mr-2 text-red-500"></i>
+                                <span class="font-medium text-gray-900">關係狀態</span>
+                            </div>
+                            <div class="text-sm space-y-1">
+                                <div class="flex items-center">
+                                    <i class="fas fa-thermometer-half mr-1 text-red-500"></i>
+                                    <strong>好感度:</strong>
+                                    <span class="ml-1 px-2 py-1 rounded-full text-xs ${
+                                        affection >= 80 ? 'bg-red-100 text-red-800' :
+                                        affection >= 60 ? 'bg-orange-100 text-orange-800' :
+                                        affection >= 40 ? 'bg-yellow-100 text-yellow-800' :
+                                        'bg-gray-100 text-gray-800'
+                                    }">${affection}/100</span>
+                                </div>
+                                <div><i class="fas fa-smile mr-1 text-blue-500"></i><strong>心情:</strong> ${mood}</div>
+                                <div><i class="fas fa-users mr-1 text-green-500"></i><strong>關係:</strong> ${relationship}</div>
+                                <div><i class="fas fa-hand-holding-heart mr-1 text-purple-500"></i><strong>親密度:</strong> ${intimacyLevel}</div>
                             </div>
                         </div>
                     </div>
@@ -2508,12 +2536,23 @@ const AdminPages = {
                                 
                                 <!-- 技術資訊 -->
                                 <div class="flex ${isUser ? 'justify-end' : 'justify-start'} mt-2">
-                                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-400 bg-gray-50 px-3 py-1 rounded-full">
-                                        <span><i class="fas fa-font"></i> ${wordCount}字</span>
-                                        ${msg.ai_engine ? `<span><i class="fas fa-brain"></i> ${msg.ai_engine}</span>` : ''}
-                                        ${msg.response_time_ms ? `<span><i class="fas fa-stopwatch"></i> ${msg.response_time_ms}ms</span>` : ''}
-                                        ${msg.token_count ? `<span><i class="fas fa-coins"></i> ${msg.token_count}t</span>` : ''}
-                                        ${msg.id ? `<span title="消息ID: ${msg.id}"><i class="fas fa-tag"></i> ${msg.id.substring(0, 8)}</span>` : ''}
+                                    <div class="flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                        <span class="bg-gray-100 px-2 py-1 rounded-full">
+                                            <i class="fas fa-font mr-1"></i>${wordCount}字
+                                        </span>
+                                        ${!isUser ? `
+                                            <span class="bg-blue-100 text-blue-800 px-2 py-1 rounded-full">
+                                                <i class="fas fa-brain mr-1"></i>${msg.ai_engine || 'unknown'}
+                                            </span>
+                                            <span class="bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                                                <i class="fas fa-stopwatch mr-1"></i>${msg.response_time_ms || 0}ms
+                                            </span>
+                                        ` : ''}
+                                        ${msg.affection && msg.role === 'assistant' ? `
+                                            <span class="bg-red-100 text-red-800 px-2 py-1 rounded-full" title="好感度變化">
+                                                <i class="fas fa-heart mr-1"></i>${msg.affection}/100
+                                            </span>
+                                        ` : ''}
                                     </div>
                                 </div>
                             </div>
@@ -2587,7 +2626,7 @@ const AdminPages = {
                     </div>
                 </div>
             `;
-            
+
             Utils.showById('chatHistoryModal');
         },
 
