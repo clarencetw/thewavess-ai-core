@@ -1,5 +1,7 @@
 # Chat Modes 指南
 
+> 📋 **相關文檔**: 完整文檔索引請參考 [DOCS_INDEX.md](./DOCS_INDEX.md)
+
 聊天會話目前支援兩種模式：`chat`（預設）與 `novel`。模式控制 Prompt 指引與輸出風格，但 NSFW 分級與引擎路由另由 `ChatService` 處理。
 
 ## 1. 模式總覽

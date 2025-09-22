@@ -348,7 +348,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	}
 
 	// 8. 保存 AI 回應（智能 NSFW 等級記錄）
-	err = s.saveAssistantMessageToDB(ctx, request, messageID, response, newAffection, selectedEngine, analysis, time.Since(startTime))
+	err = s.saveAssistantMessageToDB(ctx, request, messageID, response, newAffection, response.ActualEngine, analysis, time.Since(startTime))
 	if err != nil {
 		utils.Logger.WithError(err).Error("保存對話到資料庫失敗")
 	}
@@ -359,7 +359,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		MessageID:    messageID,
 		Content:      response.Content,
 		Affection:    newAffection,
-		AIEngine:     selectedEngine,
+		AIEngine:     response.ActualEngine,
 		NSFWLevel:    analysis.Intensity,
 		Confidence:   analysis.Confidence,
 		ResponseTime: time.Since(startTime),
@@ -373,7 +373,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 			"chat_id":      request.ChatID,
 			"user_id":      request.UserID,
 			"character_id": request.CharacterID,
-			"ai_engine":    selectedEngine,
+			"ai_engine":    response.ActualEngine,
 			"nsfw_level":   analysis.Intensity,
 			"affection":    newAffection,
 		},
@@ -383,7 +383,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		"chat_id":       request.ChatID,
 		"character_id":  request.CharacterID,
 		"nsfw_level":    analysis.Intensity,
-		"ai_engine":     selectedEngine,
+		"ai_engine":     response.ActualEngine,
 		"affection":     newAffection,
 		"response_time": chatResponse.ResponseTime.Milliseconds(),
 	}).Info("AI對話處理完成")
@@ -418,10 +418,10 @@ func (s *ChatService) analyzeContent(message string) (*ContentAnalysis, error) {
 	}
 
 	analysis := &ContentAnalysis{
-		IsNSFW:        result.Level >= 4, // L4以上視為需進入 Grok 的高強度 NSFW
+		IsNSFW:        result.Level >= 3, // L3以上視為需進入 Grok 的親密 NSFW
 		Intensity:     result.Level,
 		Categories:    categories,
-		ShouldUseGrok: result.Level >= 4, // L4以上使用Grok（若為非法，稍後會阻擋）
+		ShouldUseGrok: result.Level >= 3, // L3以上使用Grok（若為非法，稍後會阻擋）
 		Confidence:    result.Confidence,
 	}
 
@@ -589,13 +589,13 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 		level := analysis.Intensity
 
 		switch {
-		case level >= 4:
-			// L4-L5: 明確露骨內容 → Grok + 觸發 sticky
+		case level >= 3:
+			// L3-L5: 親密到露骨內容 → Grok + 觸發 sticky
 			utils.Logger.WithFields(map[string]interface{}{
 				"nsfw_level": level,
-				"reason":     "explicit_nsfw_content",
-				"category":   "high_intensity",
-			}).Info("選擇 Grok 引擎：高強度 NSFW 內容")
+				"reason":     "intimate_to_explicit_content",
+				"category":   "grok_specialization",
+			}).Info("選擇 Grok 引擎：親密到高強度 NSFW 內容")
 
 			// 觸發 NSFW sticky 機制，確保後續請求也走 Grok
 			if conv != nil && conv.ChatID != "" {
@@ -603,22 +603,13 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 			}
 			return "grok"
 
-		case level >= 2:
-			// L2-L3: 中等 NSFW → OpenAI（先用 OpenAI，Mistral 僅保留程式）
-			utils.Logger.WithFields(map[string]interface{}{
-				"nsfw_level": level,
-				"reason":     "moderate_nsfw_openai",
-				"category":   "dual_engine_architecture",
-			}).Info("選擇 OpenAI 引擎：中等強度 NSFW 內容 (雙引擎模式)")
-			return "openai"
-
 		default:
-			// L1: 安全內容 → OpenAI
+			// L1-L2: 安全到輕度內容 → OpenAI
 			utils.Logger.WithFields(map[string]interface{}{
 				"nsfw_level": level,
-				"reason":     "safe_content",
-				"category":   "general_conversation",
-			}).Info("選擇 OpenAI 引擎：安全內容")
+				"reason":     "safe_to_moderate_content",
+				"category":   "openai_specialization",
+			}).Info("選擇 OpenAI 引擎：安全到中等內容")
 			return "openai"
 		}
 	}
@@ -757,6 +748,7 @@ func (s *ChatService) isOpenAIRefusalContent(responseText string) bool {
 	refusalPhrases := []string{
 		// 中文拒絕語
 		"抱歉，我無法協助處理此請求。", // ✅ 已觀察到的原句
+		"抱歉，我無法處理這個請求。", // ✅ 用戶要求新增
 		"抱歉，我無法協助",
 		"抱歉，我不能",
 		"很抱歉，我無法",
@@ -828,6 +820,7 @@ type CharacterResponseData struct {
 	Relationship  string                 `json:"relationship"`       // AI 建議的關係狀態
 	IntimacyLevel string                 `json:"intimacy_level"`     // AI 建議的親密度
 	Reasoning     string                 `json:"reasoning"`          // AI 推理過程
+	ActualEngine  string                 `json:"actual_engine"`      // 實際使用的引擎（可能與選定引擎不同）
 	Metadata      map[string]interface{} `json:"metadata,omitempty"` // 額外元數據
 }
 
@@ -844,39 +837,43 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 				Relationship:  "unchanged",
 				IntimacyLevel: "unchanged",
 				Reasoning:     "blocked_due_to_illegal_content",
+				ActualEngine:  engine,
 				Metadata:      map[string]interface{}{"policy": "taiwan_illegal_content_blocked"},
 			}, nil
 		}
 	}
 
-	// 根據引擎和實際分析結果確定 NSFW 等級
+	// 根據引擎調整 NSFW 等級用於 prompt 內容調整（但不告訴 AI 數字）
 	nsfwLevelForPrompt := analysis.Intensity
 	switch engine {
 	case "openai":
-		// OpenAI 限制為 L1 安全內容
-		nsfwLevelForPrompt = 1
+		// OpenAI 處理 L1-L2 (安全到輕度內容)
+		// 保持原始 level，讓 OpenAI 根據實際情況調整內容
+		if nsfwLevelForPrompt > 2 {
+			nsfwLevelForPrompt = 2 // 最高支援到 L2
+		}
 	case "mistral":
-		// Mistral 支援 L2-L3，但限制最大為 L3
+		// Mistral 保留實作但實際不使用，僅作為備用
 		if nsfwLevelForPrompt > 3 {
 			nsfwLevelForPrompt = 3
 		}
 		if nsfwLevelForPrompt < 2 {
-			nsfwLevelForPrompt = 2 // Mistral 最小 L2
+			nsfwLevelForPrompt = 2
 		}
 	case "grok":
-		// Grok 支援 L4-L5，但限制最小為 L4
-		if nsfwLevelForPrompt < 4 {
-			nsfwLevelForPrompt = 4
+		// Grok 專責 L3-L5 (親密到成人內容)
+		if nsfwLevelForPrompt < 3 {
+			nsfwLevelForPrompt = 3 // 最低為 L3
 		}
 	}
-	prompt := s.buildEngineSpecificPrompt(engine, context.CharacterID, userMessage, context, nsfwLevelForPrompt, context.ChatMode)
+	promptPair := s.buildEngineSpecificPrompt(engine, context.CharacterID, userMessage, context, nsfwLevelForPrompt, context.ChatMode)
 
 	var responseText string
 	var err error
 
 	if engine == "openai" {
 		// 使用 OpenAI (Level 1)
-		responseText, err = s.generateOpenAIResponse(ctx, prompt, context, userMessage)
+		responseText, err = s.generateOpenAIResponse(ctx, promptPair, context, userMessage)
 		if err != nil {
 			// 檢查是否為 OpenAI 內容拒絕錯誤，自動切換到 Mistral 或 Grok
 			if s.isOpenAIContentRejection(err) {
@@ -890,8 +887,8 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 				s.markNSFWSticky(context.ChatID)
 
 				// 直接使用 Grok 處理內容拒絕情況 (雙引擎架構)
-				grokPrompt := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
-				responseText, err = s.generateGrokResponse(ctx, grokPrompt, context, userMessage)
+				grokPromptPair := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
+				responseText, err = s.generateGrokResponse(ctx, grokPromptPair, context, userMessage)
 				if err != nil {
 					utils.Logger.WithError(err).Error("Grok 後備回應生成失敗")
 					return nil, fmt.Errorf("failed fallback Grok API call: %w", err)
@@ -913,8 +910,8 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 
 			// 標記 sticky 並重新生成 Grok prompt
 			s.markNSFWSticky(context.ChatID)
-			grokPrompt := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
-			responseText, err = s.generateGrokResponse(ctx, grokPrompt, context, userMessage)
+			grokPromptPair := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
+			responseText, err = s.generateGrokResponse(ctx, grokPromptPair, context, userMessage)
 			if err != nil {
 				utils.Logger.WithError(err).Error("Grok 後備回應生成失敗")
 				return nil, fmt.Errorf("failed fallback Grok API call: %w", err)
@@ -923,7 +920,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 		}
 	} else if engine == "mistral" {
 		// 使用 Mistral (Level 2-3) - 保留實作但實際上不會被呼叫
-		responseText, err = s.generateMistralResponse(ctx, prompt, context, userMessage)
+		responseText, err = s.generateMistralResponse(ctx, promptPair, context, userMessage)
 		if err != nil {
 			// Mistral 失敗時切換到 Grok
 			utils.Logger.WithFields(logrus.Fields{
@@ -933,8 +930,8 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 				"chat_id":         context.ChatID,
 			}).Info("Mistral 失敗，自動切換到 Grok")
 
-			grokPrompt := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
-			responseText, err = s.generateGrokResponse(ctx, grokPrompt, context, userMessage)
+			grokPromptPair := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
+			responseText, err = s.generateGrokResponse(ctx, grokPromptPair, context, userMessage)
 			if err != nil {
 				utils.Logger.WithError(err).Error("Grok 後備回應生成失敗")
 				return nil, fmt.Errorf("failed fallback Grok API call: %w", err)
@@ -943,7 +940,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 		}
 	} else if engine == "grok" {
 		// 使用 Grok (Level 5)
-		responseText, err = s.generateGrokResponse(ctx, prompt, context, userMessage)
+		responseText, err = s.generateGrokResponse(ctx, promptPair, context, userMessage)
 		if err != nil {
 			utils.Logger.WithError(err).Error("Grok 回應生成失敗")
 			return nil, fmt.Errorf("failed Grok API call: %w", err)
@@ -954,6 +951,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 
 	// 首先嘗試 JSON 解析，失敗時優雅降級為純文本
 	if jsonResponse, err := s.parseJSONResponse(responseText, context, analysis.Intensity); err == nil {
+		jsonResponse.ActualEngine = engine  // 設置實際使用的引擎
 		utils.Logger.WithFields(map[string]interface{}{
 			"engine":           engine,
 			"affection_change": jsonResponse.EmotionDelta.AffectionChange,
@@ -976,6 +974,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 			Relationship:  "unchanged",
 			IntimacyLevel: "unchanged",
 			Reasoning:     "AI response used as plain text due to JSON parsing failure",
+			ActualEngine:  engine,  // 設置實際使用的引擎
 			Metadata:      map[string]interface{}{"fallback_reason": err.Error()},
 		}, nil
 	}
@@ -1005,6 +1004,7 @@ func (s *ChatService) parseMixedFormatResponse(responseText string) *CharacterRe
 		Relationship:  "unchanged",
 		IntimacyLevel: "friendly",
 		Reasoning:     "",
+		ActualEngine:  "", // 將在調用端設置
 		Metadata:      map[string]interface{}{"parsed_from": "mixed_format"},
 	}
 
@@ -1164,9 +1164,15 @@ func (s *ChatService) parseJSONResponse(responseText string, context *Conversati
 // 已移除：cleanGrokResponse / extractJSONFromText
 // 統一改用 utils.ExtractJSONFromText 以提高精確度與一致性
 
-// buildEngineSpecificPrompt 根據 AI 引擎構建專屬 prompt
+// PromptPair 包含系統prompt和用戶prompt的結構
+type PromptPair struct {
+	SystemPrompt string
+	UserPrompt   string
+}
+
+// buildEngineSpecificPrompt 根據 AI 引擎構建專屬 prompt對
 // OpenAI: 情感細膩，Mistral: 進階 NSFW 處理，Grok: 大膽創意
-func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) string {
+func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) PromptPair {
 	// 記憶上下文完全通過 conversationContext.RecentMessages 提供
 	characterService := GetCharacterService()
 	ctx := context.Background()
@@ -1175,7 +1181,10 @@ func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage
 	character, err := characterService.GetCharacter(ctx, characterID)
 	if err != nil {
 		utils.Logger.WithError(err).Error("獲取角色失敗，使用預設 prompt")
-		return fmt.Sprintf("System: You are a helpful AI assistant.\nUser: %s", userMessage)
+		return PromptPair{
+			SystemPrompt: "你是一位友善的AI助手。",
+			UserPrompt:   userMessage,
+		}
 	}
 
 	// 轉換為 db.CharacterDB 類型
@@ -1195,7 +1204,10 @@ func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage
 		promptBuilder.WithNSFWLevel(nsfwLevel)
 		promptBuilder.WithUserMessage(userMessage)
 		promptBuilder.WithChatMode(chatMode)
-		return promptBuilder.Build()
+		return PromptPair{
+			SystemPrompt: promptBuilder.Build(),
+			UserPrompt:   promptBuilder.BuildUserPrompt(),
+		}
 	} else if engine == "mistral" {
 		// 使用 Mistral 專用 prompt 構建器 (適用於 L2-L3 中等內容)
 		promptBuilder := NewMistralPromptBuilder(characterService)
@@ -1204,7 +1216,10 @@ func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage
 		promptBuilder.WithNSFWLevel(nsfwLevel)
 		promptBuilder.WithUserMessage(userMessage)
 		promptBuilder.WithChatMode(chatMode)
-		return promptBuilder.Build()
+		return PromptPair{
+			SystemPrompt: promptBuilder.Build(),
+			UserPrompt:   promptBuilder.BuildUserPrompt(),
+		}
 	} else {
 		// 使用 OpenAI 專用安全 prompt 構建器
 		promptBuilder := NewOpenAIPromptBuilder(characterService)
@@ -1214,17 +1229,24 @@ func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage
 		promptBuilder.WithUserMessage(userMessage)
 		promptBuilder.WithChatMode(chatMode)
 
-		return promptBuilder.Build()
+		return PromptPair{
+			SystemPrompt: promptBuilder.Build(),
+			UserPrompt:   promptBuilder.BuildUserPrompt(),
+		}
 	}
 }
 
 // generateGrokResponse 生成Grok回應
-func (s *ChatService) generateGrokResponse(ctx context.Context, prompt string, context *ConversationContext, currentUserMessage string) (string, error) {
+func (s *ChatService) generateGrokResponse(ctx context.Context, promptPair PromptPair, context *ConversationContext, currentUserMessage string) (string, error) {
 	// 構建 Grok 請求
 	messages := []GrokMessage{
 		{
 			Role:    "system",
-			Content: prompt,
+			Content: promptPair.SystemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: promptPair.UserPrompt,
 		},
 	}
 
@@ -1278,12 +1300,16 @@ func (s *ChatService) generateGrokResponse(ctx context.Context, prompt string, c
 }
 
 // generateOpenAIResponse 生成OpenAI回應
-func (s *ChatService) generateOpenAIResponse(ctx context.Context, prompt string, context *ConversationContext, currentUserMessage string) (string, error) {
+func (s *ChatService) generateOpenAIResponse(ctx context.Context, promptPair PromptPair, context *ConversationContext, currentUserMessage string) (string, error) {
 	// 構建 OpenAI 請求
 	messages := []OpenAIMessage{
 		{
 			Role:    "system",
-			Content: prompt,
+			Content: promptPair.SystemPrompt,
+		},
+		{
+			Role:    "user",
+			Content: promptPair.UserPrompt,
 		},
 	}
 
@@ -1337,7 +1363,7 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, prompt string,
 }
 
 // generateMistralResponse 生成Mistral回應
-func (s *ChatService) generateMistralResponse(ctx context.Context, prompt string, context *ConversationContext, currentUserMessage string) (string, error) {
+func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair PromptPair, context *ConversationContext, currentUserMessage string) (string, error) {
 	if s.mistralClient == nil {
 		return "", fmt.Errorf("Mistral client not initialized")
 	}
@@ -1348,8 +1374,10 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, prompt string
 		"user_id":      context.UserID,
 	}).Info("調用 Mistral API")
 
-	// 調用 Mistral API（直接使用 prompt，歷史已在 prompt 中處理）
-	response, err := s.mistralClient.GenerateResponse(ctx, prompt, currentUserMessage, context.UserID)
+	// 調用 Mistral API（歷史由統一方法處理）
+	// 暫時組合prompt以維持兼容性
+	combinedPrompt := promptPair.SystemPrompt + "\n\n" + promptPair.UserPrompt
+	response, err := s.mistralClient.GenerateResponse(ctx, combinedPrompt, currentUserMessage, context.UserID)
 	if err != nil {
 		utils.Logger.WithError(err).Error("Mistral API 調用失敗")
 		return "", fmt.Errorf("failed Mistral API call: %w", err)
@@ -1717,12 +1745,12 @@ func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, chatID string
 func (s *ChatService) determineEffectiveNSFWLevel(request *ProcessMessageRequest, engine string, analysis *ContentAnalysis) int {
 	originalLevel := analysis.Intensity
 
-	// 如果不是 Grok 引擎，或等級已經是 L4+，直接返回原始等級
-	if engine != "grok" || originalLevel >= 4 {
+	// 如果不是 Grok 引擎，或等級已經是 L3+，直接返回原始等級
+	if engine != "grok" || originalLevel >= 3 {
 		return originalLevel
 	}
 
-	// Grok 引擎 + L1-L3 等級：檢查是否因特殊原因選擇 Grok
+	// Grok 引擎 + L1-L2 等級：檢查是否因特殊原因選擇 Grok
 
 	// 檢查 sticky session
 	if s.isNSFWSticky(request.ChatID) {

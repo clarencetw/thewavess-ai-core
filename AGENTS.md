@@ -1,5 +1,7 @@
 # Repository Guidelines
 
+> 📋 **Related Documentation**: Complete documentation index available at [DOCS_INDEX.md](./DOCS_INDEX.md)
+
 ## Project Structure & Module Organization
 - `handlers/` hosts HTTP entry points for chat, emotion, user, and character flows.
 - Core business logic lives in `services/`, including routing, memory, NSFW checks, TTS, and AI client adapters.

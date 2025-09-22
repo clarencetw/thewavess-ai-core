@@ -122,7 +122,7 @@ func (mc *MistralClient) GenerateResponse(ctx context.Context, systemPrompt, use
 		}).Debug("Mistral request message")
 	}
 
-	// 構建消息
+	// 構建消息 - 歷史由 Chat Service 統一處理
 	messages := []mistral.ChatMessage{
 		{
 			Role:    mistral.RoleSystem,
@@ -299,3 +299,4 @@ func (mc *MistralClient) ValidateConnection(ctx context.Context) error {
 	utils.Logger.Info("Mistral 連接驗證成功")
 	return nil
 }
+

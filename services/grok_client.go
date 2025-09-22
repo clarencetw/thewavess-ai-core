@@ -6,7 +6,6 @@ import (
 	"strings"
 	"time"
 
-	db "github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/option"
@@ -236,72 +235,3 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 	return resp, nil
 }
 
-// BuildNSFWPrompt 構建 NSFW 場景的提示詞（使用統一模板）
-func (c *GrokClient) BuildNSFWPrompt(characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) []GrokMessage {
-	// 使用Grok專屬的prompt構建器
-	characterService := GetCharacterService()
-	promptBuilder := NewGrokPromptBuilder(characterService)
-	ctx := context.Background()
-
-	// 獲取 character 物件
-	character, err := characterService.GetCharacter(ctx, characterID)
-	if err != nil {
-		utils.Logger.WithError(err).Error("獲取角色失敗")
-		// 使用基本 prompt 作為 fallback
-		systemPrompt := "請以創意的方式回應用戶。"
-		return []GrokMessage{
-			{Role: "system", Content: systemPrompt},
-			{Role: "user", Content: userMessage},
-		}
-	}
-
-	// 轉換為 db.CharacterDB 類型
-	dbCharacter := &db.CharacterDB{
-		ID:              character.ID,
-		Name:            character.GetName(),
-		Type:            string(character.Type),
-		Tags:            character.Metadata.Tags,
-		UserDescription: character.UserDescription,
-	}
-
-	promptBuilder.WithCharacter(dbCharacter)
-	promptBuilder.WithContext(conversationContext)
-	promptBuilder.WithNSFWLevel(nsfwLevel)
-	promptBuilder.WithUserMessage(userMessage)
-	promptBuilder.WithChatMode(chatMode)
-	systemPrompt := promptBuilder.Build()
-
-	messages := []GrokMessage{
-		{
-			Role:    "system",
-			Content: systemPrompt,
-		},
-	}
-
-	// 添加對話歷史
-	if conversationContext != nil {
-		// 僅保留最近2則歷史（舊 -> 新）
-		count := len(conversationContext.RecentMessages)
-		if count > 2 {
-			count = 2
-		}
-		for i := count - 1; i >= 0; i-- {
-			msg := conversationContext.RecentMessages[i]
-			messages = append(messages, GrokMessage{Role: msg.Role, Content: msg.Content})
-		}
-	}
-
-	// 添加當前用戶消息（避免與歷史最後一則重複）
-	shouldAppendUser := true
-	if conversationContext != nil && len(conversationContext.RecentMessages) > 0 {
-		latest := conversationContext.RecentMessages[0]
-		if latest.Role == "user" && strings.TrimSpace(latest.Content) == strings.TrimSpace(userMessage) {
-			shouldAppendUser = false
-		}
-	}
-	if shouldAppendUser {
-		messages = append(messages, GrokMessage{Role: "user", Content: userMessage})
-	}
-
-	return messages
-}

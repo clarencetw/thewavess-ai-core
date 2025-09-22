@@ -1,5 +1,7 @@
 # NSFW RAG 快速參考
 
+> 📋 **相關文檔**: 完整文檔索引請參考 [DOCS_INDEX.md](./DOCS_INDEX.md)
+
 > 詳細說明請參閱 [NSFW_GUIDE.md](./NSFW_GUIDE.md)。此文件著重於決策表與快速查詢。
 
 ## 一覽表

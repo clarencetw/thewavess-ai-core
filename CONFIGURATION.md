@@ -2,6 +2,8 @@
 
 建議先複製 `.env.example` → `.env`，再依下列步驟與對照表填寫參數；完整清單與註解請參考 `.env.example`。
 
+> 📋 **相關文檔**: 完整文檔索引請參考 [DOCS_INDEX.md](./DOCS_INDEX.md)
+
 ## 1. 建議設定流程
 1. 複製 `.env.example` 為 `.env`
 2. 填寫必填變數：OpenAI、資料庫、JWT

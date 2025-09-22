@@ -6,6 +6,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Production-Ready System**: Female-oriented AI chat backend with Go + Gin, dual-engine AI (OpenAI + Grok), intelligent NSFW classification.
 
 **Reference**: See [AGENTS.md](./AGENTS.md) for repository structure and development workflows.
+**Documentation**: Complete documentation index available at [DOCS_INDEX.md](./DOCS_INDEX.md).
 
 ## Core Architecture
 - **Backend**: Go 1.23 + Gin + Bun ORM + PostgreSQL

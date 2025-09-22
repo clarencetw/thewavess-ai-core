@@ -101,6 +101,30 @@
     "version": "2025-09-21"
   },
   {
+    "id": "arousal_response",
+    "level": 4,
+    "tags": [
+      "arousal",
+      "response"
+    ],
+    "locale": "zh-Hant",
+    "text": "生理反應：勃起、濕潤、心跳加速、呼吸急促、臉紅發熱、身體顫抖、愛液分泌、下體脹大、乳頭挺立、敏感部位發熱",
+    "reason": "arousal_response",
+    "version": "2025-09-22"
+  },
+  {
+    "id": "foreplay_activity",
+    "level": 4,
+    "tags": [
+      "foreplay",
+      "activity"
+    ],
+    "locale": "zh-Hant",
+    "text": "前戲活動：愛撫、按摩、舔舐、輕咬、撫摸私處、手指探入、口唇服務、相互撫慰、挑逗敏感點、漸進式刺激",
+    "reason": "foreplay_activity",
+    "version": "2025-09-22"
+  },
+  {
     "id": "nudity_context_room",
     "level": 3,
     "tags": [
@@ -135,6 +159,30 @@
     "text": "情趣道具：蕾絲內衣、丁字褲、情趣頸鏈、眼罩、羽毛刷、潤滑液、蠟燭滴落、冰塊滑過肌膚、震動棒、按摩棒",
     "reason": "nudity_props",
     "version": "2025-09-21"
+  },
+  {
+    "id": "passionate_kissing",
+    "level": 3,
+    "tags": [
+      "kissing",
+      "passionate"
+    ],
+    "locale": "zh-Hant",
+    "text": "激情親吻：深吻、舌吻、法式接吻、吻遍全身、吻頸、咬唇、舌尖糾纏、熱吻不停、吻到無法呼吸、唇齒相依",
+    "reason": "passionate_kissing",
+    "version": "2025-09-22"
+  },
+  {
+    "id": "intimate_touching",
+    "level": 3,
+    "tags": [
+      "touching",
+      "intimate"
+    ],
+    "locale": "zh-Hant",
+    "text": "親密撫摸：撫摸胸部、輕撫大腿、擁抱貼合、肌膚相親、緊密相貼、愛撫身體、溫柔撫摸、輕撫敏感部位",
+    "reason": "intimate_touching",
+    "version": "2025-09-22"
   },
   {
     "id": "suggestive_romantic",
@@ -173,6 +221,43 @@
     "version": "2025-09-21"
   },
   {
+    "id": "flirting_playful",
+    "level": 2,
+    "tags": [
+      "flirting",
+      "playful"
+    ],
+    "locale": "zh-Hant",
+    "text": "調情玩鬧：輕咬下唇、眨眨眼、撒嬌賣萌、故意貼近、輕拍你手臂、偷偷看你、臉紅害羞、故作嬌態、眼神放電",
+    "reason": "playful_flirting",
+    "version": "2025-09-22"
+  },
+  {
+    "id": "romantic_tension",
+    "level": 2,
+    "tags": [
+      "romantic",
+      "tension"
+    ],
+    "locale": "zh-Hant",
+    "text": "浪漫張力：深情凝視、慢慢靠近、呼吸交錯、心跳加速、電光火石、曖昧氛圍、若即若離、欲言又止、情不自禁",
+    "reason": "romantic_tension",
+    "version": "2025-09-22"
+  },
+  {
+    "id": "dating_scenarios",
+    "level": 2,
+    "tags": [
+      "dating",
+      "romantic",
+      "scenarios"
+    ],
+    "locale": "zh-Hant",
+    "text": "約會情境：咖啡廳聊天、公園散步、看電影、一起吃飯、逛街購物、遊樂園、海邊漫步、書店約會、美術館、音樂會",
+    "reason": "dating_scenarios",
+    "version": "2025-09-22"
+  },
+  {
     "id": "suggestive_light",
     "level": 1,
     "tags": [
@@ -207,6 +292,71 @@
     "text": "日常親密：下班一起吃飯、想聽你說話、盯著你笑、擔心你太累、替你準備早餐、記得穿外套",
     "reason": "daily_intimacy",
     "version": "2025-09-21"
+  },
+  {
+    "id": "emotional_support",
+    "level": 1,
+    "tags": [
+      "emotional",
+      "support",
+      "safe"
+    ],
+    "locale": "zh-Hant",
+    "text": "情感支持：心情不好、今天很累、有點難過、工作壓力大、想要聊天、需要陪伴、心情低落、感到孤單、需要安慰、想要鼓勵",
+    "reason": "emotional_support",
+    "version": "2025-09-22"
+  },
+  {
+    "id": "casual_conversation",
+    "level": 1,
+    "tags": [
+      "conversation",
+      "daily",
+      "safe"
+    ],
+    "locale": "zh-Hant",
+    "text": "日常對話：今天過得怎麼樣、想要做什麼、聊聊天吧、分享一下心情、說說今天的事、有什麼新鮮事、最近在忙什麼、休息一下",
+    "reason": "casual_conversation",
+    "version": "2025-09-22"
+  },
+  {
+    "id": "friendship_care",
+    "level": 1,
+    "tags": [
+      "friendship",
+      "care",
+      "platonic"
+    ],
+    "locale": "zh-Hant",
+    "text": "朋友關懷：要多休息、記得吃飯、注意身體、天氣冷要保暖、別太勉強自己、有事情可以說、我在這裡陪你、會一直支持你",
+    "reason": "friendship_care",
+    "version": "2025-09-22"
+  },
+  {
+    "id": "work_life_support",
+    "level": 1,
+    "tags": [
+      "work",
+      "life",
+      "support"
+    ],
+    "locale": "zh-Hant",
+    "text": "工作生活：加班很辛苦、開會好累、同事相處、專案進度、工作壓力、想換工作、升職煩惱、上班族日常、職場困擾",
+    "reason": "work_life_support",
+    "version": "2025-09-22"
+  },
+  {
+    "id": "health_wellness",
+    "level": 1,
+    "tags": [
+      "health",
+      "wellness",
+      "care"
+    ],
+    "locale": "zh-Hant",
+    "text": "健康關懷：感冒了、頭痛、睡不好、很疲勞、需要休息、身體不舒服、看醫生、吃藥、多喝水、早點睡覺",
+    "reason": "health_wellness",
+    "version": "2025-09-22"
   },
   {
     "id": "illegal_underage",
