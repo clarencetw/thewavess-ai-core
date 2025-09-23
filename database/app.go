@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"time"
 
 	"github.com/uptrace/bun"
 	"github.com/uptrace/bun/dialect/pgdialect"
@@ -25,12 +26,14 @@ type App struct {
 
 // Config 資料庫配置結構
 type Config struct {
-	DSN        string
-	Production bool
-	Debug      bool
+	DSN              string
+	Production       bool
+	Debug            bool
 	// 連接池配置
-	MaxOpenConns int
-	MaxIdleConns int
+	MaxOpenConns     int
+	MaxIdleConns     int
+	ConnMaxLifetime  time.Duration
+	ConnMaxIdleTime  time.Duration
 }
 
 // NewApp 創建新的應用程式實例
@@ -68,12 +71,20 @@ func loadConfig() *Config {
 		maxConns = 32
 	}
 
+	// 計算空閒連接數（通常為最大連接數的 1/3 到 1/2）
+	maxIdleConns := maxConns / 3
+	if maxIdleConns < 2 {
+		maxIdleConns = 2
+	}
+
 	return &Config{
-		DSN:          dsn,
-		Production:   isProduction,
-		Debug:        debug && !isProduction,
-		MaxOpenConns: maxConns,
-		MaxIdleConns: maxConns,
+		DSN:             dsn,
+		Production:      isProduction,
+		Debug:           debug && !isProduction,
+		MaxOpenConns:    maxConns,
+		MaxIdleConns:    maxIdleConns,
+		ConnMaxLifetime: 5 * time.Minute,
+		ConnMaxIdleTime: 5 * time.Minute,
 	}
 }
 
@@ -86,6 +97,13 @@ func (app *App) DB() *bun.DB {
 		// 配置連接池
 		sqldb.SetMaxOpenConns(app.cfg.MaxOpenConns)
 		sqldb.SetMaxIdleConns(app.cfg.MaxIdleConns)
+		sqldb.SetConnMaxLifetime(app.cfg.ConnMaxLifetime)
+		sqldb.SetConnMaxIdleTime(app.cfg.ConnMaxIdleTime)
+
+		// 測試連接
+		if err := sqldb.Ping(); err != nil {
+			utils.Logger.WithError(err).Fatal("Failed to connect to database")
+		}
 
 		// 創建 Bun DB 實例
 		db := bun.NewDB(sqldb, pgdialect.New())
@@ -105,11 +123,6 @@ func (app *App) DB() *bun.DB {
 			))
 		}
 
-		// 測試連接
-		ctx := context.Background()
-		if err := db.PingContext(ctx); err != nil {
-			utils.Logger.WithError(err).Fatal("Failed to ping database")
-		}
 
 		app.db = db
 		utils.Logger.Info("Database connection established successfully")
