@@ -55,8 +55,7 @@ COPY --from=builder /app/public ./public
 # Copy templates directory for HTML rendering
 COPY --from=builder /app/templates ./templates
 
-# Copy configs directory for configuration files
-COPY --from=builder /app/configs ./configs
+# Note: configs directory removed (NSFW classification now uses built-in keywords)
 
 # Set correct ownership
 RUN chown -R appuser:appgroup /app
