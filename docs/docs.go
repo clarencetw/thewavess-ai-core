@@ -3774,7 +3774,7 @@ const docTemplate = `{
         },
         "/monitor/health": {
             "get": {
-                "description": "檢查系統整體健康狀態，包括服務運行時間、資料庫連接狀態等基本信息",
+                "description": "檢查系統整體健康狀態。關鍵服務：資料庫連接。非關鍵服務：Redis快取（故障時自動降級為記憶體快取）",
                 "consumes": [
                     "application/json"
                 ],
@@ -3823,7 +3823,7 @@ const docTemplate = `{
                         }
                     },
                     "503": {
-                        "description": "系統服務降級",
+                        "description": "關鍵服務故障",
                         "schema": {
                             "allOf": [
                                 {
@@ -5136,6 +5136,20 @@ const docTemplate = `{
                 }
             }
         },
+        "handlers.RedisInfo": {
+            "type": "object",
+            "properties": {
+                "connected": {
+                    "type": "boolean"
+                },
+                "ping_latency": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                }
+            }
+        },
         "handlers.RelationshipHistoryResponse": {
             "type": "object",
             "properties": {
@@ -5265,6 +5279,9 @@ const docTemplate = `{
             "properties": {
                 "database": {
                     "$ref": "#/definitions/handlers.DatabaseInfo"
+                },
+                "redis": {
+                    "$ref": "#/definitions/handlers.RedisInfo"
                 },
                 "runtime": {
                     "$ref": "#/definitions/handlers.RuntimeInfo"

@@ -29,8 +29,10 @@ services:
       - DB_PORT=5432
       - DB_NAME=${DB_NAME:-thewavess_ai_core}
       - DB_SSLMODE=disable
-      # Redis Configuration  
-      - REDIS_URL=redis://redis:6379/0
+      # Redis Configuration
+      - REDIS_ADDR=redis:6379
+      - REDIS_PASSWORD=
+      - REDIS_DB=0
       # OpenAI Configuration
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
@@ -72,10 +74,11 @@ services:
         condition: service_healthy
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/api/v1/monitor/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "-O", "/dev/null", "http://localhost:8080/api/v1/monitor/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   # PostgreSQL Database
   postgres:

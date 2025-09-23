@@ -67,8 +67,8 @@ USER appuser:appgroup
 EXPOSE 8080
 
 # Enhanced health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/api/v1/monitor/health || exit 1
+HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
+    CMD wget --no-verbose --tries=1 -O /dev/null http://localhost:8080/api/v1/monitor/health || exit 1
 
 # Run the application
 ENTRYPOINT ["./main"]

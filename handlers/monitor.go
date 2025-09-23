@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"time"
 
+	"github.com/clarencetw/thewavess-ai-core/database"
 	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/gin-gonic/gin"
@@ -28,6 +29,7 @@ type SystemStatsResponse struct {
 	Timestamp time.Time      `json:"timestamp"`
 	System    SystemInfo     `json:"system"`
 	Database  DatabaseInfo   `json:"database"`
+	Redis     RedisInfo      `json:"redis"`
 	Runtime   RuntimeInfo    `json:"runtime"`
 	Services  ServicesStatus `json:"services"`
 }
@@ -44,6 +46,13 @@ type SystemInfo struct {
 type DatabaseInfo struct {
 	Status      string `json:"status"`
 	Type        string `json:"type"`
+	Connected   bool   `json:"connected"`
+	PingLatency string `json:"ping_latency,omitempty"`
+}
+
+// RedisInfo Redis 資訊
+type RedisInfo struct {
+	Status      string `json:"status"`
 	Connected   bool   `json:"connected"`
 	PingLatency string `json:"ping_latency,omitempty"`
 }
@@ -66,14 +75,16 @@ type ServicesStatus struct {
 
 var MonitorStartTime = time.Now() // 導出供其他包使用
 
+// 移除 getRedisClient，直接使用全局客戶端
+
 // HealthCheck godoc
 // @Summary      系統健康檢查
-// @Description  檢查系統整體健康狀態，包括服務運行時間、資料庫連接狀態等基本信息
+// @Description  檢查系統整體健康狀態。關鍵服務：資料庫連接。非關鍵服務：Redis快取（故障時自動降級為記憶體快取）
 // @Tags         Monitor
 // @Accept       json
 // @Produce      json
 // @Success      200 {object} models.APIResponse{data=HealthResponse} "系統健康"
-// @Success      503 {object} models.APIResponse{data=HealthResponse} "系統服務降級"
+// @Success      503 {object} models.APIResponse{data=HealthResponse} "關鍵服務故障"
 // @Failure      500 {object} models.APIResponse{error=models.APIError} "內部服務器錯誤"
 // @Router       /monitor/health [get]
 func HealthCheck(c *gin.Context) {
@@ -81,8 +92,10 @@ func HealthCheck(c *gin.Context) {
 
 	// 檢查資料庫連接
 	dbStatus := "healthy"
+	redisStatus := "healthy"
 	services := map[string]string{
 		"database": "healthy",
+		"redis":    "healthy",
 		"api":      "healthy",
 	}
 
@@ -99,11 +112,20 @@ func HealthCheck(c *gin.Context) {
 		services["database"] = "disconnected"
 	}
 
-	// 決定整體狀態
+	// 檢查 Redis 狀態
+	if database.IsRedisAvailable() {
+		services["redis"] = "healthy"
+	} else {
+		redisStatus = "unhealthy"
+		services["redis"] = "unhealthy"
+	}
+
+	// 決定整體狀態（僅基於關鍵服務）
 	status := "healthy"
 	if dbStatus == "unhealthy" {
 		status = "degraded"
 	}
+	// Redis 故障不影響整體健康狀態（已有降級機制）
 
 	uptime := time.Since(MonitorStartTime).Round(time.Second).String()
 
@@ -119,13 +141,14 @@ func HealthCheck(c *gin.Context) {
 	httpStatus := http.StatusOK
 	if status == "degraded" {
 		httpStatus = http.StatusServiceUnavailable
-		response.Message = "某些服務不可用"
+		response.Message = "關鍵服務故障"
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
-		"status":    status,
-		"uptime":    uptime,
-		"db_status": dbStatus,
+		"status":       status,
+		"uptime":       uptime,
+		"db_status":    dbStatus,
+		"redis_status": redisStatus,
 	}).Info("健康檢查完成")
 
 	c.JSON(httpStatus, models.APIResponse{
@@ -171,6 +194,18 @@ func GetSystemStats(c *gin.Context) {
 		}
 	}
 
+	// 檢查 Redis 狀態
+	redisInfo := RedisInfo{
+		Connected: false,
+		Status:    "disconnected",
+	}
+
+	if database.IsRedisAvailable() {
+		redisInfo.Connected = true
+		redisInfo.Status = "connected"
+		// 注：延遲測試可以在需要時添加
+	}
+
 	// 檢查外部服務狀態
 	services := ServicesStatus{
 		OpenAI: getServiceStatus("OPENAI_API_KEY"),
@@ -188,6 +223,7 @@ func GetSystemStats(c *gin.Context) {
 			GoVersion:    runtime.Version(),
 		},
 		Database: dbInfo,
+		Redis:    redisInfo,
 		Runtime: RuntimeInfo{
 			Goroutines:  runtime.NumGoroutine(),
 			MemoryUsage: formatBytes(memStats.Alloc),
@@ -199,9 +235,10 @@ func GetSystemStats(c *gin.Context) {
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
-		"goroutines":   response.Runtime.Goroutines,
-		"memory_usage": response.Runtime.MemoryUsage,
-		"db_connected": dbInfo.Connected,
+		"goroutines":     response.Runtime.Goroutines,
+		"memory_usage":   response.Runtime.MemoryUsage,
+		"db_connected":   dbInfo.Connected,
+		"redis_connected": redisInfo.Connected,
 	}).Info("系統狀態統計獲取完成")
 
 	c.JSON(http.StatusOK, models.APIResponse{
@@ -263,7 +300,7 @@ func Ready(c *gin.Context) {
 	ready := true
 	services := make(map[string]bool)
 
-	// 檢查資料庫
+	// 檢查資料庫（關鍵服務）
 	if GetDB() != nil {
 		ctx := c.Request.Context()
 		if err := GetDB().PingContext(ctx); err != nil {
@@ -276,6 +313,10 @@ func Ready(c *gin.Context) {
 		ready = false
 		services["database"] = false
 	}
+
+	// 檢查 Redis（資訊性，不影響就緒狀態）
+	services["redis"] = database.IsRedisAvailable()
+	// 註：Redis 狀態不影響整體就緒判斷
 
 	// 檢查必要的環境變數
 	if utils.GetEnvWithDefault("OPENAI_API_KEY", "") == "" &&
