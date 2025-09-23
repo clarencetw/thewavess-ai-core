@@ -1116,60 +1116,63 @@ func RegenerateResponse(c *gin.Context) {
 		return
 	}
 
-	// 重新生成回應
+	// 使用專門的重新生成方法
 	chatService := services.GetChatService()
-	processReq := &services.ProcessMessageRequest{
-		ChatID:      chatID,
-		UserMessage: previousUserMsg.Dialogue,
-		CharacterID: chat.CharacterID,
-		UserID:      userID.(string),
-	}
 
-	response, err := chatService.ProcessMessage(context.Background(), processReq)
+	aiResponse, err := chatService.RegenerateMessage(
+		context.Background(),
+		previousUserMsg.Dialogue,
+		chatID,
+		chat.CharacterID,
+		userID.(string),
+	)
 
 	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to regenerate message")
+		utils.Logger.WithError(err).Error("Failed to regenerate AI response")
 		c.JSON(http.StatusInternalServerError, models.APIResponse{
 			Success: false,
 			Error: &models.APIError{
 				Code:    "REGENERATION_FAILED",
-				Message: "重新生成失敗",
+				Message: "重新生成 AI 回應失敗",
 			},
 		})
 		return
 	}
 
-	// 標記原消息為已替換
-	_, err = database.GetApp().DB().NewUpdate().
-		Model(&originalMessage).
+	// 直接更新原消息欄位
+	_, err = database.GetApp().DB().NewUpdate().Model(&originalMessage).
+		Set("dialogue = ?", aiResponse.Content).
+		Set("ai_engine = ?", aiResponse.ActualEngine).
 		Set("is_regenerated = true").
-		Set("updated_at = ?", time.Now()).
-		Where("id = ?", messageID).
-		Exec(context.Background())
+		Where("id = ?", messageID).Exec(context.Background())
 
 	if err != nil {
-		utils.Logger.WithError(err).Error("Failed to mark original message as regenerated")
+		utils.Logger.WithError(err).Error("Failed to update regenerated message")
+		c.JSON(http.StatusInternalServerError, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "UPDATE_FAILED",
+				Message: "更新重新生成的消息失敗",
+			},
+		})
+		return
 	}
 
-	// 構建詳細 MessageResponse 用於 RegenerateMessageResponse
-	now := time.Now()
-	messageResponse := &models.DetailedMessageResponse{
-		MessageResponse: models.MessageResponse{
-			ID:             response.MessageID,
-			ChatID:         response.ChatID,
-			Role:           "assistant",
-			Dialogue:       response.Content,
-			AIEngine:       response.AIEngine,
-			ResponseTimeMs: int(response.ResponseTime.Milliseconds()),
-			NSFWLevel:      response.NSFWLevel,
-			CreatedAt:      now,
-		},
-		IsRegenerated: true, // 標記為重新生成
-	}
-
-	// 使用專用的 RegenerateMessageResponse 結構
+	// 回傳結果
 	regenerateResponse := &models.RegenerateMessageResponse{
-		Message:           messageResponse,
+		Message: &models.DetailedMessageResponse{
+			MessageResponse: models.MessageResponse{
+				ID:             messageID,
+				ChatID:         chatID,
+				Role:           "assistant",
+				Dialogue:       aiResponse.Content,
+				AIEngine:       aiResponse.ActualEngine,
+				ResponseTimeMs: 0, // 重新生成不記錄響應時間
+				NSFWLevel:      0, // 可以從 analysis 獲取，但簡化處理
+				CreatedAt:      originalMessage.CreatedAt,
+			},
+			IsRegenerated: true,
+		},
 		PreviousMessageID: messageID,
 		Regenerated:       true,
 	}

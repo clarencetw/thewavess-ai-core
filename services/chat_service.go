@@ -313,6 +313,49 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 	}, nil
 }
 
+// RegenerateMessage 重新生成 AI 回應（不保存新消息）
+func (s *ChatService) RegenerateMessage(ctx context.Context, userMessage, chatID, characterID, userID string) (*CharacterResponseData, error) {
+	// 1. 構建上下文
+	contextReq := &ProcessMessageRequest{
+		ChatID:      chatID,
+		UserMessage: userMessage,
+		CharacterID: characterID,
+		UserID:      userID,
+	}
+
+	conversationContext, err := s.buildFemaleOrientedContext(ctx, contextReq)
+	if err != nil {
+		return nil, fmt.Errorf("failed to build context: %w", err)
+	}
+
+	// 2. 分析內容
+	analysis, err := s.analyzeContent(userMessage)
+	if err != nil {
+		return nil, fmt.Errorf("failed to analyze content: %w", err)
+	}
+
+	// 3. 獲取角色資訊
+	characterService := GetCharacterService()
+	character, err := characterService.GetCharacter(ctx, characterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get character: %w", err)
+	}
+
+	// 4. 選擇引擎並生成回應
+	selectedEngine := s.selectAIEngineWithCharacter(analysis, conversationContext, userMessage, character)
+
+	response, err := s.generatePersonalizedResponseWithCharacter(ctx, selectedEngine, userMessage, conversationContext, analysis, character)
+	if err != nil {
+		// 如果失敗，創建錯誤佔位符（與 ProcessMessage 一致）
+		response = &CharacterResponseData{
+			Content:      "AI回應生成失敗，請重新生成",
+			ActualEngine: "error",
+		}
+	}
+
+	return response, nil
+}
+
 // ProcessMessage 處理用戶消息並生成回應 - 女性向AI聊天系統 (性能優化版)
 func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessageRequest) (*ChatResponse, error) {
 	startTime := time.Now()
