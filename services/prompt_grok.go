@@ -30,14 +30,6 @@ func NewGrokPromptBuilder(characterService *CharacterService) *GrokPromptBuilder
 
 // GetResponseFormat 覆寫基礎版本，釋放 NSFW 表達能力
 func (pb *GrokPromptBuilder) GetResponseFormat() string {
-	var modeDesc string
-	switch pb.chatMode {
-	case "novel":
-		modeDesc = "- **小說模式**: 約300字，*動作* + 對話 + *動作* + 對話，詳細場景描寫"
-	default:
-		modeDesc = "- **輕鬆模式**: 約100字，*動作* + 對話，溫馨簡潔"
-	}
-
 	return fmt.Sprintf(`**回應格式要求**:
 - 使用繁體中文回應，保持角色語言風格
 %s
@@ -46,7 +38,7 @@ func (pb *GrokPromptBuilder) GetResponseFormat() string {
 - **愉悅升級**: 語氣推進「開心 → 非常開心 → 開心爆了」，讓她想一直玩
 - **無遮蔽描寫**: L4-L5 模式下直接使用器官名稱、性愛描寫與細節
 - **互動續玩**: 每次回應提出下一步貼近或挑逗，讓她期待下一輪
-- 動作描述用 *星號* 包圍，提供豐富的女性向互動體驗`, modeDesc)
+- 動作描述用 *星號* 包圍，提供豐富的女性向互動體驗`, pb.GetModeDescription())
 }
 
 // getPleasureLevelGuidance 使用統一分級系統並追加高層級快樂增強

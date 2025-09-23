@@ -3,6 +3,8 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"strings"
 	"time"
 
@@ -49,18 +51,28 @@ func NewGrokClient() *GrokClient {
 	}
 
 	// 從環境變數讀取配置
-	modelName := utils.GetEnvWithDefault("GROK_MODEL", "grok-beta")
+	modelName := utils.GetEnvWithDefault("GROK_MODEL", "grok-4-fast")
 	maxTokens := utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 2000)
-	temperature := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.7)
+	temperature := utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.9)
 
 	// 獲取 API URL
 	baseURL := utils.GetEnvWithDefault("GROK_API_URL", "https://api.x.ai/v1")
 
-	// 創建 OpenAI 客戶端，使用 xAI 端點
-	client := openai.NewClient(
+	// 準備客戶端選項
+	options := []option.RequestOption{
 		option.WithAPIKey(apiKey),
 		option.WithBaseURL(baseURL),
-	)
+	}
+
+	// 在開發環境下啟用 debug 日誌
+	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
+		debugLogger := log.New(os.Stderr, "[Grok-DEBUG] ", log.LstdFlags)
+		options = append(options, option.WithDebugLog(debugLogger))
+		utils.Logger.Info("Grok SDK debug logging enabled")
+	}
+
+	// 創建 OpenAI 客戶端，使用 xAI 端點
+	client := openai.NewClient(options...)
 
 	utils.Logger.WithField("base_url", baseURL).Info("Using xAI Grok API with OpenAI SDK")
 
@@ -147,13 +159,30 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		"model":   request.Model,
 	}).Info("Sending Grok API request via OpenAI SDK")
 
-	resp, err := c.client.Chat.Completions.New(ctx, params)
+	resp, err := c.client.Chat.Completions.New(ctx, params, option.WithRequestTimeout(30*time.Second))
 	if err != nil {
+		// 記錄詳細的錯誤信息用於診斷
 		utils.Logger.WithFields(map[string]interface{}{
-			"service": "grok",
-			"error":   err.Error(),
-			"model":   request.Model,
+			"service":        "grok",
+			"error":          err.Error(),
+			"error_type":     fmt.Sprintf("%T", err),
+			"model":          request.Model,
+			"base_url":       c.baseURL,
+			"max_tokens":     request.MaxTokens,
+			"temperature":    request.Temperature,
+			"messages_count": len(request.Messages),
+			"request_time":   time.Since(startTime),
 		}).Error("Grok API call failed")
+
+		// 檢查是否是超時錯誤
+		if ctx.Err() == context.DeadlineExceeded {
+			utils.Logger.WithFields(map[string]interface{}{
+				"service":      "grok",
+				"timeout_type": "context_deadline",
+				"elapsed":      time.Since(startTime),
+			}).Error("Grok API 請求超時")
+		}
+
 		return nil, fmt.Errorf("failed Grok API call: %w", err)
 	}
 

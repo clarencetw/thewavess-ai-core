@@ -3,7 +3,10 @@ package services
 import (
 	"context"
 	"fmt"
+	"log"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/openai/openai-go/v2"
@@ -70,20 +73,25 @@ func NewOpenAIClient() *OpenAIClient {
 		model = openai.ChatModelGPT4oMini
 	}
 
-	var client openai.Client
-	if baseURL != "https://api.openai.com/v1" {
-		// 自定義端點
-		client = openai.NewClient(
-			option.WithAPIKey(apiKey),
-			option.WithBaseURL(baseURL),
-		)
-		utils.Logger.WithField("base_url", baseURL).Info("Using custom OpenAI API URL")
-	} else {
-		// 使用默認 OpenAI API
-		client = openai.NewClient(
-			option.WithAPIKey(apiKey),
-		)
+	// 準備客戶端選項
+	options := []option.RequestOption{
+		option.WithAPIKey(apiKey),
 	}
+
+	// 添加自定義端點
+	if baseURL != "https://api.openai.com/v1" {
+		options = append(options, option.WithBaseURL(baseURL))
+		utils.Logger.WithField("base_url", baseURL).Info("Using custom OpenAI API URL")
+	}
+
+	// 在開發環境下啟用 debug 日誌
+	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
+		debugLogger := log.New(os.Stderr, "[OpenAI-DEBUG] ", log.LstdFlags)
+		options = append(options, option.WithDebugLog(debugLogger))
+		utils.Logger.Info("OpenAI SDK debug logging enabled")
+	}
+
+	client := openai.NewClient(options...)
 
 	return &OpenAIClient{
 		client:      client,
@@ -183,15 +191,33 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	}
 
 	// 調用 OpenAI API
-	resp, err := c.client.Chat.Completions.New(ctx, params)
+	startTime := time.Now()
+	resp, err := c.client.Chat.Completions.New(ctx, params, option.WithRequestTimeout(30*time.Second))
 
 	if err != nil {
+		// 記錄詳細的錯誤信息用於診斷
 		utils.Logger.WithFields(map[string]interface{}{
-			"service": "openai",
-			"error":   err.Error(),
-			"model":   string(c.model),
-			"user":    request.User,
+			"service":        "openai",
+			"error":          err.Error(),
+			"error_type":     fmt.Sprintf("%T", err),
+			"model":          string(c.model),
+			"user":           request.User,
+			"base_url":       c.baseURL,
+			"max_tokens":     request.MaxTokens,
+			"temperature":    request.Temperature,
+			"messages_count": len(request.Messages),
+			"request_time":   time.Since(startTime),
 		}).Error("OpenAI API call failed")
+
+		// 檢查是否是超時錯誤
+		if ctx.Err() == context.DeadlineExceeded {
+			utils.Logger.WithFields(map[string]interface{}{
+				"service":      "openai",
+				"timeout_type": "context_deadline",
+				"elapsed":      time.Since(startTime),
+			}).Error("OpenAI API 請求超時")
+		}
+
 		return nil, fmt.Errorf("failed OpenAI API call: %w", err)
 	}
 

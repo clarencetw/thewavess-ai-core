@@ -100,13 +100,6 @@ func (pb *OpenAIPromptBuilder) getSafeInstructions() string {
 
 // GetResponseFormat 覆寫基礎版本，專精女性向言情風格
 func (pb *OpenAIPromptBuilder) GetResponseFormat() string {
-	var modeDesc string
-	switch pb.chatMode {
-	case "novel":
-		modeDesc = "- **小說模式**: 約300字，*動作* + 對話 + *動作* + 對話，詳細場景描寫"
-	default:
-		modeDesc = "- **輕鬆模式**: 約100字，*動作* + 對話，溫馨簡潔"
-	}
 
 	return fmt.Sprintf(`**回應格式要求**:
 - 使用繁體中文回應，保持角色語言風格
@@ -114,7 +107,7 @@ func (pb *OpenAIPromptBuilder) GetResponseFormat() string {
 - **女性向專精**: 擅長言情、溫馨、浪漫的表達方式
 - **情感細膩**: 準確捕捉和回應女性用戶的情感需求
 - **語氣漸進**: 隨親密度調整溫度與細節，保持自然升溫
-- 動作描述用 *星號* 包圍，避免重複用戶話語`, modeDesc)
+- 動作描述用 *星號* 包圍，避免重複用戶話語`, pb.GetModeDescription())
 }
 
 // getLevelAdjustments 針對 L1-L3 的細緻指引

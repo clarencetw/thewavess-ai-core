@@ -83,9 +83,9 @@ func (b *BasePromptBuilder) GetLevelGuidance() string {
 func (b *BasePromptBuilder) GetModeGuidance() string {
 	switch b.chatMode {
 	case "novel":
-		return `模式: 小說敘事風格，約300字，*動作描述* 與對話交替，詳細場景與心理描寫`
+		return `模式: 小說敘事風格，約450字，*動作描述* 與對話交替，詳細場景與心理描寫`
 	default:
-		return `模式: 輕鬆互動風格，約100字，*動作描述* + 對話，溫馨簡潔`
+		return `模式: 輕鬆互動風格，約200字，*動作描述* + 對話，溫馨簡潔`
 	}
 }
 
@@ -95,21 +95,23 @@ func (b *BasePromptBuilder) GetFemaleAudienceGuidance() string {
 }
 
 
-// GetResponseFormat 獲取回應格式要求
-func (b *BasePromptBuilder) GetResponseFormat() string {
-	var modeDesc string
+// GetModeDescription 獲取模式描述（統一字數設定）
+func (b *BasePromptBuilder) GetModeDescription() string {
 	switch b.chatMode {
 	case "novel":
-		modeDesc = "- **小說模式**: 約300字，*動作* + 對話 + *動作* + 對話，詳細場景描寫"
+		return "- **小說模式**: 約450字，*動作* + 對話 + *動作* + 對話，詳細場景描寫"
 	default:
-		modeDesc = "- **輕鬆模式**: 約100字，*動作* + 對話，溫馨簡潔"
+		return "- **輕鬆模式**: 約200字，*動作* + 對話，溫馨簡潔"
 	}
+}
 
+// GetResponseFormat 獲取基礎回應格式要求
+func (b *BasePromptBuilder) GetResponseFormat() string {
 	return fmt.Sprintf(`**回應格式要求**:
 - 使用繁體中文回應，保持角色語言風格
 %s
 - 動作用 *星號* 包圍，對話自然流暢
-- 避免重複用戶話語，推進互動發展`, modeDesc)
+- 避免重複用戶話語，推進互動發展`, b.GetModeDescription())
 }
 
 // GetCharacterInfo 獲取統一的角色信息（合併 Core 和 Description）

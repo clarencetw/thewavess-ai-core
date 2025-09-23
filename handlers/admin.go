@@ -246,7 +246,7 @@ func GetAdminStats(c *gin.Context) {
 			"enabled":     utils.GetEnvWithDefault("OPENAI_API_KEY", "") != "",
 		},
 		"grok": gin.H{
-			"model":       utils.GetEnvWithDefault("GROK_MODEL", "grok-3"),
+			"model":       utils.GetEnvWithDefault("GROK_MODEL", "grok-4-fast"),
 			"temperature": utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.9),
 			"max_tokens":  utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 2000),
 			"base_url":    utils.GetEnvWithDefault("GROK_API_URL", "https://api.x.ai/v1"),

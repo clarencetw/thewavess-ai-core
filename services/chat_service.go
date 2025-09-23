@@ -173,8 +173,8 @@ func NewChatService() *ChatService {
 			MaxTokens   int     `json:"max_tokens"`
 			Temperature float64 `json:"temperature"`
 		}{
-			// 預設使用 grok-3；若需回退可在環境改為 grok-beta
-			Model:       utils.GetEnvWithDefault("GROK_MODEL", "grok-3"),
+			// 使用 grok-4-fast 最新模型
+			Model:       utils.GetEnvWithDefault("GROK_MODEL", "grok-4-fast"),
 			MaxTokens:   utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 2000),
 			Temperature: utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.9),
 		},
@@ -382,25 +382,61 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		"nsfw_level":      analysis.Intensity,
 	}).Info("引擎選擇完成")
 
-	// 5. 生成 AI 回應 (主要耗時操作，添加超時控制)
+	// 5. 生成 AI 回應 (主要耗時操作，添加 fallback 機制)
 	aiStart := time.Now()
+	var response *CharacterResponseData
+	actualEngine := selectedEngine
 
-	// 為AI調用設置超時 (8秒超時)
-	aiCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	// 為AI調用設置超時 (12秒超時，給 fallback 更多時間)
+	aiCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
 	defer cancel()
 
-	response, err := s.generatePersonalizedResponse(aiCtx, selectedEngine, request.UserMessage, conversationContext, analysis)
+	// 嘗試主要引擎
+	response, err = s.generatePersonalizedResponse(aiCtx, selectedEngine, request.UserMessage, conversationContext, analysis)
+
+	// 如果主要引擎失敗且是 OpenAI，嘗試 fallback 到 Grok
+	if err != nil && selectedEngine == "openai" {
+		utils.Logger.WithFields(logrus.Fields{
+			"original_engine": selectedEngine,
+			"ai_time": time.Since(aiStart),
+			"error": err.Error(),
+		}).Warn("OpenAI 失敗，嘗試 fallback 到 Grok")
+
+		// 標記為 NSFW sticky (因為 OpenAI 拒絕了)
+		s.markNSFWSticky(request.ChatID)
+
+		// 嘗試 Grok fallback
+		fallbackStart := time.Now()
+		response, err = s.generatePersonalizedResponse(aiCtx, "grok", request.UserMessage, conversationContext, analysis)
+		actualEngine = "grok_fallback"
+
+		if err == nil {
+			utils.Logger.WithFields(logrus.Fields{
+				"fallback_time": time.Since(fallbackStart),
+				"total_ai_time": time.Since(aiStart),
+			}).Info("Grok fallback 成功")
+		}
+	}
+
+	// 如果所有引擎都失敗了
 	if err != nil {
 		utils.Logger.WithFields(logrus.Fields{
 			"ai_time": time.Since(aiStart),
-			"engine": selectedEngine,
-		}).WithError(err).Error("AI回應生成失敗")
+			"original_engine": selectedEngine,
+			"actual_engine": actualEngine,
+		}).WithError(err).Error("所有AI引擎都失敗")
 		return nil, fmt.Errorf("failed to generate personalized response: %w", err)
+	}
+
+	// 確保 response 包含正確的實際引擎
+	if response != nil {
+		response.ActualEngine = actualEngine
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
 		"ai_time": time.Since(aiStart),
-		"engine": selectedEngine,
+		"original_engine": selectedEngine,
+		"actual_engine": actualEngine,
 	}).Info("AI回應生成完成")
 
 	// 6. 更新關係狀態（包含好感度、心情、關係、親密度）
@@ -1767,4 +1803,3 @@ func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, chatID string
 
 	return chatMessages, nil
 }
-

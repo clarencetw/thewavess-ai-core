@@ -1,7 +1,7 @@
 services:
   # Thewavess AI Core API
   api:
-    build: 
+    build:
       context: .
       args:
         VERSION: ${VERSION:-v1.0.0}
@@ -11,6 +11,11 @@ services:
       - "8080:8080"
     env_file:
       - .env
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
     environment:
       - GIN_MODE=release
       - GO_ENV=development
@@ -61,8 +66,10 @@ services:
       # Swagger API Host Configuration
       - API_HOST=${API_HOST:-localhost:8080}
     depends_on:
-      - postgres
-      - redis
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/api/v1/monitor/health"]
@@ -82,6 +89,11 @@ services:
     volumes:
       - ./data/postgres/data:/var/lib/postgresql/data
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U thewavess -d thewavess_ai_core"]
       interval: 10s
@@ -96,8 +108,16 @@ services:
     volumes:
       - ./data/redis:/data
     restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "5m"
+        max-file: "2"
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 3s
       retries: 3
+
+# 使用 Docker 預設 bridge 網路，簡單有效
+# 所有服務自動在同一網路中，可通過服務名稱互相通信
