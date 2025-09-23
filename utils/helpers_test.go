@@ -254,7 +254,7 @@ func TestMin_輔助函數測試(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := Min(tt.a, tt.b)
+			result := min(tt.a, tt.b)
 			assert.Equal(t, tt.expected, result)
 		})
 	}

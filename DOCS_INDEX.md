@@ -131,7 +131,7 @@
 | `make docker-build` | 建置 Docker 映像 | 容器化部署 |
 | `make test` | 執行 Go 單元測試 | 代碼驗證 |
 | `make docs` | 重新生成 Swagger 文檔 | API 更新後 |
-| `make nsfw-embeddings` | 更新 NSFW 向量嵌入 | NSFW 語料更新後 |
+| ~~`make nsfw-embeddings`~~ | ~~更新 NSFW 向量嵌入~~ | **已移除：現使用關鍵字分類器** |
 
 ## 🔑 環境變數速查表
 
@@ -143,8 +143,7 @@
 | **JWT** | ✅ | `JWT_SECRET` | 用戶認證簽名 |
 | | 選擇性 | `ADMIN_JWT_SECRET` | 管理端獨立簽名 |
 | **伺服器** | 建議 | `PORT`, `GIN_MODE`, `LOG_LEVEL`, `API_HOST` | 服務配置 |
-| **NSFW RAG** | 建議 | `NSFW_CORPUS_DATA_PATH`, `NSFW_CORPUS_EMBEDDING_PATH` | RAG 分類器路徑 |
-| | | `NSFW_RAG_LEVEL_THRESHOLDS` | L1-L5 閾值設定 |
+| **NSFW** | 無需設定 | — | 內建關鍵字分類器 |
 | **其他** | 選擇性 | `TTS_API_KEY` | OpenAI TTS 語音 |
 | | | `MISTRAL_API_KEY` | 保留介面 |
 

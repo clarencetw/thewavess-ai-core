@@ -17,6 +17,11 @@ import (
 	"github.com/uptrace/bun"
 )
 
+const (
+	// CHAT_HISTORY_LIMIT 歷史對話記錄數量限制 (20-30條範圍內的最佳平衡值)
+	CHAT_HISTORY_LIMIT = 25
+)
+
 // ChatMessage 聊天消息類型（內部使用）
 type ChatMessage struct {
 	Role      string    `json:"role"`
@@ -27,12 +32,13 @@ type ChatMessage struct {
 
 // ChatService 對話服務
 type ChatService struct {
-	db             *bun.DB
-	openaiClient   *OpenAIClient
-	grokClient     *GrokClient
-	mistralClient  *MistralClient
-	config         *ChatConfig
-	nsfwClassifier *NSFWClassifier
+	db                     *bun.DB
+	openaiClient           *OpenAIClient
+	grokClient             *GrokClient
+	mistralClient          *MistralClient  // 保留實作但不使用
+	config                 *ChatConfig
+	keywordClassifier      *EnhancedKeywordClassifier
+	engineSelector         *EngineSelector
 	// 簡單的 NSFW 遲滯（會話內短期內直接走 Grok）
 	nsfwSticky    map[string]time.Time
 	nsfwStickyMu  sync.RWMutex
@@ -170,6 +176,15 @@ func NewChatService() *ChatService {
 			MaxTokens:   utils.GetEnvIntWithDefault("GROK_MAX_TOKENS", 2000),
 			Temperature: utils.GetEnvFloatWithDefault("GROK_TEMPERATURE", 0.9),
 		},
+		Mistral: struct {
+			Model       string  `json:"model"`
+			MaxTokens   int     `json:"max_tokens"`
+			Temperature float64 `json:"temperature"`
+		}{
+			Model:       utils.GetEnvWithDefault("MISTRAL_MODEL", "mistral-large-latest"),
+			MaxTokens:   utils.GetEnvIntWithDefault("MISTRAL_MAX_TOKENS", 1500),
+			Temperature: utils.GetEnvFloatWithDefault("MISTRAL_TEMPERATURE", 0.85),
+		},
 		NSFW: struct {
 			DetectionThreshold float64 `json:"detection_threshold"`
 			MaxIntensityLevel  int     `json:"max_intensity_level"`
@@ -182,18 +197,22 @@ func NewChatService() *ChatService {
 	openaiClient := NewOpenAIClient()
 	grokClient := NewGrokClient()
 	mistralClient := NewMistralClient()
-	nsfwClassifier := GetNSFWClassifier()
+	keywordClassifier := NewEnhancedKeywordClassifier()
 
 	service := &ChatService{
-		db:             GetDB(),
-		openaiClient:   openaiClient,
-		grokClient:     grokClient,
-		mistralClient:  mistralClient,
-		config:         config,
-		nsfwClassifier: nsfwClassifier,
+		db:               GetDB(),
+		openaiClient:     openaiClient,
+		grokClient:       grokClient,
+		mistralClient:    mistralClient,
+		config:           config,
+		keywordClassifier: keywordClassifier,
 		nsfwSticky:     make(map[string]time.Time),
 		nsfwStickyTTL:  5 * time.Minute,
 	}
+
+	// 初始化引擎選擇器
+	engineSelector := NewEngineSelector(service)
+	service.engineSelector = engineSelector
 
 	// 啟動 NSFW 黏滯清理程序，防止記憶體洩漏
 	go service.startNSFWStickyCleanup()
@@ -299,7 +318,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	}).Info("開始處理AI對話請求")
 
 	// 1. NSFW 內容分析
-	utils.Logger.WithField("user_message", request.UserMessage[:utils.Min(20, len(request.UserMessage))]).Info("即將調用NSFW分析函數")
+	utils.Logger.WithField("user_message", request.UserMessage[:min(20, len(request.UserMessage))]).Info("即將調用NSFW分析函數")
 	analysis, err := s.analyzeContent(request.UserMessage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze content: %w", err)
@@ -391,23 +410,22 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	return chatResponse, nil
 }
 
-// analyzeContent 分析消息內容 - RAG 語意檢索分級
+// analyzeContent 分析消息內容 - 關鍵字分級
 func (s *ChatService) analyzeContent(message string) (*ContentAnalysis, error) {
-	ctx := context.Background()
-	utils.Logger.WithField("message_preview", message[:utils.Min(30, len(message))]).Info("開始 RAG NSFW 內容分析")
+	utils.Logger.WithField("message_preview", message[:min(30, len(message))]).Info("開始關鍵字NSFW內容分析")
 
-	// 使用語意檢索分級器
-	result, err := s.nsfwClassifier.ClassifyContent(ctx, message)
+	// 使用關鍵字分級器
+	result, err := s.keywordClassifier.ClassifyContent(message)
 	if err != nil {
 		utils.Logger.WithError(err).Error("NSFW 分級失敗")
 		return nil, fmt.Errorf("NSFW classification failed: %w", err)
 	}
 
-	// 基於 RAG 分級結果
-	// 附帶 chunk ID 與 reason 供後續路由與審核
-	categories := []string{"semantic_rag_analysis"}
+	// 基於關鍵字分級結果
+	// 附帶匹配關鍵字與原因供後續路由與審核
+	categories := []string{"keyword_analysis"}
 	if result.ChunkID != "" {
-		categories = append(categories, "rag_chunk:"+result.ChunkID)
+		categories = append(categories, "keyword_chunk:"+result.ChunkID)
 	}
 	if result.Reason != "" {
 		categories = append(categories, result.Reason)
@@ -427,12 +445,12 @@ func (s *ChatService) analyzeContent(message string) (*ContentAnalysis, error) {
 
 	// 記錄分析結果
 	utils.Logger.WithFields(logrus.Fields{
-		"message_preview": message[:utils.Min(50, len(message))],
+		"message_preview": message[:min(50, len(message))],
 		"nsfw_level":      result.Level,
 		"is_nsfw":         analysis.IsNSFW,
 		"confidence":      result.Confidence,
 		"should_use_grok": analysis.ShouldUseGrok,
-		"analysis_method": "semantic_rag",
+		"analysis_method": "keyword_matching",
 		"reason":          result.Reason,
 	}).Info("NSFW 內容分析完成")
 
@@ -454,8 +472,8 @@ func (s *ChatService) buildFemaleOrientedContext(ctx context.Context, request *P
 		}
 	}
 
-	// 2. 從 messages 表獲取最近對話記憶（限制 5 條，控制 AI 上下文大小）
-	recentMemories, err := s.getRecentMemoriesFromDB(ctx, request.ChatID, 5)
+	// 2. 從 messages 表獲取最近對話記憶（25條，增強角色記憶）
+	recentMemories, err := s.getRecentMemoriesFromDB(ctx, request.ChatID, CHAT_HISTORY_LIMIT)
 	if err != nil {
 		utils.Logger.WithError(err).Warn("獲取會話歷史失敗，使用空歷史")
 		recentMemories = []ChatMessage{} // 直接使用空歷史，簡化邏輯
@@ -526,24 +544,9 @@ func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, 
 
 // getRecentMemories 已移除：統一使用資料庫查詢，失敗時返回空歷史
 
-// selectAIEngine 智能選擇 AI 引擎（基於精確的 L1-L5 分級）
+// selectAIEngine 簡單有效的AI引擎選擇
 func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *ConversationContext, userMessage string) string {
-	// Debug 日誌：記錄輸入參數
-	chatID := "nil"
-	if conv != nil {
-		chatID = conv.ChatID
-	}
-	nsfwLevel := -1
-	if analysis != nil {
-		nsfwLevel = analysis.Intensity
-	}
-	utils.Logger.WithFields(map[string]interface{}{
-		"has_conv":   conv != nil,
-		"chat_id":    chatID,
-		"nsfw_level": nsfwLevel,
-	}).Info("開始 AI 引擎選擇")
-
-	// 0. 角色標籤預分流（含 nsfw 標籤直接 Grok）
+	// 角色標籤預分流（含 nsfw 標籤直接 Grok）
 	if conv != nil {
 		characterService := GetCharacterService()
 		if character, err := characterService.GetCharacter(context.Background(), conv.CharacterID); err == nil {
@@ -561,65 +564,17 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 		}
 	}
 
-	// 1. 檢查 NSFW 遲滯（若該會話最近有 NSFW 觸發，直接走 Grok）
-	if conv != nil {
-		chatID := conv.ChatID
-		utils.Logger.WithFields(map[string]interface{}{
-			"chat_id":         chatID,
-			"checking_sticky": true,
-		}).Debug("檢查 NSFW Sticky 狀態")
+	// 使用簡單選擇器
+	engine := s.engineSelector.SelectEngine(userMessage, conv, analysis.Intensity)
 
-		if s.isNSFWSticky(chatID) {
-			utils.Logger.WithFields(map[string]interface{}{
-				"chat_id": chatID,
-				"reason":  "nsfw_sticky_session",
-			}).Info("選擇 Grok 引擎：NSFW 遲滯期")
-			return "grok"
-		} else {
-			utils.Logger.WithFields(map[string]interface{}{
-				"chat_id": chatID,
-			}).Debug("NSFW Sticky 狀態：非遲滯期")
-		}
-	} else {
-		utils.Logger.Debug("無對話上下文，跳過 NSFW Sticky 檢查")
-	}
-
-	// 2. 基於精確的 NSFW 分級選擇引擎
-	if analysis != nil {
-		level := analysis.Intensity
-
-		switch {
-		case level >= 3:
-			// L3-L5: 親密到露骨內容 → Grok + 觸發 sticky
-			utils.Logger.WithFields(map[string]interface{}{
-				"nsfw_level": level,
-				"reason":     "intimate_to_explicit_content",
-				"category":   "grok_specialization",
-			}).Info("選擇 Grok 引擎：親密到高強度 NSFW 內容")
-
-			// 觸發 NSFW sticky 機制，確保後續請求也走 Grok
-			if conv != nil && conv.ChatID != "" {
-				s.markNSFWSticky(conv.ChatID)
-			}
-			return "grok"
-
-		default:
-			// L1-L2: 安全到輕度內容 → OpenAI
-			utils.Logger.WithFields(map[string]interface{}{
-				"nsfw_level": level,
-				"reason":     "safe_to_moderate_content",
-				"category":   "openai_specialization",
-			}).Info("選擇 OpenAI 引擎：安全到中等內容")
-			return "openai"
-		}
-	}
-
-	// 3. 預設使用 OpenAI
 	utils.Logger.WithFields(map[string]interface{}{
-		"nsfw_level": 1,
-		"reason":     "default_choice",
-	}).Info("選擇 OpenAI 引擎：預設")
-	return "openai"
+		"engine":      engine,
+		"nsfw_level":  analysis.Intensity,
+		"user_msg":    userMessage[:min(30, len(userMessage))],
+		"selector":    "simple",
+	}).Info("簡單選擇器決策")
+
+	return engine
 }
 
 // 標記會話在短期內直接使用 Grok
@@ -676,6 +631,24 @@ func (s *ChatService) isNSFWSticky(chatID string) bool {
 	}
 
 	return isSticky
+}
+
+// 清除會話的 NSFW sticky 狀態
+func (s *ChatService) clearNSFWSticky(chatID string) {
+	if chatID == "" {
+		utils.Logger.Warn("clearNSFWSticky called with empty chatID")
+		return
+	}
+
+	s.nsfwStickyMu.Lock()
+	defer s.nsfwStickyMu.Unlock()
+
+	if _, exists := s.nsfwSticky[chatID]; exists {
+		delete(s.nsfwSticky, chatID)
+		utils.Logger.WithFields(logrus.Fields{
+			"chat_id": chatID,
+		}).Info("已清除會話的 NSFW sticky 狀態")
+	}
 }
 
 // 檢查是否為 OpenAI 內容拒絕錯誤
@@ -853,13 +826,8 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 			nsfwLevelForPrompt = 2 // 最高支援到 L2
 		}
 	case "mistral":
-		// Mistral 保留實作但實際不使用，僅作為備用
-		if nsfwLevelForPrompt > 3 {
-			nsfwLevelForPrompt = 3
-		}
-		if nsfwLevelForPrompt < 2 {
-			nsfwLevelForPrompt = 2
-		}
+		// Mistral 保留實作但設為 L11（目前不使用）
+		nsfwLevelForPrompt = 11  // 特殊等級，明確標示不在當前 L1-L5 範圍內
 	case "grok":
 		// Grok 專責 L3-L5 (親密到成人內容)
 		if nsfwLevelForPrompt < 3 {
@@ -919,7 +887,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 			engine = "grok_fallback"
 		}
 	} else if engine == "mistral" {
-		// 使用 Mistral (Level 2-3) - 保留實作但實際上不會被呼叫
+		// 使用 Mistral - 保留實作但目前不會被選中
 		responseText, err = s.generateMistralResponse(ctx, promptPair, context, userMessage)
 		if err != nil {
 			// Mistral 失敗時切換到 Grok
@@ -1209,7 +1177,7 @@ func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage
 			UserPrompt:   promptBuilder.BuildUserPrompt(),
 		}
 	} else if engine == "mistral" {
-		// 使用 Mistral 專用 prompt 構建器 (適用於 L2-L3 中等內容)
+		// 使用 Mistral 專用 prompt 構建器 - 保留實作但目前不使用
 		promptBuilder := NewMistralPromptBuilder(characterService)
 		promptBuilder.WithCharacter(dbCharacter)
 		promptBuilder.WithContext(conversationContext)
@@ -1313,8 +1281,8 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, promptPair Pro
 		},
 	}
 
-	// 使用通用歷史處理方法
-	historyMessages := s.buildHistoryMessages(context, currentUserMessage)
+	// 為OpenAI使用乾淨的歷史（解決歷史污染問題）
+	historyMessages := s.buildCleanHistoryForOpenAI(context, currentUserMessage)
 	for _, msg := range historyMessages {
 		messages = append(messages, OpenAIMessage{Role: msg.Role, Content: msg.Content})
 		if msg.Action != "" {
@@ -1362,7 +1330,7 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, promptPair Pro
 	return "", fmt.Errorf("empty response from OpenAI API")
 }
 
-// generateMistralResponse 生成Mistral回應
+// generateMistralResponse 生成Mistral回應 - 保留實作但目前不使用
 func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair PromptPair, context *ConversationContext, currentUserMessage string) (string, error) {
 	if s.mistralClient == nil {
 		return "", fmt.Errorf("Mistral client not initialized")
@@ -1408,6 +1376,50 @@ type historyMessage struct {
 	Role    string
 	Content string
 	Action  string
+}
+
+// buildCleanHistoryForOpenAI 為OpenAI構建乾淨的歷史（過濾NSFW內容，支持25條記錄）
+func (s *ChatService) buildCleanHistoryForOpenAI(conversationContext *ConversationContext, currentUserMessage string) []historyMessage {
+	var messages []historyMessage
+
+	if conversationContext == nil {
+		return messages
+	}
+
+	// 使用EngineSelector的方法從數據庫獲取並過濾25條歷史記錄
+	ctx := context.Background()
+	cleanHistory, err := s.engineSelector.BuildCleanHistoryForOpenAI(ctx, conversationContext.ChatID, CHAT_HISTORY_LIMIT)
+	if err != nil {
+		utils.Logger.WithError(err).Warn("獲取乾淨歷史失敗，使用RecentMessages")
+		// Fallback到原有邏輯
+		for _, msg := range conversationContext.RecentMessages {
+			if s.engineSelector.IsSafeMessage(msg.Content) {
+				messages = append(messages, historyMessage{
+					Role:    msg.Role,
+					Content: msg.Content,
+					Action:  msg.Action,
+				})
+			}
+		}
+	} else {
+		// 轉換為historyMessage格式
+		for _, msg := range cleanHistory {
+			messages = append(messages, historyMessage{
+				Role:    msg.Role,
+				Content: msg.Content,
+				Action:  msg.Action,
+			})
+		}
+	}
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"original_limit": CHAT_HISTORY_LIMIT,
+		"clean_count":    len(messages),
+		"chat_id":        conversationContext.ChatID,
+		"method":         "database_filtered",
+	}).Info("為OpenAI構建乾淨歷史（數據庫記錄）")
+
+	return messages
 }
 
 func (s *ChatService) buildHistoryMessages(context *ConversationContext, currentUserMessage string) []historyMessage {
@@ -1490,13 +1502,6 @@ func extractUserAction(input string) (string, string) {
 	return "", input
 }
 
-// max 輔助函數
-func max(a, b int) int {
-	if a > b {
-		return a
-	}
-	return b
-}
 
 // updateAffection 好感度更新
 func (s *ChatService) updateAffection(currentAffection int, response *CharacterResponseData) int {
@@ -1629,7 +1634,7 @@ func (s *ChatService) saveAssistantMessageToDB(ctx context.Context, request *Pro
 			},
 			AIEngine:       engine,
 			ResponseTimeMs: int(responseTime.Milliseconds()),
-			NSFWLevel:      s.determineEffectiveNSFWLevel(request, engine, analysis),
+			NSFWLevel:      analysis.Intensity,
 			CreatedAt:      time.Now(),
 		}
 
@@ -1740,29 +1745,3 @@ func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, chatID string
 	return chatMessages, nil
 }
 
-// determineEffectiveNSFWLevel 智能確定記錄的 NSFW 等級
-// 解決 sticky session 和 contextual continuation 時等級記錄不準確的問題
-func (s *ChatService) determineEffectiveNSFWLevel(request *ProcessMessageRequest, engine string, analysis *ContentAnalysis) int {
-	originalLevel := analysis.Intensity
-
-	// 如果不是 Grok 引擎，或等級已經是 L3+，直接返回原始等級
-	if engine != "grok" || originalLevel >= 3 {
-		return originalLevel
-	}
-
-	// Grok 引擎 + L1-L2 等級：檢查是否因特殊原因選擇 Grok
-
-	// 檢查 sticky session
-	if s.isNSFWSticky(request.ChatID) {
-		utils.Logger.WithFields(logrus.Fields{
-			"chat_id":         request.ChatID,
-			"original_level":  originalLevel,
-			"effective_level": 4,
-			"reason":          "sticky_session_adjustment",
-		}).Info("因 sticky session 調整記錄的 NSFW 等級")
-		return 4 // sticky session 表示之前有 L4+ 內容
-	}
-
-	// 其他情況（如角色標籤觸發），保持原始等級
-	return originalLevel
-}

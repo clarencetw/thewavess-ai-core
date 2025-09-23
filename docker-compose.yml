@@ -57,14 +57,7 @@ services:
       - CORS_EXPOSED_HEADERS=${CORS_EXPOSED_HEADERS:-}
       # TTS (Optional)
       - TTS_API_KEY=${TTS_API_KEY:-}
-      # NSFW RAG Configuration
-      - NSFW_CORPUS_DATA_PATH=${NSFW_CORPUS_DATA_PATH:-configs/nsfw/corpus.json}
-      - NSFW_CORPUS_EMBEDDING_PATH=${NSFW_CORPUS_EMBEDDING_PATH:-configs/nsfw/embeddings.json}
-      - NSFW_RAG_LOCALE=${NSFW_RAG_LOCALE:-zh-Hant}
-      - NSFW_RAG_TOP_K=${NSFW_RAG_TOP_K:-4}
-      - NSFW_RAG_LEVEL_THRESHOLDS=${NSFW_RAG_LEVEL_THRESHOLDS:-5:0.55,4:0.42,3:0.30,2:0.18,1:0.10}
-      - NSFW_EMBED_MODEL=${NSFW_EMBED_MODEL:-text-embedding-3-small}
-      - NSFW_EMBED_TIMEOUT_MS=${NSFW_EMBED_TIMEOUT_MS:-2000}
+      # NSFW Classification: Using built-in keyword classifier
       # Swagger API Host Configuration
       - API_HOST=${API_HOST:-localhost:8080}
     depends_on:

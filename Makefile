@@ -1,4 +1,4 @@
-.PHONY: help install run build test clean docs dev check db-setup fixtures migrate migrate-reset create-migration test-all test-api test-chat test-relationships test-user test-tts test-admin test-search docker-up docker-down fresh-start quick-setup lint nsfw-check nsfw-embeddings
+.PHONY: help install run build test clean docs dev check db-setup fixtures migrate migrate-reset create-migration test-all test-api test-chat test-relationships test-user test-tts test-admin test-search docker-up docker-down fresh-start quick-setup lint
 
 # ==========================================
 # 🚀 Thewavess AI Core - 女性向智能對話系統
@@ -176,14 +176,5 @@ quick-setup: db-setup fixtures ## ⚡ 快速設置
 	@echo "⚡ Quick setup completed!"
 	@echo "🚀 Run: make dev"
 
-# ================================
-# 🔒 NSFW 語料管理
-# ================================
 
-nsfw-check: ## 🔒 檢查語料狀態
-	@echo "🔒 Checking NSFW corpus status..."
-	@go run ./tools/nsfw-check
 
-nsfw-embeddings: ## 🧠 重建語料向量
-	@echo "🧠 Rebuilding NSFW embeddings..."
-	@go run ./tools/nsfw-embeddings

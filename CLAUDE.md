@@ -11,12 +11,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Core Architecture
 - **Backend**: Go 1.23 + Gin + Bun ORM + PostgreSQL
 - **Dual AI Engine**: OpenAI GPT-4o (L1-L3) + Grok AI (L4-L5) with intelligent routing
-- **NSFW System**: RAG-based semantic similarity classifier with zero startup cost
+- **NSFW System**: Keyword-based content classifier with zero runtime cost
 - **Prompt System**: Inheritance-based builders (`BasePromptBuilder` → engine-specific)
 
 ## Key Components
 - **Chat Service**: `services/chat_service.go:selectAIEngine()` - Dual engine routing with fallbacks
-- **NSFW Classifier**: `services/nsfw_classifier.go` - RAG semantic similarity (L1-L5), zero startup cost
+- **NSFW Classifier**: `services/keyword_classifier_*.go` - Keyword matching (L1-L5), zero runtime cost
 - **Character System**: `services/{character_service,character_store}.go` - Dynamic personality management
 - **Handlers**: Clean APIs in `handlers/` - real database fields, no fake data
 - **Prompt Architecture**: `services/prompt_{base,openai,grok}.go` - DRY inheritance pattern
@@ -32,7 +32,7 @@ make dev                # Generate docs + start server
 # Development
 make build docs test-all # Standard development workflow
 make db-setup fixtures   # Database initialization
-make nsfw-embeddings     # Update NSFW corpus vectors
+# make nsfw-embeddings     # (Deprecated: now using keyword-based classification)
 
 # Testing
 ./tests/test-all.sh     # Complete test suite
@@ -44,20 +44,20 @@ make nsfw-embeddings     # Update NSFW corpus vectors
 - **AI Integration**: Dual engine (OpenAI L1-L3, Grok L4-L5), sticky sessions, fallback chain
 - **Code Quality**: Go 1.21+ built-ins, no fake data, DRY principles
 
-## NSFW RAG System
-Semantic similarity classifier with separated files (corpus.json + embeddings.json):
+## NSFW Classification System
+Keyword-based content classifier with zero runtime cost:
 - **L5-L4**: Explicit content → Grok | **L3-L1**: Safe/moderate → OpenAI
-- **Zero startup cost**: Pre-computed vectors, ~$0.0018/message runtime
+- **Zero cost**: No API calls, microsecond-level response time
 - **Features**: Sticky sessions (5min), fallback chain, illegal content blocking
-- **Maintenance**: `make nsfw-embeddings` when corpus updated
+- **Maintenance**: Keywords managed in source code, no external dependencies
 
 ## Configuration & Status
-**Required `.env`**: Database credentials, `OPENAI_API_KEY`, `GROK_API_KEY`, model names, NSFW paths
+**Required `.env`**: Database credentials, `OPENAI_API_KEY`, `GROK_API_KEY`, model names
 **Optional**: `OPENAI_SEED`, `OPENAI_LOGPROBS`, `TTS_API_KEY`
 **Status**: 57/57 APIs complete, 7 tables, 24/24 tests pass, 1-3s response, 95%+ NSFW accuracy, Swagger at :8080/swagger
 
 ## Troubleshooting
-**Fixtures**: `make migrate-reset && make fixtures` | **Build**: `make docs` first | **NSFW**: `make nsfw-check` | **Deps**: `make clean && make install`
+**Fixtures**: `make migrate-reset && make fixtures` | **Build**: `make docs` first | **Deps**: `make clean && make install`
 
 ## Commit Guidelines
 Follow existing style with detailed descriptions and co-authoring format.

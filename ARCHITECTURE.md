@@ -62,10 +62,10 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                     資料存儲層 (Data Layer)                       │
 ├─────────────────────────────────┬───────────────────────────────┤
-│         PostgreSQL             │       Vector Cache            │
-│   • users, characters          │   • corpus.json               │
-│   • chats, messages            │   • embeddings.json           │
-│   • relationships              │   • NSFW 語意檢索             │
+│         PostgreSQL             │    Keyword Classification     │
+│   • users, characters          │   • Built-in keyword rules    │
+│   • chats, messages            │   • Zero-cost NSFW detection  │
+│   • relationships              │   • Microsecond response      │
 │   • admins                     │                               │
 └─────────────────────────────────┴───────────────────────────────┘
 ```
@@ -80,7 +80,7 @@
 - `models/`：資料模型與 API 響應定義
   - `models/db/`：資料庫表模型（User、Character、Chat、Relationship、Admin…）
 - `cmd/bun/`：資料庫連線、遷移、種子資料
-- `configs/nsfw/`：NSFW RAG 語料與向量（`corpus.json` + `embeddings.json`）
+- `services/keyword_classifier_*.go`：NSFW 關鍵字分類器（L1-L5 等級）
 - `middleware/`：認證、日誌、CORS 等橫切關注
 - `utils/`：日誌、錯誤、JWT、工具函式
 - `public/`：靜態頁面與 Swagger UI
@@ -93,18 +93,18 @@
 ### 架構優化重構
 - **API 響應簡化**：關係與搜尋 handlers 回傳嚴謹的 JSON 結構，移除舊有假資料欄位
 - **資料真實性**：所有搜尋、關係與情感統計皆直接讀取資料庫欄位或 JSONB (`relationships.emotion_data`)
-- **語意檢索升級**：NSFW 模組採用預計算向量，查詢零額外 API 成本
+- **關鍵字分類升級**：NSFW 模組採用關鍵字匹配，零 API 成本微秒級響應
 - **AI 引擎路由**：Chat Service 依 NSFW 分級與角色標籤切換 OpenAI / Grok 並驅動專屬 Prompt Builders
 - **Prompt 架構**：繼承式 Prompt Builder，依照引擎 (OpenAI/Grok) 客製
 
 ### 性能與可維護性
-- **分離式文件**：`corpus.json` + `embeddings.json`，降低啟動成本
-- **記憶體運算**：NSFW RAG 純記憶體比對，平均 8.5ms
+- **內建關鍵字**：NSFW 分類器內建關鍵字規則，零外部依賴
+- **記憶體運算**：NSFW 關鍵字純記憶體比對，平均 < 100μs
 - **程式碼清理**：移除未使用 Helper，統一時間與分頁處理工具
 - **Relationships 單一真實來源**：`relationships` 表同步保存好感度、情緒、親密度與歷史 (`emotion_data`)
 - **JSONB 優化**：`emotion_data` 持久化歷史事件，篩選效率佳
 - **資料庫一致性**：統一欄位命名，搜尋/關係 handler 使用相同查詢來源
-- **維護工具**：`make nsfw-embeddings`、`make nsfw-check` 確保語料與向量同步
+- **維護工具**：`tools/keyword_*.go` 關鍵字分析與衝突檢測工具
 
 ## 其他說明
 

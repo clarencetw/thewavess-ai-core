@@ -106,10 +106,3 @@ func GenerateDefaultAvatarURLByGender(gender *string) string {
 	return g.GetURL()
 }
 
-// Min 返回兩個整數中的較小值
-func Min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

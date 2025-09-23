@@ -60,7 +60,7 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 	// 記錄請求開始
 	utils.Logger.WithFields(map[string]interface{}{
 		"service": "tts",
-		"text":    text[:utils.Min(len(text), 50)] + "...", // 只記錄前50個字符
+		"text":    text[:min(len(text), 50)] + "...", // 只記錄前50個字符
 		"voice":   voice,
 		"speed":   speed,
 	}).Info("TTS generation started")
@@ -159,7 +159,7 @@ func (s *TTSService) mockTTSResponse(text string, voice string) *TTSResponse {
 	utils.Logger.WithFields(map[string]interface{}{
 		"service": "tts",
 		"mode":    "mock",
-		"text":    text[:utils.Min(len(text), 50)] + "...",
+		"text":    text[:min(len(text), 50)] + "...",
 		"voice":   voice,
 	}).Info("TTS mock response generated")
 

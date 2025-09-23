@@ -7,10 +7,10 @@
 ## 1. 建議設定流程
 1. 複製 `.env.example` 為 `.env`
 2. 填寫必填變數：OpenAI、資料庫、JWT
-3. 依需求啟用 Grok（高強度 NSFW），確保 NSFW 語料路徑正確
+3. 依需求啟用 Grok（高強度 NSFW）
 4. 若需 TTS 或 Mistral，補上對應金鑰
 5. 調整伺服器埠、Log、CORS 等安全設定
-6. （若更新 NSFW 語料）執行 `make nsfw-embeddings`
+6. （NSFW 分類現已內建關鍵字，無需額外設定）
 7. 執行 `make db-setup` 或 `make fresh-start`，再跑 `./tests/test-all.sh`
 
 ## 2. 必填變數
@@ -31,16 +31,8 @@
 | Mistral | `MISTRAL_API_KEY`、`MISTRAL_MODEL=mistral-medium-latest` | 目前保留介面，預設不啟用 |
 | TTS | `TTS_API_KEY` | 未設定時沿用 `OPENAI_API_KEY` |
 
-## 4. NSFW RAG 設定
-| 變數 | 預設 | 說明 |
-|------|------|------|
-| `NSFW_CORPUS_DATA_PATH` | `configs/nsfw/corpus.json` | 語料檔 |
-| `NSFW_CORPUS_EMBEDDING_PATH` | `configs/nsfw/embeddings.json` | 預計算向量 |
-| `NSFW_RAG_LOCALE` | `zh-Hant` | 語系過濾 |
-| `NSFW_RAG_TOP_K` | `4` | 聚合筆數 |
-| `NSFW_RAG_LEVEL_THRESHOLDS` | `5:0.55,4:0.42,3:0.30,2:0.18,1:0.10` | 門檻表（可覆寫）|
-| `NSFW_EMBED_MODEL` | `text-embedding-3-small` | Embedding 模型 |
-| `NSFW_EMBED_TIMEOUT_MS` | `2000` | Embedding API timeout (ms) |
+## 4. NSFW 分類器
+> **注意**: 現使用內建關鍵字分類器，無需額外環境變數設定
 
 ## 5. 伺服器與日誌
 | 變數 | 預設 | 功能 |
@@ -70,7 +62,7 @@
 ## 8. 檢查清單
 - [ ] `.env` 已複製並填妥必填變數
 - [ ] Grok/TTS 等選用服務已視需求填寫
-- [ ] 若更新 NSFW 語料，已執行 `make nsfw-embeddings`
+- [ ] NSFW 關鍵字分類器已正常運作（內建無需額外設定）
 - [ ] `make db-setup` 或 `make fresh-start` 成功
 - [ ] `./tests/test-all.sh` 全數通過
 - [ ] 生產環境將 `GIN_MODE=release`、限制 `CORS_ALLOWED_ORIGINS`
