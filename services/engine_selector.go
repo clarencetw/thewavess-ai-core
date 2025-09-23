@@ -149,9 +149,15 @@ func (es *EngineSelector) BuildHistoryForEngine(
 func (es *EngineSelector) filterHistoryForOpenAI(fullHistory []ChatMessage) []ChatMessage {
 	cleanHistory := []ChatMessage{}
 	for _, msg := range fullHistory {
-		// 過濾高等級 NSFW 內容（L3+）
-		if es.isSafeForOpenAI(msg.Content) {
+		// 區分用戶輸入和 AI 回應的過濾標準
+		if msg.Role == "assistant" {
+			// Assistant 回應：寬鬆過濾（OpenAI 自己生成的內容應該是安全的）
 			cleanHistory = append(cleanHistory, msg)
+		} else {
+			// User 輸入：嚴格過濾高等級 NSFW 內容（L3+）
+			if es.isSafeForOpenAI(msg.Content) {
+				cleanHistory = append(cleanHistory, msg)
+			}
 		}
 	}
 	return cleanHistory
