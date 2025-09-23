@@ -431,14 +431,15 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		}
 	}
 
-	// 如果所有引擎都失敗了
+	// 如果所有引擎都失敗了，創建簡單佔位符
 	if err != nil {
-		utils.Logger.WithFields(logrus.Fields{
-			"ai_time": time.Since(aiStart),
-			"original_engine": selectedEngine,
-			"actual_engine": actualEngine,
-		}).WithError(err).Error("所有AI引擎都失敗")
-		return nil, fmt.Errorf("failed to generate personalized response: %w", err)
+		utils.Logger.WithError(err).Error("AI引擎失敗，創建佔位符")
+
+		response = &CharacterResponseData{
+			Content:      "AI回應生成失敗，請重新生成",
+			ActualEngine: "error",
+		}
+		actualEngine = "error"
 	}
 
 	// 確保 response 包含正確的實際引擎

@@ -608,12 +608,12 @@ func GetMessageHistory(c *gin.Context) {
 		}
 	}
 
-	// 查詢消息歷史
+	// 查詢消息歷史 (最新消息在前，符合用戶期望)
 	var messagesDB []*db.MessageDB
 	err = GetDB().NewSelect().
 		Model(&messagesDB).
 		Where("chat_id = ?", sessionID).
-		Order("created_at ASC").
+		Order("created_at DESC").
 		Limit(limit).
 		Offset((page - 1) * limit).
 		Scan(context.Background())
@@ -1096,16 +1096,33 @@ func RegenerateResponse(c *gin.Context) {
 		utils.Logger.WithError(err).Error("Failed to retrieve message history")
 	}
 
-	// 使用聊天服務重新生成回應
-	chatService := services.GetChatService()
+	// 找到對應的用戶消息
+	var previousUserMsg db.MessageDB
+	err = database.GetApp().DB().NewSelect().
+		Model(&previousUserMsg).
+		Where("chat_id = ? AND role = ? AND created_at < ?", chatID, "user", originalMessage.CreatedAt).
+		Order("created_at DESC").
+		Limit(1).
+		Scan(context.Background())
 
-	// 構建正確的ProcessMessageRequest
+	if err != nil {
+		c.JSON(http.StatusBadRequest, models.APIResponse{
+			Success: false,
+			Error: &models.APIError{
+				Code:    "USER_MESSAGE_NOT_FOUND",
+				Message: "找不到對應的用戶消息",
+			},
+		})
+		return
+	}
+
+	// 重新生成回應
+	chatService := services.GetChatService()
 	processReq := &services.ProcessMessageRequest{
 		ChatID:      chatID,
-		UserMessage: "[重新生成]",
+		UserMessage: previousUserMsg.Dialogue,
 		CharacterID: chat.CharacterID,
 		UserID:      userID.(string),
-		Metadata:    map[string]interface{}{},
 	}
 
 	response, err := chatService.ProcessMessage(context.Background(), processReq)
