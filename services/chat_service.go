@@ -43,6 +43,8 @@ type ChatService struct {
 	nsfwSticky    map[string]time.Time
 	nsfwStickyMu  sync.RWMutex
 	nsfwStickyTTL time.Duration
+	// 關係狀態快取服務 (Redis)
+	relationshipCache *RelationshipCache
 }
 
 // ChatConfig 對話配置
@@ -199,6 +201,9 @@ func NewChatService() *ChatService {
 	mistralClient := NewMistralClient()
 	keywordClassifier := NewEnhancedKeywordClassifier()
 
+	// 初始化關係狀態快取服務
+	relationshipCache := NewRelationshipCache()
+
 	service := &ChatService{
 		db:               GetDB(),
 		openaiClient:     openaiClient,
@@ -208,6 +213,7 @@ func NewChatService() *ChatService {
 		keywordClassifier: keywordClassifier,
 		nsfwSticky:     make(map[string]time.Time),
 		nsfwStickyTTL:  5 * time.Minute,
+		relationshipCache: relationshipCache,
 	}
 
 	// 初始化引擎選擇器
@@ -306,7 +312,7 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 	}, nil
 }
 
-// ProcessMessage 處理用戶消息並生成回應 - 女性向AI聊天系統
+// ProcessMessage 處理用戶消息並生成回應 - 女性向AI聊天系統 (性能優化版)
 func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessageRequest) (*ChatResponse, error) {
 	startTime := time.Now()
 
@@ -317,34 +323,58 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		"message_len":  len(request.UserMessage),
 	}).Info("開始處理AI對話請求")
 
-	// 1. NSFW 內容分析
-	utils.Logger.WithField("user_message", request.UserMessage[:min(20, len(request.UserMessage))]).Info("即將調用NSFW分析函數")
+	// 1. 快速NSFW內容分析（關鍵字匹配，極快）
+	analysisStart := time.Now()
 	analysis, err := s.analyzeContent(request.UserMessage)
 	if err != nil {
 		return nil, fmt.Errorf("failed to analyze content: %w", err)
 	}
-	utils.Logger.WithField("nsfw_level", analysis.Intensity).Info("NSFW分析完成，返回等級")
+	utils.Logger.WithFields(logrus.Fields{
+		"nsfw_level": analysis.Intensity,
+		"analysis_time": time.Since(analysisStart),
+	}).Info("NSFW分析完成")
 
-	// NSFW Sticky 機制已移到 OpenAI 拒絕後的 fallback 處理中
-	// 這樣可以確保只有真正被 OpenAI 拒絕的內容才會觸發 sticky
-
-	// 2. 生成訊息 ID
+	// 2. 生成訊息 ID (極快操作)
 	conversationTurnID := utils.GenerateUUID()
 	messageID := fmt.Sprintf("msg_%s_ai", conversationTurnID)
 	userMessageID := fmt.Sprintf("msg_%s_user", conversationTurnID)
 
-	// 3. 保存用戶訊息
-	if err := s.saveUserMessageToDB(ctx, request, userMessageID, analysis); err != nil {
-		utils.Logger.WithError(err).Error("保存用戶消息失敗：將降級為臨時上下文")
+	// 3. 並行執行：用戶消息保存 + 對話上下文構建
+	type contextResult struct {
+		context *ConversationContext
+		err     error
 	}
 
-	// 4. 構建對話上下文
-	conversationContext, err := s.buildFemaleOrientedContext(ctx, request)
-	if err != nil {
-		return nil, fmt.Errorf("failed to build female-oriented context: %w", err)
-	}
+	contextChan := make(chan contextResult, 1)
+	saveChan := make(chan error, 1)
 
-	// 5. 選擇 AI 引擎
+	// 並行：構建對話上下文 (DB查詢)
+	go func() {
+		contextStart := time.Now()
+		conversationContext, err := s.buildFemaleOrientedContext(ctx, request)
+		utils.Logger.WithField("context_build_time", time.Since(contextStart)).Debug("對話上下文構建完成")
+		contextChan <- contextResult{context: conversationContext, err: err}
+	}()
+
+	// 並行：保存用戶訊息 (DB寫入)
+	go func() {
+		saveStart := time.Now()
+		err := s.saveUserMessageToDB(ctx, request, userMessageID, analysis)
+		if err != nil {
+			utils.Logger.WithError(err).Error("保存用戶消息失敗：將降級為臨時上下文")
+		}
+		utils.Logger.WithField("save_time", time.Since(saveStart)).Debug("用戶消息保存完成")
+		saveChan <- err
+	}()
+
+	// 等待對話上下文構建完成（AI生成需要用到）
+	contextRes := <-contextChan
+	if contextRes.err != nil {
+		return nil, fmt.Errorf("failed to build female-oriented context: %w", contextRes.err)
+	}
+	conversationContext := contextRes.context
+
+	// 4. 選擇 AI 引擎 (極快操作)
 	selectedEngine := s.selectAIEngine(analysis, conversationContext, request.UserMessage)
 
 	utils.Logger.WithFields(logrus.Fields{
@@ -352,27 +382,54 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		"nsfw_level":      analysis.Intensity,
 	}).Info("引擎選擇完成")
 
-	// 6. 生成 AI 回應
-	response, err := s.generatePersonalizedResponse(ctx, selectedEngine, request.UserMessage, conversationContext, analysis)
+	// 5. 生成 AI 回應 (主要耗時操作，添加超時控制)
+	aiStart := time.Now()
+
+	// 為AI調用設置超時 (8秒超時)
+	aiCtx, cancel := context.WithTimeout(ctx, 8*time.Second)
+	defer cancel()
+
+	response, err := s.generatePersonalizedResponse(aiCtx, selectedEngine, request.UserMessage, conversationContext, analysis)
 	if err != nil {
+		utils.Logger.WithFields(logrus.Fields{
+			"ai_time": time.Since(aiStart),
+			"engine": selectedEngine,
+		}).WithError(err).Error("AI回應生成失敗")
 		return nil, fmt.Errorf("failed to generate personalized response: %w", err)
 	}
 
-	// 7. 更新關係狀態（包含好感度、心情、關係、親密度）
+	utils.Logger.WithFields(logrus.Fields{
+		"ai_time": time.Since(aiStart),
+		"engine": selectedEngine,
+	}).Info("AI回應生成完成")
+
+	// 6. 更新關係狀態（包含好感度、心情、關係、親密度）
 	newAffection := s.updateAffection(conversationContext.Affection, response)
-	err = s.updateRelationshipState(ctx, request, response, newAffection)
-	if err != nil {
-		utils.Logger.WithError(err).Error("更新關係狀態失敗")
-		// 不中斷流程，繼續處理
-	}
 
-	// 8. 保存 AI 回應（智能 NSFW 等級記錄）
-	err = s.saveAssistantMessageToDB(ctx, request, messageID, response, newAffection, response.ActualEngine, analysis, time.Since(startTime))
-	if err != nil {
-		utils.Logger.WithError(err).Error("保存對話到資料庫失敗")
-	}
+	// 並行：關係狀態更新 (不阻塞主流程)
+	go func() {
+		updateStart := time.Now()
+		err := s.updateRelationshipState(ctx, request, response, newAffection)
+		if err != nil {
+			utils.Logger.WithError(err).Error("更新關係狀態失敗")
+		}
+		utils.Logger.WithField("update_time", time.Since(updateStart)).Debug("關係狀態更新完成")
+	}()
 
-	// 9. 構建回應結果
+	// 等待用戶消息保存完成 (確保一致性)
+	<-saveChan
+
+	// 7. 並行：保存 AI 回應 (不阻塞回應返回)
+	go func() {
+		saveStart := time.Now()
+		err := s.saveAssistantMessageToDB(ctx, request, messageID, response, newAffection, response.ActualEngine, analysis, time.Since(startTime))
+		if err != nil {
+			utils.Logger.WithError(err).Error("保存對話到資料庫失敗")
+		}
+		utils.Logger.WithField("ai_save_time", time.Since(saveStart)).Debug("AI回應保存完成")
+	}()
+
+	// 8. 立即構建並返回回應結果 (不等待保存完成)
 	chatResponse := &ChatResponse{
 		ChatID:       request.ChatID,
 		MessageID:    messageID,
@@ -405,7 +462,8 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		"ai_engine":     response.ActualEngine,
 		"affection":     newAffection,
 		"response_time": chatResponse.ResponseTime.Milliseconds(),
-	}).Info("AI對話處理完成")
+		"optimization":  "parallel_processing_v1",
+	}).Info("AI對話處理完成 (性能優化版)")
 
 	return chatResponse, nil
 }
@@ -493,16 +551,33 @@ func (s *ChatService) buildFemaleOrientedContext(ctx context.Context, request *P
 	}, nil
 }
 
-// getOrCreateRelationshipState 讀取或建立最新的關係狀態
+// getOrCreateRelationshipState 讀取或建立最新的關係狀態 (Redis快取優化)
 func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, characterID, chatID string) (*db.RelationshipDB, error) {
-	var relationship db.RelationshipDB
+	// 1. 嘗試從Redis快取獲取
+	cached, err := s.relationshipCache.GetRelationship(ctx, userID, characterID, chatID)
+	if err == nil && cached != nil {
+		return cached, nil
+	}
 
-	err := s.db.NewSelect().
+	// 2. 快取未命中，從資料庫查詢
+	var relationship db.RelationshipDB
+	queryStart := time.Now()
+
+	err = s.db.NewSelect().
 		Model(&relationship).
 		Where("user_id = ? AND character_id = ? AND chat_id = ?", userID, characterID, chatID).
 		Scan(ctx)
 
+	utils.Logger.WithFields(map[string]interface{}{
+		"query_time": time.Since(queryStart),
+		"cache_miss": true,
+	}).Debug("關係狀態資料庫查詢完成")
+
 	if err == nil {
+		// 3. 存入Redis快取 (30秒TTL)
+		if cacheErr := s.relationshipCache.SetRelationship(ctx, userID, characterID, chatID, &relationship, 30*time.Second); cacheErr != nil {
+			utils.Logger.WithError(cacheErr).Warn("設置關係狀態快取失敗")
+		}
 		return &relationship, nil
 	}
 
@@ -529,6 +604,11 @@ func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, 
 		return nil, fmt.Errorf("創建新關係記錄失敗: %w", insertErr)
 	}
 
+	// 4. 新建記錄存入Redis快取
+	if cacheErr := s.relationshipCache.SetRelationship(ctx, userID, characterID, chatID, newRelationship, 30*time.Second); cacheErr != nil {
+		utils.Logger.WithError(cacheErr).Warn("設置新建關係狀態快取失敗")
+	}
+
 	utils.Logger.WithFields(map[string]interface{}{
 		"user_id":      userID,
 		"character_id": characterID,
@@ -537,6 +617,7 @@ func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, 
 		"mood":         newRelationship.Mood,
 		"relationship": newRelationship.Relationship,
 		"intimacy":     newRelationship.IntimacyLevel,
+		"cached":       true,
 	}).Info("創建新的用戶-角色關係記錄")
 
 	return newRelationship, nil
@@ -1218,8 +1299,8 @@ func (s *ChatService) generateGrokResponse(ctx context.Context, promptPair Promp
 		},
 	}
 
-	// 使用通用歷史處理方法
-	historyMessages := s.buildHistoryMessages(context, currentUserMessage)
+	// 使用統一歷史處理方法（Grok - 25條完整歷史）
+	historyMessages := s.buildHistoryForEngine(context, currentUserMessage, "grok")
 	for _, msg := range historyMessages {
 		messages = append(messages, GrokMessage{Role: msg.Role, Content: msg.Content})
 		if msg.Action != "" {
@@ -1281,8 +1362,8 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, promptPair Pro
 		},
 	}
 
-	// 為OpenAI使用乾淨的歷史（解決歷史污染問題）
-	historyMessages := s.buildCleanHistoryForOpenAI(context, currentUserMessage)
+	// 使用統一歷史處理方法（OpenAI - 25條過濾後歷史）
+	historyMessages := s.buildHistoryForEngine(context, currentUserMessage, "openai")
 	for _, msg := range historyMessages {
 		messages = append(messages, OpenAIMessage{Role: msg.Role, Content: msg.Content})
 		if msg.Action != "" {
@@ -1371,39 +1452,30 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair Pr
 	return response.Content, nil
 }
 
-// buildHistoryMessages 統一的歷史訊息構建方法（確保用戶-AI對話對）
-type historyMessage struct {
-	Role    string
-	Content string
-	Action  string
-}
-
-// buildCleanHistoryForOpenAI 為OpenAI構建乾淨的歷史（過濾NSFW內容，支持25條記錄）
-func (s *ChatService) buildCleanHistoryForOpenAI(conversationContext *ConversationContext, currentUserMessage string) []historyMessage {
+// buildHistoryForEngine 為指定引擎構建歷史（統一方法）
+func (s *ChatService) buildHistoryForEngine(conversationContext *ConversationContext, currentUserMessage string, engineType string) []historyMessage {
 	var messages []historyMessage
 
 	if conversationContext == nil {
 		return messages
 	}
 
-	// 使用EngineSelector的方法從數據庫獲取並過濾25條歷史記錄
+	// 使用統一歷史服務獲取引擎適用的歷史
 	ctx := context.Background()
-	cleanHistory, err := s.engineSelector.BuildCleanHistoryForOpenAI(ctx, conversationContext.ChatID, CHAT_HISTORY_LIMIT)
+	engineHistory, err := s.engineSelector.BuildHistoryForEngine(ctx, conversationContext.ChatID, CHAT_HISTORY_LIMIT, engineType)
 	if err != nil {
-		utils.Logger.WithError(err).Warn("獲取乾淨歷史失敗，使用RecentMessages")
-		// Fallback到原有邏輯
+		utils.Logger.WithError(err).Warnf("獲取 %s 歷史失敗，使用 RecentMessages", engineType)
+		// Fallback 到 RecentMessages (使用全部，不限制條數)
 		for _, msg := range conversationContext.RecentMessages {
-			if s.engineSelector.IsSafeMessage(msg.Content) {
-				messages = append(messages, historyMessage{
-					Role:    msg.Role,
-					Content: msg.Content,
-					Action:  msg.Action,
-				})
-			}
+			messages = append(messages, historyMessage{
+				Role:    msg.Role,
+				Content: msg.Content,
+				Action:  msg.Action,
+			})
 		}
 	} else {
-		// 轉換為historyMessage格式
-		for _, msg := range cleanHistory {
+		// 使用從統一歷史服務獲取的歷史
+		for _, msg := range engineHistory {
 			messages = append(messages, historyMessage{
 				Role:    msg.Role,
 				Content: msg.Content,
@@ -1412,86 +1484,32 @@ func (s *ChatService) buildCleanHistoryForOpenAI(conversationContext *Conversati
 		}
 	}
 
+	// 確定過濾策略描述
+	filterDesc := map[string]string{
+		"openai":  "L1_L2_only",
+		"grok":    "no_filter",
+		"mistral": "no_filter",
+	}[engineType]
+
 	utils.Logger.WithFields(map[string]interface{}{
 		"original_limit": CHAT_HISTORY_LIMIT,
-		"clean_count":    len(messages),
+		"history_count":  len(messages),
 		"chat_id":        conversationContext.ChatID,
-		"method":         "database_filtered",
-	}).Info("為OpenAI構建乾淨歷史（數據庫記錄）")
+		"method":         "unified_history_service",
+		"engine":         engineType,
+		"filter":         filterDesc,
+	}).Infof("為 %s 構建歷史（統一服務）", engineType)
 
 	return messages
 }
 
-func (s *ChatService) buildHistoryMessages(context *ConversationContext, currentUserMessage string) []historyMessage {
-	var messages []historyMessage
-
-	// 智能選擇歷史訊息，確保包含用戶-AI對話對
-	if context != nil && len(context.RecentMessages) > 0 {
-		// 從最新消息開始，找到最近的AI回應和對應的用戶消息
-		var historyMessages []ChatMessage
-
-		// 如果有超過3條消息，優先包含最近的AI回應
-		if len(context.RecentMessages) >= 3 {
-			// 找最近的AI回應
-			for i := len(context.RecentMessages) - 1; i >= 0; i-- {
-				msg := context.RecentMessages[i]
-				if msg.Role == "assistant" && strings.TrimSpace(msg.Content) != "" {
-					// 找到AI回應，包含它和之前的1-2條用戶消息
-					start := max(0, i-2)
-					historyMessages = context.RecentMessages[start : i+1]
-					break
-				}
-			}
-		}
-
-		// 如果沒找到AI回應，就取最近的2-3條消息
-		if len(historyMessages) == 0 {
-			start := len(context.RecentMessages) - 3
-			if start < 0 {
-				start = 0
-			}
-			historyMessages = context.RecentMessages[start:]
-		}
-
-		// 轉換為API格式
-		for _, msg := range historyMessages {
-			if strings.TrimSpace(msg.Content) != "" || msg.Action != "" {
-				content := msg.Content
-				if msg.Action != "" {
-					content = fmt.Sprintf("*%s*", msg.Action)
-				}
-				messages = append(messages, historyMessage{
-					Role:    msg.Role,
-					Content: content,
-					Action:  msg.Action,
-				})
-			}
-		}
-	}
-
-	// 加入當前用戶消息（避免與最新歷史重複）
-	if strings.TrimSpace(currentUserMessage) != "" {
-		shouldAdd := true
-		// 檢查是否與最新的歷史訊息重複
-		if len(messages) > 0 {
-			lastMsg := messages[len(messages)-1]
-			if lastMsg.Role == "user" && strings.TrimSpace(lastMsg.Content) == strings.TrimSpace(currentUserMessage) {
-				shouldAdd = false
-			}
-		}
-
-		if shouldAdd {
-			action, content := extractUserAction(currentUserMessage)
-			messages = append(messages, historyMessage{
-				Role:    "user",
-				Content: content,
-				Action:  action,
-			})
-		}
-	}
-
-	return messages
+// historyMessage 歷史訊息結構
+type historyMessage struct {
+	Role    string
+	Content string
+	Action  string
 }
+
 
 func extractUserAction(input string) (string, string) {
 	trimmed := strings.TrimSpace(input)
@@ -1562,6 +1580,11 @@ func (s *ChatService) updateRelationshipState(ctx context.Context, request *Proc
 	_, err := query.Exec(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to update relationship state: %w", err)
+	}
+
+	// 資料庫更新成功後，清除 Redis 快取確保一致性
+	if cacheErr := s.relationshipCache.DeleteRelationship(ctx, request.UserID, request.CharacterID, request.ChatID); cacheErr != nil {
+		utils.Logger.WithError(cacheErr).Warn("清除關係狀態快取失敗")
 	}
 
 	utils.Logger.WithFields(map[string]interface{}{

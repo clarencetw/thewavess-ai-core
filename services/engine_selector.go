@@ -118,29 +118,68 @@ func (es *EngineSelector) isIntimateRelationship(context *ConversationContext) b
 	return false
 }
 
-// BuildCleanHistoryForOpenAI 為OpenAI構建乾淨的歷史（解決歷史污染）
+// BuildHistoryForEngine 為不同引擎構建適合的歷史記錄（統一入口）
+func (es *EngineSelector) BuildHistoryForEngine(
+	ctx context.Context,
+	chatID string,
+	limit int,
+	engineType string,
+) ([]ChatMessage, error) {
+	// 獲取完整歷史記錄（25條）
+	fullHistory, err := es.chatService.getRecentMemoriesFromDB(ctx, chatID, limit)
+	if err != nil {
+		utils.Logger.WithError(err).Warn("獲取歷史記錄失敗")
+		return []ChatMessage{}, err
+	}
+
+	// 根據引擎類型應用不同的過濾策略
+	switch engineType {
+	case "openai":
+		return es.filterHistoryForOpenAI(fullHistory), nil
+	case "grok", "mistral":
+		// Grok 和 Mistral 都不需要過濾 NSFW 內容
+		return es.filterHistoryForUnrestricted(fullHistory), nil
+	default:
+		// 默認使用 OpenAI 策略（安全優先）
+		return es.filterHistoryForOpenAI(fullHistory), nil
+	}
+}
+
+// filterHistoryForOpenAI OpenAI 過濾策略：移除 L3+ NSFW 內容
+func (es *EngineSelector) filterHistoryForOpenAI(fullHistory []ChatMessage) []ChatMessage {
+	cleanHistory := []ChatMessage{}
+	for _, msg := range fullHistory {
+		// 過濾高等級 NSFW 內容（L3+）
+		if es.isSafeForOpenAI(msg.Content) {
+			cleanHistory = append(cleanHistory, msg)
+		}
+	}
+	return cleanHistory
+}
+
+// filterHistoryForUnrestricted 無限制引擎過濾策略：保留所有內容（Grok & Mistral）
+func (es *EngineSelector) filterHistoryForUnrestricted(fullHistory []ChatMessage) []ChatMessage {
+	// Grok 和 Mistral 都可以處理所有內容，不需要過濾
+	return fullHistory
+}
+
+// isSafeForOpenAI 判斷內容是否適合 OpenAI（L1-L2）
+func (es *EngineSelector) isSafeForOpenAI(content string) bool {
+	result, err := es.keywordClassifier.ClassifyContent(content)
+	if err != nil {
+		return true // 分類失敗時保守處理
+	}
+	return result.Level <= 2 // 只允許 L1-L2
+}
+
+
+// BuildCleanHistoryForOpenAI 為OpenAI構建乾淨的歷史（向後兼容）
 func (es *EngineSelector) BuildCleanHistoryForOpenAI(
 	ctx context.Context,
 	chatID string,
 	limit int,
 ) ([]ChatMessage, error) {
-
-	// 獲取完整歷史
-	fullHistory, err := es.chatService.getRecentMemoriesFromDB(ctx, chatID, limit)
-	if err != nil {
-		return []ChatMessage{}, nil
-	}
-
-	// 過濾NSFW內容，保留安全對話
-	cleanHistory := []ChatMessage{}
-	for _, msg := range fullHistory {
-		// 簡單過濾：不包含NSFW關鍵字的消息
-		if es.IsSafeMessage(msg.Content) {
-			cleanHistory = append(cleanHistory, msg)
-		}
-	}
-
-	return cleanHistory, nil
+	return es.BuildHistoryForEngine(ctx, chatID, limit, "openai")
 }
 
 // IsSafeMessage 判斷消息是否安全（可以給OpenAI）
