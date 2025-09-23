@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/clarencetw/thewavess-ai-core/models"
 	"github.com/clarencetw/thewavess-ai-core/models/db"
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/sirupsen/logrus"
@@ -43,7 +44,7 @@ type ChatService struct {
 	nsfwSticky    map[string]time.Time
 	nsfwStickyMu  sync.RWMutex
 	nsfwStickyTTL time.Duration
-	// 關係狀態快取服務 (Redis)
+	// 關係狀態快取服務 (Ristretto)
 	relationshipCache *RelationshipCache
 }
 
@@ -323,6 +324,13 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		"message_len":  len(request.UserMessage),
 	}).Info("開始處理AI對話請求")
 
+	// 0. 預先獲取角色資訊（避免重複查詢）
+	characterService := GetCharacterService()
+	character, err := characterService.GetCharacter(ctx, request.CharacterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get character: %w", err)
+	}
+
 	// 1. 快速NSFW內容分析（關鍵字匹配，極快）
 	analysisStart := time.Now()
 	analysis, err := s.analyzeContent(request.UserMessage)
@@ -374,8 +382,8 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	}
 	conversationContext := contextRes.context
 
-	// 4. 選擇 AI 引擎 (極快操作)
-	selectedEngine := s.selectAIEngine(analysis, conversationContext, request.UserMessage)
+	// 4. 選擇 AI 引擎 (極快操作，使用預獲取的角色資訊)
+	selectedEngine := s.selectAIEngineWithCharacter(analysis, conversationContext, request.UserMessage, character)
 
 	utils.Logger.WithFields(logrus.Fields{
 		"selected_engine": selectedEngine,
@@ -396,8 +404,8 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	aiCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
-	// 嘗試主要引擎
-	response, err = s.generatePersonalizedResponse(aiCtx, selectedEngine, request.UserMessage, conversationContext, analysis)
+	// 嘗試主要引擎（使用預獲取的角色資訊）
+	response, err = s.generatePersonalizedResponseWithCharacter(aiCtx, selectedEngine, request.UserMessage, conversationContext, analysis, character)
 
 	// 如果主要引擎失敗且是 OpenAI，嘗試 fallback 到 Grok
 	if err != nil && selectedEngine == "openai" {
@@ -410,9 +418,9 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		// 標記為 NSFW sticky (因為 OpenAI 拒絕了)
 		s.markNSFWSticky(request.ChatID)
 
-		// 嘗試 Grok fallback
+		// 嘗試 Grok fallback（使用預獲取的角色資訊）
 		fallbackStart := time.Now()
-		response, err = s.generatePersonalizedResponse(aiCtx, "grok", request.UserMessage, conversationContext, analysis)
+		response, err = s.generatePersonalizedResponseWithCharacter(aiCtx, "grok", request.UserMessage, conversationContext, analysis, character)
 		actualEngine = "grok_fallback"
 
 		if err == nil {
@@ -592,9 +600,9 @@ func (s *ChatService) buildFemaleOrientedContext(ctx context.Context, request *P
 	}, nil
 }
 
-// getOrCreateRelationshipState 讀取或建立最新的關係狀態 (Redis快取優化)
+// getOrCreateRelationshipState 讀取或建立最新的關係狀態 (Ristretto快取優化)
 func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, characterID, chatID string) (*db.RelationshipDB, error) {
-	// 1. 嘗試從Redis快取獲取
+	// 1. 嘗試從Ristretto快取獲取
 	cached, err := s.relationshipCache.GetRelationship(ctx, userID, characterID, chatID)
 	if err == nil && cached != nil {
 		return cached, nil
@@ -615,7 +623,7 @@ func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, 
 	}).Debug("關係狀態資料庫查詢完成")
 
 	if err == nil {
-		// 3. 存入Redis快取 (30秒TTL)
+		// 3. 存入Ristretto快取 (30秒TTL)
 		if cacheErr := s.relationshipCache.SetRelationship(ctx, userID, characterID, chatID, &relationship, 30*time.Second); cacheErr != nil {
 			utils.Logger.WithError(cacheErr).Warn("設置關係狀態快取失敗")
 		}
@@ -645,7 +653,7 @@ func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, 
 		return nil, fmt.Errorf("創建新關係記錄失敗: %w", insertErr)
 	}
 
-	// 4. 新建記錄存入Redis快取
+	// 4. 新建記錄存入Ristretto快取
 	if cacheErr := s.relationshipCache.SetRelationship(ctx, userID, characterID, chatID, newRelationship, 30*time.Second); cacheErr != nil {
 		utils.Logger.WithError(cacheErr).Warn("設置新建關係狀態快取失敗")
 	}
@@ -666,7 +674,7 @@ func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, 
 
 // getRecentMemories 已移除：統一使用資料庫查詢，失敗時返回空歷史
 
-// selectAIEngine 簡單有效的AI引擎選擇
+// selectAIEngine 簡單有效的AI引擎選擇（舊版本，保持向後相容）
 func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *ConversationContext, userMessage string) string {
 	// 角色標籤預分流（含 nsfw 標籤直接 Grok）
 	if conv != nil {
@@ -695,6 +703,36 @@ func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *Conversati
 		"user_msg":    userMessage[:min(30, len(userMessage))],
 		"selector":    "simple",
 	}).Info("簡單選擇器決策")
+
+	return engine
+}
+
+// selectAIEngineWithCharacter 使用預獲取角色資訊的AI引擎選擇（性能優化版）
+func (s *ChatService) selectAIEngineWithCharacter(analysis *ContentAnalysis, conv *ConversationContext, userMessage string, character *models.Character) string {
+	// 角色標籤預分流（含 nsfw 標籤直接 Grok）
+	if character != nil {
+		for _, tag := range character.Metadata.Tags {
+			t := strings.ToLower(tag)
+			if t == "nsfw" || t == "adult" {
+				utils.Logger.WithFields(map[string]interface{}{
+					"character_id": character.ID,
+					"reason":       "character_tag",
+					"tag":          t,
+				}).Info("選擇 Grok 引擎：角色標籤（快取版）")
+				return "grok"
+			}
+		}
+	}
+
+	// 使用簡單選擇器
+	engine := s.engineSelector.SelectEngine(userMessage, conv, analysis.Intensity)
+
+	utils.Logger.WithFields(map[string]interface{}{
+		"engine":      engine,
+		"nsfw_level":  analysis.Intensity,
+		"user_msg":    userMessage[:min(30, len(userMessage))],
+		"selector":    "simple_cached",
+	}).Info("簡單選擇器決策（快取版）")
 
 	return engine
 }
@@ -919,8 +957,20 @@ type CharacterResponseData struct {
 	Metadata      map[string]interface{} `json:"metadata,omitempty"` // 額外元數據
 }
 
-// generatePersonalizedResponse 生成個性化女性向回應
+// generatePersonalizedResponse 生成個性化女性向回應（舊版本，保持向後相容）
 func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, userMessage string, context *ConversationContext, analysis *ContentAnalysis) (*CharacterResponseData, error) {
+	// 內部調用新版本，獲取角色資訊
+	characterService := GetCharacterService()
+	character, err := characterService.GetCharacter(ctx, context.CharacterID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get character: %w", err)
+	}
+
+	return s.generatePersonalizedResponseWithCharacter(ctx, engine, userMessage, context, analysis, character)
+}
+
+// generatePersonalizedResponseWithCharacter 生成個性化女性向回應（性能優化版）
+func (s *ChatService) generatePersonalizedResponseWithCharacter(ctx context.Context, engine, userMessage string, context *ConversationContext, analysis *ContentAnalysis, character *models.Character) (*CharacterResponseData, error) {
 	// 台灣法律不合法內容：不處理（直接拒絕）
 	for _, cat := range analysis.Categories {
 		if cat == "illegal_content" {
@@ -956,7 +1006,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 			nsfwLevelForPrompt = 3 // 最低為 L3
 		}
 	}
-	promptPair := s.buildEngineSpecificPrompt(engine, context.CharacterID, userMessage, context, nsfwLevelForPrompt, context.ChatMode)
+	promptPair := s.buildEngineSpecificPromptWithCharacter(engine, userMessage, context, nsfwLevelForPrompt, context.ChatMode, character)
 
 	var responseText string
 	var err error
@@ -977,7 +1027,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 				s.markNSFWSticky(context.ChatID)
 
 				// 直接使用 Grok 處理內容拒絕情況 (雙引擎架構)
-				grokPromptPair := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
+				grokPromptPair := s.buildEngineSpecificPromptWithCharacter("grok", userMessage, context, 5, context.ChatMode, character)
 				responseText, err = s.generateGrokResponse(ctx, grokPromptPair, context, userMessage)
 				if err != nil {
 					utils.Logger.WithError(err).Error("Grok 後備回應生成失敗")
@@ -1000,7 +1050,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 
 			// 標記 sticky 並重新生成 Grok prompt
 			s.markNSFWSticky(context.ChatID)
-			grokPromptPair := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
+			grokPromptPair := s.buildEngineSpecificPromptWithCharacter("grok", userMessage, context, 5, context.ChatMode, character)
 			responseText, err = s.generateGrokResponse(ctx, grokPromptPair, context, userMessage)
 			if err != nil {
 				utils.Logger.WithError(err).Error("Grok 後備回應生成失敗")
@@ -1020,7 +1070,7 @@ func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, 
 				"chat_id":         context.ChatID,
 			}).Info("Mistral 失敗，自動切換到 Grok")
 
-			grokPromptPair := s.buildEngineSpecificPrompt("grok", context.CharacterID, userMessage, context, 5, context.ChatMode)
+			grokPromptPair := s.buildEngineSpecificPromptWithCharacter("grok", userMessage, context, 5, context.ChatMode, character)
 			responseText, err = s.generateGrokResponse(ctx, grokPromptPair, context, userMessage)
 			if err != nil {
 				utils.Logger.WithError(err).Error("Grok 後備回應生成失敗")
@@ -1260,7 +1310,7 @@ type PromptPair struct {
 	UserPrompt   string
 }
 
-// buildEngineSpecificPrompt 根據 AI 引擎構建專屬 prompt對
+// buildEngineSpecificPrompt 根據 AI 引擎構建專屬 prompt對（舊版本，保持向後相容）
 // OpenAI: 情感細膩，Mistral: 進階 NSFW 處理，Grok: 大膽創意
 func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) PromptPair {
 	// 記憶上下文完全通過 conversationContext.RecentMessages 提供
@@ -1276,6 +1326,14 @@ func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage
 			UserPrompt:   userMessage,
 		}
 	}
+
+	return s.buildEngineSpecificPromptWithCharacter(engine, userMessage, conversationContext, nsfwLevel, chatMode, character)
+}
+
+// buildEngineSpecificPromptWithCharacter 根據 AI 引擎構建專屬 prompt對（性能優化版）
+// OpenAI: 情感細膩，Mistral: 進階 NSFW 處理，Grok: 大膽創意
+func (s *ChatService) buildEngineSpecificPromptWithCharacter(engine, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string, character *models.Character) PromptPair {
+	characterService := GetCharacterService()
 
 	// 轉換為 db.CharacterDB 類型
 	dbCharacter := &db.CharacterDB{
@@ -1623,7 +1681,7 @@ func (s *ChatService) updateRelationshipState(ctx context.Context, request *Proc
 		return fmt.Errorf("failed to update relationship state: %w", err)
 	}
 
-	// 資料庫更新成功後，清除 Redis 快取確保一致性
+	// 資料庫更新成功後，清除 Ristretto 快取確保一致性
 	if cacheErr := s.relationshipCache.DeleteRelationship(ctx, request.UserID, request.CharacterID, request.ChatID); cacheErr != nil {
 		utils.Logger.WithError(cacheErr).Warn("清除關係狀態快取失敗")
 	}

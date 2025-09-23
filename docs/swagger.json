@@ -3772,7 +3772,7 @@
         },
         "/monitor/health": {
             "get": {
-                "description": "檢查系統整體健康狀態。關鍵服務：資料庫連接。非關鍵服務：Redis快取（故障時自動降級為記憶體快取）",
+                "description": "檢查系統整體健康狀態。關鍵服務：資料庫連接。非關鍵服務：Redis 連線狀態",
                 "consumes": [
                     "application/json"
                 ],

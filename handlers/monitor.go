@@ -79,7 +79,7 @@ var MonitorStartTime = time.Now() // 導出供其他包使用
 
 // HealthCheck godoc
 // @Summary      系統健康檢查
-// @Description  檢查系統整體健康狀態。關鍵服務：資料庫連接。非關鍵服務：Redis快取（故障時自動降級為記憶體快取）
+// @Description  檢查系統整體健康狀態。關鍵服務：資料庫連接。非關鍵服務：Redis 連線狀態
 // @Tags         Monitor
 // @Accept       json
 // @Produce      json
@@ -125,7 +125,7 @@ func HealthCheck(c *gin.Context) {
 	if dbStatus == "unhealthy" {
 		status = "degraded"
 	}
-	// Redis 故障不影響整體健康狀態（已有降級機制）
+	// Redis 故障不影響整體健康狀態（快取已使用 Ristretto）
 
 	uptime := time.Since(MonitorStartTime).Round(time.Second).String()
 
@@ -316,7 +316,7 @@ func Ready(c *gin.Context) {
 
 	// 檢查 Redis（資訊性，不影響就緒狀態）
 	services["redis"] = database.IsRedisAvailable()
-	// 註：Redis 狀態不影響整體就緒判斷
+	// 註：Redis 狀態不影響整體就緒判斷（快取已使用 Ristretto）
 
 	// 檢查必要的環境變數
 	if utils.GetEnvWithDefault("OPENAI_API_KEY", "") == "" &&

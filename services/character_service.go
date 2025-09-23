@@ -14,16 +14,18 @@ import (
 // CharacterService 角色業務邏輯服務
 type CharacterService struct {
 	store *CharacterStore
+	cache *CharacterCache
 }
 
 // NewCharacterService 創建角色服務
 func NewCharacterService(store *CharacterStore) *CharacterService {
 	return &CharacterService{
 		store: store,
+		cache: NewCharacterCache(store),
 	}
 }
 
-// GetCharacter 獲取角色詳情
+// GetCharacter 獲取角色詳情（使用快取）
 func (s *CharacterService) GetCharacter(ctx context.Context, id string) (*models.Character, error) {
 	if utils.Logger != nil {
 		utils.Logger.WithFields(logrus.Fields{
@@ -31,7 +33,8 @@ func (s *CharacterService) GetCharacter(ctx context.Context, id string) (*models
 		}).Debug("獲取角色詳情")
 	}
 
-	character, err := s.store.GetAggregate(ctx, id)
+	// 使用快取獲取角色，自動處理 Redis fallback
+	character, err := s.cache.GetCharacter(ctx, id)
 	if err != nil {
 		if utils.Logger != nil {
 			utils.Logger.WithFields(logrus.Fields{
@@ -213,6 +216,9 @@ func (s *CharacterService) CreateCharacter(ctx context.Context, req *models.Char
 		return nil, err
 	}
 
+	// 清除快取（新角色需要確保快取一致性）
+	s.cache.InvalidateCharacter(ctx, characterID)
+
 	utils.Logger.WithFields(logrus.Fields{
 		"character_id": characterID,
 		"name":         character.Name,
@@ -254,6 +260,9 @@ func (s *CharacterService) UpdateCharacter(ctx context.Context, id string, req *
 		return nil, err
 	}
 
+	// 清除快取（角色更新後需要重新快取）
+	s.cache.InvalidateCharacter(ctx, id)
+
 	utils.Logger.WithFields(logrus.Fields{
 		"character_id": id,
 	}).Info("角色更新成功")
@@ -275,6 +284,9 @@ func (s *CharacterService) DeleteCharacter(ctx context.Context, id string) error
 		}).Error("刪除角色失敗")
 		return err
 	}
+
+	// 清除快取（角色刪除後需要清理快取）
+	s.cache.InvalidateCharacter(ctx, id)
 
 	utils.Logger.WithFields(logrus.Fields{
 		"character_id": id,
@@ -477,6 +489,9 @@ func (s *CharacterService) CreateCharacterWithUser(ctx context.Context, req *mod
 		return nil, err
 	}
 
+	// 清除快取（新角色需要確保快取一致性）
+	s.cache.InvalidateCharacter(ctx, characterID)
+
 	utils.Logger.WithFields(logrus.Fields{
 		"character_id": characterID,
 		"name":         character.Name,
@@ -536,6 +551,9 @@ func (s *CharacterService) UpdateCharacterWithUser(ctx context.Context, id strin
 		return nil, err
 	}
 
+	// 清除快取（角色更新後需要重新快取）
+	s.cache.InvalidateCharacter(ctx, id)
+
 	utils.Logger.WithFields(logrus.Fields{
 		"character_id": id,
 		"user_id":      userID,
@@ -580,6 +598,9 @@ func (s *CharacterService) SoftDeleteCharacterWithUser(ctx context.Context, id s
 		}).Error("軟刪除角色失敗")
 		return err
 	}
+
+	// 清除快取（角色刪除後需要清理快取）
+	s.cache.InvalidateCharacter(ctx, id)
 
 	utils.Logger.WithFields(logrus.Fields{
 		"character_id": id,
