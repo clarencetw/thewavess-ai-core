@@ -191,6 +191,7 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	}
 
 	// 調用 OpenAI API
+	// WithRequestTimeout(30s): 單次 API 調用超時，必須小於 Context timeout (90s)
 	startTime := time.Now()
 	resp, err := c.client.Chat.Completions.New(ctx, params, option.WithRequestTimeout(30*time.Second))
 

@@ -387,8 +387,13 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	var response *CharacterResponseData
 	actualEngine := selectedEngine
 
-	// 為AI調用設置超時 (12秒超時，給 fallback 更多時間)
-	aiCtx, cancel := context.WithTimeout(ctx, 12*time.Second)
+	// 為AI調用設置超時 (90秒總時間，充足支援 LLM 生成和 fallback)
+	// Timeout 層級設計：
+	// - Context timeout (90s): 整個請求生命週期，包含所有重試和 fallback
+	// - RequestTimeout (30s): 每次 API 調用的單次超時，在 openai_client.go 和 grok_client.go 中設定
+	// - 90s > 30s 確保有充足時間進行 OpenAI → Grok fallback
+	// - 參考 OpenAI 官方範例：context.WithTimeout(5*time.Minute) + WithRequestTimeout(20*time.Second)
+	aiCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
 
 	// 嘗試主要引擎
@@ -1758,11 +1763,11 @@ func (s *ChatService) saveAssistantMessageToDB(ctx context.Context, request *Pro
 	return nil
 }
 
-// getRecentMemoriesFromDB 從資料庫獲取最近對話記憶，新消息在前
+// getRecentMemoriesFromDB 從資料庫獲取最近對話記憶，按時間順序（舊到新）
 func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, chatID string, limit int) ([]ChatMessage, error) {
 	var messages []db.MessageDB
 
-	// 查詢最近的消息，使用 limit*2 確保獲取足夠的用戶和AI消息對
+	// 先取最近的消息（DESC），然後在程式中反轉為時間順序
 	err := s.db.NewSelect().
 		Model(&messages).
 		Where("chat_id = ?", chatID).
@@ -1774,9 +1779,9 @@ func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, chatID string
 		return nil, fmt.Errorf("failed to query chat history from database: %w", err)
 	}
 
-	// 轉換為 ChatMessage 格式，保持新消息在前的順序
+	// 轉換為 ChatMessage 格式
 	chatMessages := make([]ChatMessage, 0, len(messages))
-	for _, msg := range messages { // 保持資料庫查詢順序：新的消息在前
+	for _, msg := range messages {
 		// 跳過空消息內容
 		if strings.TrimSpace(msg.Dialogue) == "" {
 			continue
@@ -1792,6 +1797,11 @@ func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, chatID string
 	// 如果消息過多，保留最新的對話
 	if len(chatMessages) > limit {
 		chatMessages = chatMessages[:limit]
+	}
+
+	// 反轉順序：從新消息在前 → 舊消息在前（符合 AI 期望的時間順序）
+	for i, j := 0, len(chatMessages)-1; i < j; i, j = i+1, j-1 {
+		chatMessages[i], chatMessages[j] = chatMessages[j], chatMessages[i]
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
