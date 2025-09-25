@@ -95,7 +95,7 @@ func GenerateDefaultAvatarURLByGender(gender *string) string {
 		case "male":
 			g.Default = "robohash" // 機器人風格適合男性
 		case "female":
-			g.Default = "wavatar"  // 面部風格適合女性
+			g.Default = "wavatar" // 面部風格適合女性
 		default:
 			g.Default = "identicon" // 幾何圖案適合其他
 		}
@@ -105,4 +105,3 @@ func GenerateDefaultAvatarURLByGender(gender *string) string {
 
 	return g.GetURL()
 }
-

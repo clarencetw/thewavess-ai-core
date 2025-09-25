@@ -30,6 +30,7 @@ type OpenAIRequest struct {
 	MaxTokens   int             `json:"max_tokens"`
 	Temperature float64         `json:"temperature"`
 	User        string          `json:"user,omitempty"`
+	ChatID      string          `json:"chat_id,omitempty"` // 用於 PromptCacheKey
 }
 
 // OpenAIMessage OpenAI 消息結構
@@ -159,13 +160,17 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 		}
 	}
 
+	// 計算 prompt cache key（基於聊天會話ID，每個對話獨立快取）
+	cacheKey := request.ChatID
+
 	// 建立 API 參數
 	params := openai.ChatCompletionNewParams{
-		Model:       c.model,
-		Messages:    messages,
-		MaxTokens:   openai.Int(int64(c.maxTokens)),
-		Temperature: openai.Float(c.temperature),
-		User:        openai.String(request.User),
+		Model:          c.model,
+		Messages:       messages,
+		MaxTokens:      openai.Int(int64(c.maxTokens)),
+		Temperature:    openai.Float(c.temperature),
+		User:           openai.String(request.User),
+		PromptCacheKey: openai.String(cacheKey), // 啟用 prompt caching
 	}
 
 	// 設置 Structured Outputs - 確保 JSON 格式和類型正確性
@@ -201,13 +206,13 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 				"description": "角色當前情緒狀態",
 			},
 			"relationship": map[string]interface{}{
-				"type": "string",
-				"enum": []string{"stranger", "friend", "close_friend", "lover", "soulmate"},
+				"type":        "string",
+				"enum":        []string{"stranger", "friend", "close_friend", "lover", "soulmate"},
 				"description": "角色與用戶的關係狀態",
 			},
 			"intimacy_level": map[string]interface{}{
-				"type": "string",
-				"enum": []string{"distant", "friendly", "close", "intimate", "deeply_intimate"},
+				"type":        "string",
+				"enum":        []string{"distant", "friendly", "close", "intimate", "deeply_intimate"},
 				"description": "親密度層級",
 			},
 			"reasoning": map[string]interface{}{
@@ -356,6 +361,9 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	outputCost := float64(completionTokens) * outputCostPer1K / 1000
 	costEstimate := inputCost + outputCost
 
+	// 計算響應時間
+	duration := time.Since(startTime)
+
 	// 記錄API響應信息，包含詳細的 token 使用和成本分解
 	logFields := map[string]interface{}{
 		"service":            "openai",
@@ -372,6 +380,33 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 		"input_rate_per_1k":  fmt.Sprintf("$%.6f", inputCostPer1K),
 		"output_rate_per_1k": fmt.Sprintf("$%.6f", outputCostPer1K),
 		"choices_count":      len(resp.Choices),
+		"duration_ms":        duration.Milliseconds(),
+		"cache_key":          cacheKey, // 記錄使用的快取鍵
+	}
+
+	// 添加 Prompt Caching 指標監控
+	if resp.Usage.PromptTokensDetails.CachedTokens > 0 {
+		cachedTokens := int(resp.Usage.PromptTokensDetails.CachedTokens)
+		totalPromptTokens := int(resp.Usage.PromptTokens)
+
+		cacheHitRate := float64(cachedTokens) / float64(totalPromptTokens) * 100
+		costSavings := float64(cachedTokens) * inputCostPer1K / 1000 * 0.75 // 75% 折扣
+
+		logFields["cached_tokens"] = cachedTokens
+		logFields["cache_hit_rate"] = fmt.Sprintf("%.1f%%", cacheHitRate)
+		logFields["cache_savings_usd"] = fmt.Sprintf("$%.6f", costSavings)
+		logFields["cache_status"] = "hit"
+
+		utils.Logger.WithFields(map[string]interface{}{
+			"service":        "openai",
+			"cache_hit_rate": fmt.Sprintf("%.1f%%", cacheHitRate),
+			"cached_tokens":  cachedTokens,
+			"cache_savings":  fmt.Sprintf("$%.6f", costSavings),
+			"response_time":  fmt.Sprintf("%dms", duration.Milliseconds()),
+		}).Info("🚀 Prompt Cache Hit - Improved Performance & Cost")
+	} else {
+		logFields["cached_tokens"] = 0
+		logFields["cache_status"] = "miss"
 	}
 
 	// 加入 finish_reason 和內容過濾相關資訊
@@ -439,4 +474,3 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 	// 直接返回官方 SDK 的響應結構
 	return resp, nil
 }
-

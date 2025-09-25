@@ -13,11 +13,11 @@ import (
 
 // ConflictResolution 衝突解決策略
 type ConflictResolution struct {
-	Keyword     string `json:"keyword"`
-	CurrentLevels []int `json:"current_levels"`
-	RecommendedLevel int `json:"recommended_level"`
-	Reason      string `json:"reason"`
-	Action      string `json:"action"` // "keep_in", "remove_from", "make_specific"
+	Keyword          string `json:"keyword"`
+	CurrentLevels    []int  `json:"current_levels"`
+	RecommendedLevel int    `json:"recommended_level"`
+	Reason           string `json:"reason"`
+	Action           string `json:"action"` // "keep_in", "remove_from", "make_specific"
 }
 
 // ConflictResolver 衝突解決器
@@ -70,14 +70,14 @@ var contextRules = map[string]map[int]string{
 // 等級優先權重 - 某些關鍵字更適合特定等級
 var levelPreferences = map[string]int{
 	// L1 - 日常安全詞彙
-	"溫暖":   1,
-	"胸部":   1, // 醫學詞彙
-	"夜晚":   1, // 時間詞彙
+	"溫暖": 1,
+	"胸部": 1, // 醫學詞彙
+	"夜晚": 1, // 時間詞彙
 
 	// L2 - 情感浪漫
-	"癡迷":   2,
-	"沉醉":   2,
-	"迷戀":   2,
+	"癡迷": 2,
+	"沉醉": 2,
+	"迷戀": 2,
 
 	// L3 - 親密接觸
 	"深陷其中": 3,
@@ -85,8 +85,8 @@ var levelPreferences = map[string]int{
 
 	// L4 - 明確性行為
 	"神魂顛倒": 4,
-	"興奮":    4, // 性語境下
-	"熱烈":    4,
+	"興奮":   4, // 性語境下
+	"熱烈":   4,
 
 	// L5 - 極度露骨
 	"欲仙欲死": 5,
@@ -155,8 +155,8 @@ func (cr *ConflictResolver) resolveConflict(keyword string, levels []int) Confli
 			Keyword:          keyword,
 			CurrentLevels:    levels,
 			RecommendedLevel: preferredLevel,
-			Reason:          fmt.Sprintf("根據詞彙語義，最適合 L%d", preferredLevel),
-			Action:          "keep_in",
+			Reason:           fmt.Sprintf("根據詞彙語義，最適合 L%d", preferredLevel),
+			Action:           "keep_in",
 		}
 	}
 
@@ -169,8 +169,8 @@ func (cr *ConflictResolver) resolveConflict(keyword string, levels []int) Confli
 				Keyword:          keyword,
 				CurrentLevels:    levels,
 				RecommendedLevel: maxLevel,
-				Reason:          fmt.Sprintf("建議創建特定版本: %s", reason),
-				Action:          "make_specific",
+				Reason:           fmt.Sprintf("建議創建特定版本: %s", reason),
+				Action:           "make_specific",
 			}
 		}
 	}
@@ -181,8 +181,8 @@ func (cr *ConflictResolver) resolveConflict(keyword string, levels []int) Confli
 		Keyword:          keyword,
 		CurrentLevels:    levels,
 		RecommendedLevel: maxLevel,
-		Reason:          fmt.Sprintf("保留在最高等級 L%d，從其他等級移除", maxLevel),
-		Action:          "keep_in",
+		Reason:           fmt.Sprintf("保留在最高等級 L%d，從其他等級移除", maxLevel),
+		Action:           "keep_in",
 	}
 }
 
@@ -235,8 +235,8 @@ func (cr *ConflictResolver) applyResolutions(resolutions []ConflictResolution) e
 	fmt.Printf("🔧 套用 %d 個衝突解決方案...\n", len(resolutions))
 
 	// 按動作分組處理
-	keepActions := make(map[int][]string)      // level -> keywords to keep
-	removeActions := make(map[int][]string)    // level -> keywords to remove
+	keepActions := make(map[int][]string)                  // level -> keywords to keep
+	removeActions := make(map[int][]string)                // level -> keywords to remove
 	specificActions := make(map[string]ConflictResolution) // keyword -> resolution
 
 	for _, resolution := range resolutions {

@@ -23,11 +23,11 @@ func TestLimitedRealComparison(t *testing.T) {
 
 	// 只測試少量訊息，避免API成本
 	testMessages := []string{
-		"今天天氣真好",           // L1 安全
-		"心情不太好",            // L1 邊界案例
-		"成為我的女朋友吧",        // L2 情感
-		"想擁抱你",             // L3 親密
-		"想和你做愛",           // L4 性愛
+		"今天天氣真好",   // L1 安全
+		"心情不太好",    // L1 邊界案例
+		"成為我的女朋友吧", // L2 情感
+		"想擁抱你",     // L3 親密
+		"想和你做愛",    // L4 性愛
 	}
 
 	// 只測試3輪，控制API調用次數
@@ -40,7 +40,6 @@ func TestLimitedRealComparison(t *testing.T) {
 	// 真實embedding分類器
 	embeddingClassifier := services.NewEnhancedKeywordClassifier()
 	keywordClassifier := NewSimpleKeywordClassifier()
-
 
 	// 測試embedding分類器（真實API）
 	var embeddingTotalTime time.Duration

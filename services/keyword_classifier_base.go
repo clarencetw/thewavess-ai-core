@@ -13,7 +13,7 @@ type ClassificationResult struct {
 	Level       int     `json:"level"`
 	Reason      string  `json:"reason"`
 	MatchedWord string  `json:"matched_word"`
-	Confidence  float64 `json:"confidence"`  // 兼容性字段
+	Confidence  float64 `json:"confidence"` // 兼容性字段
 	ChunkID     string  `json:"chunk_id"`   // 兼容性字段
 }
 

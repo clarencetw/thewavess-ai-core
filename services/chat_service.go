@@ -33,13 +33,13 @@ type ChatMessage struct {
 
 // ChatService 對話服務
 type ChatService struct {
-	db                     *bun.DB
-	openaiClient           *OpenAIClient
-	grokClient             *GrokClient
-	mistralClient          *MistralClient  // 保留實作但不使用
-	config                 *ChatConfig
-	keywordClassifier      *EnhancedKeywordClassifier
-	engineSelector         *EngineSelector
+	db                *bun.DB
+	openaiClient      *OpenAIClient
+	grokClient        *GrokClient
+	mistralClient     *MistralClient // 保留實作但不使用
+	config            *ChatConfig
+	keywordClassifier *EnhancedKeywordClassifier
+	engineSelector    *EngineSelector
 	// 簡單的 NSFW 遲滯（會話內短期內直接走 Grok）
 	nsfwSticky    map[string]time.Time
 	nsfwStickyMu  sync.RWMutex
@@ -206,14 +206,14 @@ func NewChatService() *ChatService {
 	relationshipCache := NewRelationshipCache()
 
 	service := &ChatService{
-		db:               GetDB(),
-		openaiClient:     openaiClient,
-		grokClient:       grokClient,
-		mistralClient:    mistralClient,
-		config:           config,
+		db:                GetDB(),
+		openaiClient:      openaiClient,
+		grokClient:        grokClient,
+		mistralClient:     mistralClient,
+		config:            config,
 		keywordClassifier: keywordClassifier,
-		nsfwSticky:     make(map[string]time.Time),
-		nsfwStickyTTL:  5 * time.Minute,
+		nsfwSticky:        make(map[string]time.Time),
+		nsfwStickyTTL:     5 * time.Minute,
 		relationshipCache: relationshipCache,
 	}
 
@@ -280,7 +280,7 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 		Confidence:    1.0,
 	}
 
-	// 歡迎訊息使用 OpenAI 引擎，L1 等級
+	// 歡迎訊息使用 OpenAI 引擎，L1 等級（遵循 context 最佳實務）
 	response, err := s.generatePersonalizedResponseWithCharacter(ctx, "openai", "[SYSTEM_WELCOME_FIRST_MESSAGE]", welcomeContext, analysis, character)
 
 	if err != nil {
@@ -341,7 +341,7 @@ func (s *ChatService) RegenerateMessage(ctx context.Context, userMessage, chatID
 		return nil, fmt.Errorf("failed to get character: %w", err)
 	}
 
-	// 4. 選擇引擎並生成回應
+	// 4. 選擇引擎並生成回應（遵循 context 最佳實務）
 	selectedEngine := s.selectAIEngineWithCharacter(analysis, conversationContext, userMessage, character)
 
 	response, err := s.generatePersonalizedResponseWithCharacter(ctx, selectedEngine, userMessage, conversationContext, analysis, character)
@@ -384,7 +384,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 		return nil, fmt.Errorf("failed to analyze content: %w", err)
 	}
 	utils.Logger.WithFields(logrus.Fields{
-		"nsfw_level": analysis.Intensity,
+		"nsfw_level":    analysis.Intensity,
 		"analysis_time": time.Since(analysisStart),
 	}).Info("NSFW分析完成")
 
@@ -402,18 +402,26 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	contextChan := make(chan contextResult, 1)
 	saveChan := make(chan error, 1)
 
-	// 並行：構建對話上下文 (DB查詢)
+	// 並行：構建對話上下文 (DB查詢，使用獨立context避免HTTP超時影響)
 	go func() {
 		contextStart := time.Now()
-		conversationContext, err := s.buildFemaleOrientedContext(ctx, request)
+		// 為數據庫操作創建獨立context，30秒超時，不受HTTP請求context取消影響
+		dbCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		conversationContext, err := s.buildFemaleOrientedContext(dbCtx, request)
 		utils.Logger.WithField("context_build_time", time.Since(contextStart)).Debug("對話上下文構建完成")
 		contextChan <- contextResult{context: conversationContext, err: err}
 	}()
 
-	// 並行：保存用戶訊息 (DB寫入)
+	// 並行：保存用戶訊息 (DB寫入，使用獨立context避免HTTP超時影響)
 	go func() {
 		saveStart := time.Now()
-		err := s.saveUserMessageToDB(ctx, request, userMessageID, analysis)
+		// 為數據庫操作創建獨立context，30秒超時，不受HTTP請求context取消影響
+		dbCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err := s.saveUserMessageToDB(dbCtx, request, userMessageID, analysis)
 		if err != nil {
 			utils.Logger.WithError(err).Error("保存用戶消息失敗：將降級為臨時上下文")
 		}
@@ -457,8 +465,8 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	if err != nil && selectedEngine == "openai" {
 		utils.Logger.WithFields(logrus.Fields{
 			"original_engine": selectedEngine,
-			"ai_time": time.Since(aiStart),
-			"error": err.Error(),
+			"ai_time":         time.Since(aiStart),
+			"error":           err.Error(),
 		}).Warn("OpenAI 失敗，嘗試 fallback 到 Grok")
 
 		// 標記為 NSFW sticky (因為 OpenAI 拒絕了)
@@ -497,18 +505,22 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
-		"ai_time": time.Since(aiStart),
+		"ai_time":         time.Since(aiStart),
 		"original_engine": selectedEngine,
-		"actual_engine": actualEngine,
+		"actual_engine":   actualEngine,
 	}).Info("AI回應生成完成")
 
 	// 6. 更新關係狀態（包含好感度、心情、關係、親密度）
 	newAffection := s.updateAffection(conversationContext.Affection, response)
 
-	// 並行：關係狀態更新 (不阻塞主流程)
+	// 並行：關係狀態更新 (不阻塞主流程，使用獨立context避免HTTP超時影響)
 	go func() {
 		updateStart := time.Now()
-		err := s.updateRelationshipState(ctx, request, response, newAffection)
+		// 為數據庫操作創建獨立context，30秒超時，不受HTTP請求context取消影響
+		dbCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err := s.updateRelationshipState(dbCtx, request, response, newAffection)
 		if err != nil {
 			utils.Logger.WithError(err).Error("更新關係狀態失敗")
 		}
@@ -518,10 +530,14 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	// 等待用戶消息保存完成 (確保一致性)
 	<-saveChan
 
-	// 7. 並行：保存 AI 回應 (不阻塞回應返回)
+	// 7. 並行：保存 AI 回應 (不阻塞回應返回，使用獨立context避免HTTP超時影響)
 	go func() {
 		saveStart := time.Now()
-		err := s.saveAssistantMessageToDB(ctx, request, messageID, response, newAffection, response.ActualEngine, analysis, time.Since(startTime))
+		// 為數據庫操作創建獨立context，30秒超時，不受HTTP請求context取消影響
+		dbCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		err := s.saveAssistantMessageToDB(dbCtx, request, messageID, response, newAffection, response.ActualEngine, analysis, time.Since(startTime))
 		if err != nil {
 			utils.Logger.WithError(err).Error("保存對話到資料庫失敗")
 		}
@@ -638,12 +654,12 @@ func (s *ChatService) buildFemaleOrientedContext(ctx context.Context, request *P
 
 	// 3. 組裝標準化對話上下文數據結構
 	return &ConversationContext{
-		ChatID:         request.ChatID,             // 會話識別碼
-		UserID:         request.UserID,             // 用戶識別碼
-		CharacterID:    request.CharacterID,        // 角色識別碼
-		RecentMessages: recentMemories,             // 最近對話記憶（最多 5 條）
+		ChatID:         request.ChatID,              // 會話識別碼
+		UserID:         request.UserID,              // 用戶識別碼
+		CharacterID:    request.CharacterID,         // 角色識別碼
+		RecentMessages: recentMemories,              // 最近對話記憶（最多 5 條）
 		Affection:      relationshipState.Affection, // 當前好感度（0-100）
-		ChatMode:       request.ChatMode,           // 聊天模式設定
+		ChatMode:       request.ChatMode,            // 聊天模式設定
 		Mood:           relationshipState.Mood,
 		Relationship:   relationshipState.Relationship,
 		IntimacyLevel:  relationshipState.IntimacyLevel,
@@ -724,7 +740,6 @@ func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, 
 
 // getRecentMemories 已移除：統一使用資料庫查詢，失敗時返回空歷史
 
-
 // selectAIEngineWithCharacter 使用預獲取角色資訊的AI引擎選擇（性能優化版）
 func (s *ChatService) selectAIEngineWithCharacter(analysis *ContentAnalysis, conv *ConversationContext, userMessage string, character *models.Character) string {
 	// 角色標籤預分流（含 nsfw 標籤直接 Grok）
@@ -746,10 +761,10 @@ func (s *ChatService) selectAIEngineWithCharacter(analysis *ContentAnalysis, con
 	engine := s.engineSelector.SelectEngine(userMessage, conv, analysis.Intensity)
 
 	utils.Logger.WithFields(map[string]interface{}{
-		"engine":      engine,
-		"nsfw_level":  analysis.Intensity,
-		"user_msg":    userMessage[:min(30, len(userMessage))],
-		"selector":    "simple_cached",
+		"engine":     engine,
+		"nsfw_level": analysis.Intensity,
+		"user_msg":   userMessage[:min(30, len(userMessage))],
+		"selector":   "simple_cached",
 	}).Info("簡單選擇器決策（快取版）")
 
 	return engine
@@ -899,7 +914,7 @@ func (s *ChatService) isOpenAIRefusalContent(responseText string) bool {
 	refusalPhrases := []string{
 		// 中文拒絕語
 		"抱歉，我無法協助處理此請求。", // ✅ 已觀察到的原句
-		"抱歉，我無法處理這個請求。", // ✅ 用戶要求新增
+		"抱歉，我無法處理這個請求。",  // ✅ 用戶要求新增
 		"抱歉，我無法協助",
 		"抱歉，我不能",
 		"很抱歉，我無法",
@@ -975,7 +990,6 @@ type CharacterResponseData struct {
 	Metadata      map[string]interface{} `json:"metadata,omitempty"` // 額外元數據
 }
 
-
 // generatePersonalizedResponseWithCharacter 生成個性化女性向回應（性能優化版）
 func (s *ChatService) generatePersonalizedResponseWithCharacter(ctx context.Context, engine, userMessage string, context *ConversationContext, analysis *ContentAnalysis, character *models.Character) (*CharacterResponseData, error) {
 	// 台灣法律不合法內容：不處理（直接拒絕）
@@ -1006,7 +1020,7 @@ func (s *ChatService) generatePersonalizedResponseWithCharacter(ctx context.Cont
 		}
 	case "mistral":
 		// Mistral 保留實作但設為 L11（目前不使用）
-		nsfwLevelForPrompt = 11  // 特殊等級，明確標示不在當前 L1-L5 範圍內
+		nsfwLevelForPrompt = 11 // 特殊等級，明確標示不在當前 L1-L5 範圍內
 	case "grok":
 		// Grok 專責 L3-L5 (親密到成人內容)
 		if nsfwLevelForPrompt < 3 {
@@ -1098,7 +1112,7 @@ func (s *ChatService) generatePersonalizedResponseWithCharacter(ctx context.Cont
 
 	// 首先嘗試 JSON 解析，失敗時優雅降級為純文本
 	if jsonResponse, err := s.parseJSONResponse(responseText, context, analysis.Intensity); err == nil {
-		jsonResponse.ActualEngine = engine  // 設置實際使用的引擎
+		jsonResponse.ActualEngine = engine // 設置實際使用的引擎
 		utils.Logger.WithFields(map[string]interface{}{
 			"engine":           engine,
 			"affection_change": jsonResponse.EmotionDelta.AffectionChange,
@@ -1121,7 +1135,7 @@ func (s *ChatService) generatePersonalizedResponseWithCharacter(ctx context.Cont
 			Relationship:  "unchanged",
 			IntimacyLevel: "unchanged",
 			Reasoning:     "AI response used as plain text due to JSON parsing failure",
-			ActualEngine:  engine,  // 設置實際使用的引擎
+			ActualEngine:  engine, // 設置實際使用的引擎
 			Metadata:      map[string]interface{}{"fallback_reason": err.Error()},
 		}, nil
 	}
@@ -1317,7 +1331,6 @@ type PromptPair struct {
 	UserPrompt   string
 }
 
-
 // buildEngineSpecificPromptWithCharacter 根據 AI 引擎構建專屬 prompt對（性能優化版）
 // OpenAI: 情感細膩，Mistral: 進階 NSFW 處理，Grok: 大膽創意
 func (s *ChatService) buildEngineSpecificPromptWithCharacter(engine, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string, character *models.Character) PromptPair {
@@ -1374,19 +1387,22 @@ func (s *ChatService) buildEngineSpecificPromptWithCharacter(engine, userMessage
 
 // generateGrokResponse 生成Grok回應
 func (s *ChatService) generateGrokResponse(ctx context.Context, promptPair PromptPair, context *ConversationContext, currentUserMessage string) (string, error) {
-	// 構建 Grok 請求
+	// 構建 Grok 請求（統一最佳實踐結構）
+	// 1. 系統 prompt（Identity - 完全靜態，最佳快取前綴）
 	messages := []GrokMessage{
 		{
 			Role:    "system",
 			Content: promptPair.SystemPrompt,
 		},
-		{
-			Role:    "user",
-			Content: promptPair.UserPrompt,
-		},
 	}
 
-	// 使用統一歷史處理方法（Grok - 25條完整歷史）
+	// 2. 用戶 prompt（Instructions - 完全靜態，有利於快取）
+	messages = append(messages, GrokMessage{
+		Role:    "user",
+		Content: promptPair.UserPrompt,
+	})
+
+	// 3. 歷史對話（Context - 會話期間靜態）
 	historyMessages := s.buildHistoryForEngine(ctx, context, currentUserMessage, "grok")
 	for _, msg := range historyMessages {
 		messages = append(messages, GrokMessage{Role: msg.Role, Content: msg.Content})
@@ -1394,6 +1410,12 @@ func (s *ChatService) generateGrokResponse(ctx context.Context, promptPair Promp
 			messages = append(messages, GrokMessage{Role: "system", Content: fmt.Sprintf("[USER_ACTION] %s", msg.Action)})
 		}
 	}
+
+	// 4. 當前用戶消息（完全動態，放在最後）
+	messages = append(messages, GrokMessage{
+		Role:    "user",
+		Content: currentUserMessage,
+	})
 
 	// 創建 Grok 請求
 	request := &GrokRequest{
@@ -1437,19 +1459,22 @@ func (s *ChatService) generateGrokResponse(ctx context.Context, promptPair Promp
 
 // generateOpenAIResponse 生成OpenAI回應
 func (s *ChatService) generateOpenAIResponse(ctx context.Context, promptPair PromptPair, context *ConversationContext, currentUserMessage string) (string, error) {
-	// 構建 OpenAI 請求
+	// 構建 OpenAI 請求（OpenAI 最佳實踐結構）
+	// 1. 系統 prompt（Identity - 完全靜態，最佳快取前綴）
 	messages := []OpenAIMessage{
 		{
 			Role:    "system",
 			Content: promptPair.SystemPrompt,
 		},
-		{
-			Role:    "user",
-			Content: promptPair.UserPrompt,
-		},
 	}
 
-	// 使用統一歷史處理方法（OpenAI - 25條過濾後歷史）
+	// 2. 用戶 prompt（Instructions - 完全靜態，有利於快取）
+	messages = append(messages, OpenAIMessage{
+		Role:    "user",
+		Content: promptPair.UserPrompt,
+	})
+
+	// 3. 歷史對話（Context - 會話期間靜態）
 	historyMessages := s.buildHistoryForEngine(ctx, context, currentUserMessage, "openai")
 	for _, msg := range historyMessages {
 		messages = append(messages, OpenAIMessage{Role: msg.Role, Content: msg.Content})
@@ -1458,6 +1483,12 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, promptPair Pro
 		}
 	}
 
+	// 4. 當前用戶消息（完全動態，放在最後）
+	messages = append(messages, OpenAIMessage{
+		Role:    "user",
+		Content: currentUserMessage,
+	})
+
 	// 創建 OpenAI 請求
 	request := &OpenAIRequest{
 		Model:       s.config.OpenAI.Model,
@@ -1465,6 +1496,7 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, promptPair Pro
 		MaxTokens:   s.config.OpenAI.MaxTokens,
 		Temperature: s.config.OpenAI.Temperature,
 		User:        context.UserID,
+		ChatID:      context.ChatID, // 用於 PromptCacheKey 優化
 	}
 
 	// 調用 OpenAI API
@@ -1510,14 +1542,9 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair Pr
 		"user_id":      context.UserID,
 	}).Info("調用 Mistral API")
 
-	// 調用 Mistral API（使用新的結構化請求格式）
-	// 構建歷史消息
-	historyMessages := s.buildHistoryForEngine(ctx, context, currentUserMessage, "mistral")
-
-	// 轉換為 Mistral 請求格式
+	// 調用 Mistral API（統一最佳實踐結構）
+	// 1. 系統 prompt（Identity - 完全靜態，最佳快取前綴）
 	mistralMessages := []MistralMessage{}
-
-	// 添加系統消息
 	if promptPair.SystemPrompt != "" {
 		mistralMessages = append(mistralMessages, MistralMessage{
 			Role:    "system",
@@ -1525,7 +1552,14 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair Pr
 		})
 	}
 
-	// 添加歷史消息
+	// 2. 用戶 prompt（Instructions - 完全靜態，有利於快取）
+	mistralMessages = append(mistralMessages, MistralMessage{
+		Role:    "user",
+		Content: promptPair.UserPrompt,
+	})
+
+	// 3. 歷史對話（Context - 會話期間靜態）
+	historyMessages := s.buildHistoryForEngine(ctx, context, currentUserMessage, "mistral")
 	for _, msg := range historyMessages {
 		mistralMessages = append(mistralMessages, MistralMessage{
 			Role:    msg.Role,
@@ -1533,15 +1567,7 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair Pr
 		})
 	}
 
-	// 添加用戶指令（如果有）
-	if promptPair.UserPrompt != "" {
-		mistralMessages = append(mistralMessages, MistralMessage{
-			Role:    "user",
-			Content: promptPair.UserPrompt,
-		})
-	}
-
-	// 添加當前用戶消息
+	// 4. 當前用戶消息（完全動態，放在最後）
 	mistralMessages = append(mistralMessages, MistralMessage{
 		Role:    "user",
 		Content: currentUserMessage,
@@ -1635,7 +1661,6 @@ type historyMessage struct {
 	Action  string
 }
 
-
 func extractUserAction(input string) (string, string) {
 	trimmed := strings.TrimSpace(input)
 	if len(trimmed) >= 2 && strings.HasPrefix(trimmed, "*") && strings.HasSuffix(trimmed, "*") {
@@ -1644,7 +1669,6 @@ func extractUserAction(input string) (string, string) {
 	}
 	return "", input
 }
-
 
 // updateAffection 好感度更新
 func (s *ChatService) updateAffection(currentAffection int, response *CharacterResponseData) int {
@@ -1669,7 +1693,7 @@ func (s *ChatService) updateAffection(currentAffection int, response *CharacterR
 func (s *ChatService) updateRelationshipState(ctx context.Context, request *ProcessMessageRequest, response *CharacterResponseData, newAffection int) error {
 	// 準備更新資料
 	updateFields := map[string]interface{}{
-		"affection":   newAffection,
+		"affection":  newAffection,
 		"updated_at": time.Now(),
 	}
 
@@ -1922,8 +1946,8 @@ func (s *ChatService) validateAndFixResponseLength(response *CharacterResponseDa
 	// 檢查是否符合字數要求
 	if wordCount >= targetMin && wordCount <= targetMax {
 		utils.Logger.WithFields(map[string]interface{}{
-			"mode": modeName,
-			"word_count": wordCount,
+			"mode":         modeName,
+			"word_count":   wordCount,
 			"target_range": fmt.Sprintf("%d-%d", targetMin, targetMax),
 		}).Debug("回應字數符合要求")
 		return response
@@ -1931,18 +1955,18 @@ func (s *ChatService) validateAndFixResponseLength(response *CharacterResponseDa
 
 	// 記錄字數不符合的情況
 	utils.Logger.WithFields(map[string]interface{}{
-		"mode": modeName,
-		"word_count": wordCount,
+		"mode":         modeName,
+		"word_count":   wordCount,
 		"target_range": fmt.Sprintf("%d-%d", targetMin, targetMax),
-		"ai_engine": response.ActualEngine,
+		"ai_engine":    response.ActualEngine,
 	}).Warn("AI 回應字數不符合模式要求")
 
 	// 如果字數嚴重偏離，可以在這裡觸發重新生成（暫時只記錄）
 	if wordCount < targetMin/2 || wordCount > targetMax*2 {
 		utils.Logger.WithFields(map[string]interface{}{
-			"mode": modeName,
+			"mode":       modeName,
 			"word_count": wordCount,
-			"ai_engine": response.ActualEngine,
+			"ai_engine":  response.ActualEngine,
 		}).Error("AI 回應字數嚴重偏離要求")
 	}
 

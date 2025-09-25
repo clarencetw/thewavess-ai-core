@@ -120,10 +120,8 @@ func (pb *GrokPromptBuilder) BuildUserPrompt() string {
 		pb.GetStrictJSONContract(),
 	}
 
-	// 添加實際用戶消息
-	if pb.userMessage != "" {
-		sections = append(sections, fmt.Sprintf("用戶消息: %s", pb.userMessage))
-	}
+	// 注意：不在此處添加實際用戶消息，避免重複
+	// 實際用戶消息將在 generateGrokResponse 中作為獨立 message 添加
 
 	// 過濾空白段落
 	var validSections []string
@@ -135,7 +133,6 @@ func (pb *GrokPromptBuilder) BuildUserPrompt() string {
 
 	return strings.Join(validSections, "\n\n")
 }
-
 
 // buildCreativeEnhancements 建構創意增強內容
 func (pb *GrokPromptBuilder) buildCreativeEnhancements() string {

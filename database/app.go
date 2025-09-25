@@ -26,14 +26,14 @@ type App struct {
 
 // Config 資料庫配置結構
 type Config struct {
-	DSN              string
-	Production       bool
-	Debug            bool
+	DSN        string
+	Production bool
+	Debug      bool
 	// 連接池配置
-	MaxOpenConns     int
-	MaxIdleConns     int
-	ConnMaxLifetime  time.Duration
-	ConnMaxIdleTime  time.Duration
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
 }
 
 // NewApp 創建新的應用程式實例
@@ -122,7 +122,6 @@ func (app *App) DB() *bun.DB {
 				bundebug.FromEnv("BUNDEBUG"),
 			))
 		}
-
 
 		app.db = db
 		utils.Logger.Info("Database connection established successfully")

@@ -235,9 +235,9 @@ func GetSystemStats(c *gin.Context) {
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
-		"goroutines":     response.Runtime.Goroutines,
-		"memory_usage":   response.Runtime.MemoryUsage,
-		"db_connected":   dbInfo.Connected,
+		"goroutines":      response.Runtime.Goroutines,
+		"memory_usage":    response.Runtime.MemoryUsage,
+		"db_connected":    dbInfo.Connected,
 		"redis_connected": redisInfo.Connected,
 	}).Info("系統狀態統計獲取完成")
 
@@ -398,7 +398,7 @@ func formatInt(n int) string {
 // BaselineInfo 基準值資訊結構
 type BaselineInfo struct {
 	MemoryMB    float64   `json:"memory_mb"`
-	GCRate      float64   `json:"gc_rate"`      // 每分鐘 GC 次數
+	GCRate      float64   `json:"gc_rate"` // 每分鐘 GC 次數
 	Goroutines  int       `json:"goroutines"`
 	CreatedAt   time.Time `json:"created_at"`
 	UpdatedAt   time.Time `json:"updated_at"`
@@ -483,9 +483,9 @@ func UpdateBaseline(c *gin.Context) {
 			SampleCount: 1,
 		}
 		utils.Logger.WithFields(logrus.Fields{
-			"memory_mb":   currentMemoryMB,
-			"gc_rate":     gcRate,
-			"goroutines":  currentGoroutines,
+			"memory_mb":  currentMemoryMB,
+			"gc_rate":    gcRate,
+			"goroutines": currentGoroutines,
 		}).Info("系統基準值已建立")
 	} else {
 		// 使用滑動平均更新基準值

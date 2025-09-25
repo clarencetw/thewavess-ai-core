@@ -218,4 +218,3 @@ func BenchmarkKeywordClassifier(b *testing.B) {
 		classifier.ClassifyContent(msg)
 	}
 }
-

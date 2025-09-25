@@ -19,7 +19,6 @@ func TestKeywordNSFWIntegration(t *testing.T) {
 	// 獲取分類器（應該是關鍵字版本）
 	classifier := services.NewEnhancedKeywordClassifier()
 
-
 	// 測試案例
 	testCases := []struct {
 		message  string
@@ -80,9 +79,9 @@ func TestSimpleSelectorIntegration(t *testing.T) {
 
 	// 測試引擎選擇
 	testCases := []struct {
-		message      string
+		message        string
 		expectedEngine string
-		desc         string
+		desc           string
 	}{
 		{"今天天氣真好", "openai", "安全內容→OpenAI"},
 		{"心情不太好", "openai", "情緒支持→OpenAI"},

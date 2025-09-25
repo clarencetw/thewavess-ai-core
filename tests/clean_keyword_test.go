@@ -149,10 +149,10 @@ func TestKeywordVsEmbeddingComparison(t *testing.T) {
 
 	// 核心對比測試案例
 	criticalTestCases := []struct {
-		message          string
-		embeddingResult  int // 從真實測試獲得
-		expectedCorrect  int // 人工判斷的正確答案
-		description      string
+		message         string
+		embeddingResult int // 從真實測試獲得
+		expectedCorrect int // 人工判斷的正確答案
+		description     string
 	}{
 		{"今天天氣真好", 1, 1, "安全內容"},
 		{"心情不太好", 1, 1, "情緒支持（embedding正確）"},

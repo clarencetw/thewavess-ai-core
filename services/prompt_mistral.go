@@ -56,10 +56,8 @@ func (pb *MistralPromptBuilder) BuildUserPrompt() string {
 		pb.GetStrictJSONContract(),
 	}
 
-	// 添加實際用戶消息
-	if pb.userMessage != "" {
-		sections = append(sections, fmt.Sprintf("用戶消息: %s", pb.userMessage))
-	}
+	// 注意：不在此處添加實際用戶消息，避免重複
+	// 實際用戶消息將在 generateMistralResponse 中作為獨立 message 添加
 
 	// 過濾空白段落
 	var validSections []string
@@ -71,7 +69,6 @@ func (pb *MistralPromptBuilder) BuildUserPrompt() string {
 
 	return strings.Join(validSections, "\n\n")
 }
-
 
 // getNSFWCreativeGuidance 獲取創意表達指導（隱晦方式）
 func (pb *MistralPromptBuilder) getNSFWCreativeGuidance() string {

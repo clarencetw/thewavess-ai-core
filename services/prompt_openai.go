@@ -66,10 +66,8 @@ func (pb *OpenAIPromptBuilder) BuildUserPrompt() string {
 		pb.GetStrictJSONContract(),
 	}
 
-	// 添加實際用戶消息
-	if pb.userMessage != "" {
-		sections = append(sections, fmt.Sprintf("用戶消息: %s", pb.userMessage))
-	}
+	// 注意：不在此處添加實際用戶消息，避免重複
+	// 實際用戶消息將在 generateOpenAIResponse 中作為獨立 message 添加
 
 	// 過濾空白段落
 	var validSections []string
@@ -81,7 +79,6 @@ func (pb *OpenAIPromptBuilder) BuildUserPrompt() string {
 
 	return strings.Join(validSections, "\n\n")
 }
-
 
 // getSafetyGuidelines 獲取創作表達原則
 func (pb *OpenAIPromptBuilder) getSafetyGuidelines() string {
@@ -147,4 +144,3 @@ func (pb *OpenAIPromptBuilder) getLevelAdjustments() string {
 		return pb.GetLevelGuidance()
 	}
 }
-

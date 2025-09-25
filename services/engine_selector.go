@@ -100,12 +100,11 @@ func (es *EngineSelector) SelectEngine(
 	return "openai"
 }
 
-
 // isIntimateRelationship 檢查是否為親密關係
 func (es *EngineSelector) isIntimateRelationship(context *ConversationContext) bool {
 	if context.Affection >= 70 ||
-	   context.IntimacyLevel == "intimate" ||
-	   context.IntimacyLevel == "deeply_intimate" {
+		context.IntimacyLevel == "intimate" ||
+		context.IntimacyLevel == "deeply_intimate" {
 		return true
 	}
 	return false
@@ -170,7 +169,6 @@ func (es *EngineSelector) isSafeForOpenAI(content string) bool {
 	}
 	return result.Level <= 2 // 只允許 L1-L2
 }
-
 
 // BuildCleanHistoryForOpenAI 為OpenAI構建乾淨的歷史（向後兼容）
 func (es *EngineSelector) BuildCleanHistoryForOpenAI(

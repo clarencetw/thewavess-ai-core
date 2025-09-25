@@ -13,13 +13,13 @@ import (
 
 // KeywordStats 關鍵字統計結構
 type KeywordStats struct {
-	Level           int                 `json:"level"`
-	File            string              `json:"file"`
-	TotalKeywords   int                 `json:"total_keywords"`
-	UniqueKeywords  int                 `json:"unique_keywords"`
-	Duplicates      []string            `json:"duplicates"`
-	Keywords        []string            `json:"keywords"`
-	LengthStats     LengthStatistics    `json:"length_stats"`
+	Level          int              `json:"level"`
+	File           string           `json:"file"`
+	TotalKeywords  int              `json:"total_keywords"`
+	UniqueKeywords int              `json:"unique_keywords"`
+	Duplicates     []string         `json:"duplicates"`
+	Keywords       []string         `json:"keywords"`
+	LengthStats    LengthStatistics `json:"length_stats"`
 }
 
 // LengthStatistics 長度統計
@@ -32,23 +32,23 @@ type LengthStatistics struct {
 
 // ConflictInfo 衝突信息
 type ConflictInfo struct {
-	Keyword  string `json:"keyword"`
-	Files    []string `json:"files"`
-	Levels   []int  `json:"levels"`
-	Count    int    `json:"count"`
+	Keyword string   `json:"keyword"`
+	Files   []string `json:"files"`
+	Levels  []int    `json:"levels"`
+	Count   int      `json:"count"`
 }
 
 // AnalysisReport 分析報告
 type AnalysisReport struct {
-	Timestamp       string              `json:"timestamp"`
-	TotalFiles      int                 `json:"total_files"`
-	TotalKeywords   int                 `json:"total_keywords"`
-	UniqueKeywords  int                 `json:"unique_keywords"`
-	DuplicateCount  int                 `json:"duplicate_count"`
-	CrossFileConflicts []ConflictInfo   `json:"cross_file_conflicts"`
-	LevelStats      []KeywordStats      `json:"level_stats"`
-	QualityScore    float64             `json:"quality_score"`
-	Recommendations []string            `json:"recommendations"`
+	Timestamp          string         `json:"timestamp"`
+	TotalFiles         int            `json:"total_files"`
+	TotalKeywords      int            `json:"total_keywords"`
+	UniqueKeywords     int            `json:"unique_keywords"`
+	DuplicateCount     int            `json:"duplicate_count"`
+	CrossFileConflicts []ConflictInfo `json:"cross_file_conflicts"`
+	LevelStats         []KeywordStats `json:"level_stats"`
+	QualityScore       float64        `json:"quality_score"`
+	Recommendations    []string       `json:"recommendations"`
 }
 
 func main() {
@@ -82,7 +82,7 @@ func analyzeKeywordFiles() (*AnalysisReport, error) {
 	}
 
 	report := &AnalysisReport{
-		Timestamp: time.Now().Format("2006-01-02 15:04:05"),
+		Timestamp:  time.Now().Format("2006-01-02 15:04:05"),
 		TotalFiles: len(files),
 	}
 

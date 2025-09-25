@@ -78,7 +78,6 @@ func (b *BasePromptBuilder) GetLevelGuidance() string {
 	}
 }
 
-
 // GetModeGuidance 獲取對話模式指引（強化字數控制版本）
 func (b *BasePromptBuilder) GetModeGuidance() string {
 	switch b.chatMode {
@@ -103,7 +102,6 @@ func (b *BasePromptBuilder) GetModeGuidance() string {
 func (b *BasePromptBuilder) GetFemaleAudienceGuidance() string {
 	return `**女性向核心**: 言情風格細膩浪漫，情感優先專屬感營造，回應推進+結尾鉤子引導互動`
 }
-
 
 // GetModeDescription 獲取模式描述（強化字數要求）
 func (b *BasePromptBuilder) GetModeDescription() string {
@@ -155,17 +153,21 @@ func (b *BasePromptBuilder) GetEnvironmentAndRelationshipContext() string {
 
 	if b.context != nil {
 		mood := strings.TrimSpace(b.context.Mood)
-		if mood == "" { mood = "neutral" }
+		if mood == "" {
+			mood = "neutral"
+		}
 		rel := strings.TrimSpace(b.context.Relationship)
-		if rel == "" { rel = "stranger" }
+		if rel == "" {
+			rel = "stranger"
+		}
 		intimacy := strings.TrimSpace(b.context.IntimacyLevel)
-		if intimacy == "" { intimacy = "distant" }
+		if intimacy == "" {
+			intimacy = "distant"
+		}
 		return fmt.Sprintf(`**狀態**: %s | %s模式 | 好感%d | %s/%s/%s`, timeOfDay, modeDesc, b.context.Affection, mood, rel, intimacy)
 	}
 	return fmt.Sprintf("**狀態**: %s | %s模式", timeOfDay, modeDesc)
 }
-
-
 
 // GetSystemHeader 獲取統一的系統標題（取代各引擎專用版本）
 func (b *BasePromptBuilder) GetSystemHeader() string {
@@ -300,4 +302,3 @@ func (b *BasePromptBuilder) GetStrictJSONContract() string {
 
 **重要提醒**: 不遵守 %s 字符要求將被視為格式錯誤`, wordCountRequirement, wordCountRequirement)
 }
-

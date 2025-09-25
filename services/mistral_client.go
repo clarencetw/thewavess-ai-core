@@ -175,13 +175,13 @@ func (c *MistralClient) GenerateResponse(ctx context.Context, request *MistralRe
 				"description": "角色當前情緒狀態",
 			},
 			"relationship": map[string]interface{}{
-				"type": "string",
-				"enum": []string{"stranger", "friend", "close_friend", "lover", "soulmate"},
+				"type":        "string",
+				"enum":        []string{"stranger", "friend", "close_friend", "lover", "soulmate"},
 				"description": "角色與用戶的關係狀態",
 			},
 			"intimacy_level": map[string]interface{}{
-				"type": "string",
-				"enum": []string{"distant", "friendly", "close", "intimate", "deeply_intimate"},
+				"type":        "string",
+				"enum":        []string{"distant", "friendly", "close", "intimate", "deeply_intimate"},
 				"description": "親密度層級",
 			},
 			"reasoning": map[string]interface{}{
@@ -277,7 +277,7 @@ func (c *MistralClient) GenerateResponse(ctx context.Context, request *MistralRe
 
 	// Legacy models
 	case "mistral-7b-instruct", "mistral-8x7b-instruct":
-		inputCostPer1M = 0.25  // Legacy pricing
+		inputCostPer1M = 0.25 // Legacy pricing
 		outputCostPer1M = 0.25
 
 	default:
