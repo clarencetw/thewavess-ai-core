@@ -95,7 +95,7 @@ run_cleanup() {
     fi
 
     # 編譯並運行清理工具
-    go run scripts/keyword_cleaner.go --auto
+    go run tools/keyword_conflict_resolver.go services
 
     if [ $? -eq 0 ]; then
         log_success "清理完成"

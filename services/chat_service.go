@@ -281,7 +281,7 @@ func (s *ChatService) GenerateWelcomeMessage(ctx context.Context, userID, charac
 	}
 
 	// 歡迎訊息使用 OpenAI 引擎，L1 等級
-	response, err := s.generatePersonalizedResponse(ctx, "openai", "[SYSTEM_WELCOME_FIRST_MESSAGE]", welcomeContext, analysis)
+	response, err := s.generatePersonalizedResponseWithCharacter(ctx, "openai", "[SYSTEM_WELCOME_FIRST_MESSAGE]", welcomeContext, analysis, character)
 
 	if err != nil {
 		// AI生成失敗，返回錯誤
@@ -352,6 +352,9 @@ func (s *ChatService) RegenerateMessage(ctx context.Context, userMessage, chatID
 			ActualEngine: "error",
 		}
 	}
+
+	// 字數驗證（只記錄，不重新生成）
+	response = s.validateAndFixResponseLength(response, contextReq.ChatMode)
 
 	return response, nil
 }
@@ -442,7 +445,7 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	// Timeout 層級設計：
 	// - Context timeout (90s): 整個請求生命週期，包含所有重試和 fallback
 	// - RequestTimeout (30s): 每次 API 調用的單次超時，在 openai_client.go 和 grok_client.go 中設定
-	// - 90s > 30s 確保有充足時間進行 OpenAI → Grok fallback
+	// - 90s > 30s 確保有充足時間進行 OpenAI → Mistral fallback
 	// - 參考 OpenAI 官方範例：context.WithTimeout(5*time.Minute) + WithRequestTimeout(20*time.Second)
 	aiCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
@@ -488,6 +491,9 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	// 確保 response 包含正確的實際引擎
 	if response != nil {
 		response.ActualEngine = actualEngine
+
+		// 字數驗證（只記錄，不重新生成）
+		response = s.validateAndFixResponseLength(response, request.ChatMode)
 	}
 
 	utils.Logger.WithFields(logrus.Fields{
@@ -718,38 +724,6 @@ func (s *ChatService) getOrCreateRelationshipState(ctx context.Context, userID, 
 
 // getRecentMemories 已移除：統一使用資料庫查詢，失敗時返回空歷史
 
-// selectAIEngine 簡單有效的AI引擎選擇（舊版本，保持向後相容）
-func (s *ChatService) selectAIEngine(analysis *ContentAnalysis, conv *ConversationContext, userMessage string) string {
-	// 角色標籤預分流（含 nsfw 標籤直接 Grok）
-	if conv != nil {
-		characterService := GetCharacterService()
-		if character, err := characterService.GetCharacter(context.Background(), conv.CharacterID); err == nil {
-			for _, tag := range character.Metadata.Tags {
-				t := strings.ToLower(tag)
-				if t == "nsfw" || t == "adult" {
-					utils.Logger.WithFields(map[string]interface{}{
-						"character_id": conv.CharacterID,
-						"reason":       "character_tag",
-						"tag":          t,
-					}).Info("選擇 Grok 引擎：角色標籤")
-					return "grok"
-				}
-			}
-		}
-	}
-
-	// 使用簡單選擇器
-	engine := s.engineSelector.SelectEngine(userMessage, conv, analysis.Intensity)
-
-	utils.Logger.WithFields(map[string]interface{}{
-		"engine":      engine,
-		"nsfw_level":  analysis.Intensity,
-		"user_msg":    userMessage[:min(30, len(userMessage))],
-		"selector":    "simple",
-	}).Info("簡單選擇器決策")
-
-	return engine
-}
 
 // selectAIEngineWithCharacter 使用預獲取角色資訊的AI引擎選擇（性能優化版）
 func (s *ChatService) selectAIEngineWithCharacter(analysis *ContentAnalysis, conv *ConversationContext, userMessage string, character *models.Character) string {
@@ -1001,17 +975,6 @@ type CharacterResponseData struct {
 	Metadata      map[string]interface{} `json:"metadata,omitempty"` // 額外元數據
 }
 
-// generatePersonalizedResponse 生成個性化女性向回應（舊版本，保持向後相容）
-func (s *ChatService) generatePersonalizedResponse(ctx context.Context, engine, userMessage string, context *ConversationContext, analysis *ContentAnalysis) (*CharacterResponseData, error) {
-	// 內部調用新版本，獲取角色資訊
-	characterService := GetCharacterService()
-	character, err := characterService.GetCharacter(ctx, context.CharacterID)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get character: %w", err)
-	}
-
-	return s.generatePersonalizedResponseWithCharacter(ctx, engine, userMessage, context, analysis, character)
-}
 
 // generatePersonalizedResponseWithCharacter 生成個性化女性向回應（性能優化版）
 func (s *ChatService) generatePersonalizedResponseWithCharacter(ctx context.Context, engine, userMessage string, context *ConversationContext, analysis *ContentAnalysis, character *models.Character) (*CharacterResponseData, error) {
@@ -1354,25 +1317,6 @@ type PromptPair struct {
 	UserPrompt   string
 }
 
-// buildEngineSpecificPrompt 根據 AI 引擎構建專屬 prompt對（舊版本，保持向後相容）
-// OpenAI: 情感細膩，Mistral: 進階 NSFW 處理，Grok: 大膽創意
-func (s *ChatService) buildEngineSpecificPrompt(engine, characterID, userMessage string, conversationContext *ConversationContext, nsfwLevel int, chatMode string) PromptPair {
-	// 記憶上下文完全通過 conversationContext.RecentMessages 提供
-	characterService := GetCharacterService()
-	ctx := context.Background()
-
-	// 獲取角色信息以便轉換
-	character, err := characterService.GetCharacter(ctx, characterID)
-	if err != nil {
-		utils.Logger.WithError(err).Error("獲取角色失敗，使用預設 prompt")
-		return PromptPair{
-			SystemPrompt: "你是一位友善的AI助手。",
-			UserPrompt:   userMessage,
-		}
-	}
-
-	return s.buildEngineSpecificPromptWithCharacter(engine, userMessage, conversationContext, nsfwLevel, chatMode, character)
-}
 
 // buildEngineSpecificPromptWithCharacter 根據 AI 引擎構建專屬 prompt對（性能優化版）
 // OpenAI: 情感細膩，Mistral: 進階 NSFW 處理，Grok: 大膽創意
@@ -1566,33 +1510,72 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair Pr
 		"user_id":      context.UserID,
 	}).Info("調用 Mistral API")
 
-	// 調用 Mistral API（歷史由統一方法處理）
-	// 暫時組合prompt以維持兼容性
-	combinedPrompt := promptPair.SystemPrompt + "\n\n" + promptPair.UserPrompt
-	response, err := s.mistralClient.GenerateResponse(ctx, combinedPrompt, currentUserMessage, context.UserID)
+	// 調用 Mistral API（使用新的結構化請求格式）
+	// 構建歷史消息
+	historyMessages := s.buildHistoryForEngine(context, currentUserMessage, "mistral")
+
+	// 轉換為 Mistral 請求格式
+	mistralMessages := []MistralMessage{}
+
+	// 添加系統消息
+	if promptPair.SystemPrompt != "" {
+		mistralMessages = append(mistralMessages, MistralMessage{
+			Role:    "system",
+			Content: promptPair.SystemPrompt,
+		})
+	}
+
+	// 添加歷史消息
+	for _, msg := range historyMessages {
+		mistralMessages = append(mistralMessages, MistralMessage{
+			Role:    msg.Role,
+			Content: msg.Content,
+		})
+	}
+
+	// 添加用戶指令（如果有）
+	if promptPair.UserPrompt != "" {
+		mistralMessages = append(mistralMessages, MistralMessage{
+			Role:    "user",
+			Content: promptPair.UserPrompt,
+		})
+	}
+
+	// 添加當前用戶消息
+	mistralMessages = append(mistralMessages, MistralMessage{
+		Role:    "user",
+		Content: currentUserMessage,
+	})
+
+	mistralRequest := &MistralRequest{
+		Messages: mistralMessages,
+		User:     context.UserID,
+	}
+
+	response, err := s.mistralClient.GenerateResponse(ctx, mistralRequest)
 	if err != nil {
 		utils.Logger.WithError(err).Error("Mistral API 調用失敗")
 		return "", fmt.Errorf("failed Mistral API call: %w", err)
 	}
 
 	// 檢查回應內容
-	if response == nil || response.Content == "" {
+	if response == nil || len(response.Choices) == 0 || response.Choices[0].Message.Content == "" {
 		utils.Logger.Warn("Mistral API 返回空回應")
 		return "", fmt.Errorf("empty response from Mistral API")
 	}
 
 	utils.Logger.WithFields(map[string]interface{}{
 		"chat_id":      context.ChatID,
-		"response_len": len(response.Content),
+		"response_len": len(response.Choices[0].Message.Content),
 		"tokens_used": func() int {
-			if response.Usage != nil {
-				return response.Usage.TotalTokens
+			if response.Usage.TotalTokens > 0 {
+				return int(response.Usage.TotalTokens)
 			}
 			return 0
 		}(),
 	}).Info("Mistral API 響應成功")
 
-	return response.Content, nil
+	return response.Choices[0].Message.Content, nil
 }
 
 // buildHistoryForEngine 為指定引擎構建歷史（統一方法）
@@ -1914,4 +1897,55 @@ func (s *ChatService) getRecentMemoriesFromDB(ctx context.Context, chatID string
 	}).Debug("成功從資料庫獲取會話歷史")
 
 	return chatMessages, nil
+}
+
+// validateAndFixResponseLength 驗證並修正回應字數（新增後處理驗證）
+func (s *ChatService) validateAndFixResponseLength(response *CharacterResponseData, chatMode string) *CharacterResponseData {
+	if response == nil || response.Content == "" {
+		return response
+	}
+
+	// 計算字數（中文字符）
+	wordCount := len([]rune(response.Content))
+
+	var targetMin, targetMax int
+	var modeName string
+
+	switch chatMode {
+	case "novel":
+		targetMin, targetMax = 400, 500
+		modeName = "小說模式"
+	default:
+		targetMin, targetMax = 150, 250
+		modeName = "輕鬆模式"
+	}
+
+	// 檢查是否符合字數要求
+	if wordCount >= targetMin && wordCount <= targetMax {
+		utils.Logger.WithFields(map[string]interface{}{
+			"mode": modeName,
+			"word_count": wordCount,
+			"target_range": fmt.Sprintf("%d-%d", targetMin, targetMax),
+		}).Debug("回應字數符合要求")
+		return response
+	}
+
+	// 記錄字數不符合的情況
+	utils.Logger.WithFields(map[string]interface{}{
+		"mode": modeName,
+		"word_count": wordCount,
+		"target_range": fmt.Sprintf("%d-%d", targetMin, targetMax),
+		"ai_engine": response.ActualEngine,
+	}).Warn("AI 回應字數不符合模式要求")
+
+	// 如果字數嚴重偏離，可以在這裡觸發重新生成（暫時只記錄）
+	if wordCount < targetMin/2 || wordCount > targetMax*2 {
+		utils.Logger.WithFields(map[string]interface{}{
+			"mode": modeName,
+			"word_count": wordCount,
+			"ai_engine": response.ActualEngine,
+		}).Error("AI 回應字數嚴重偏離要求")
+	}
+
+	return response
 }

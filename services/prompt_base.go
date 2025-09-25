@@ -79,13 +79,23 @@ func (b *BasePromptBuilder) GetLevelGuidance() string {
 }
 
 
-// GetModeGuidance 獲取對話模式指引（簡化版本）
+// GetModeGuidance 獲取對話模式指引（強化字數控制版本）
 func (b *BasePromptBuilder) GetModeGuidance() string {
 	switch b.chatMode {
 	case "novel":
-		return `模式: 小說敘事風格，約450字，*動作描述* 與對話交替，詳細場景與心理描寫`
+		return `**字數控制要求**:
+- 小說模式：嚴格控制在 400-500字（中文字符數，非token）
+- 計算方法：心中擬好 450字左右，再檢查範圍
+- 內容結構：*動作描述* 與對話交替，詳細場景與心理描寫
+- 不可少於 400字，不可超過 500字
+- 若接近上限，刪去贅詞保持情緒密度`
 	default:
-		return `模式: 輕鬆互動風格，約200字，*動作描述* + 對話，溫馨簡潔`
+		return `**字數控制要求**:
+- 輕鬆模式：嚴格控制在 150-250字（中文字符數，非token）
+- 計算方法：心中擬好 200字左右，再檢查範圍
+- 內容結構：*動作描述* + 對話，溫馨簡潔有深度
+- 不可少於 150字，不可超過 250字
+- 技巧：用日常小動作豐富內容（遞飲、整理衣角）`
 	}
 }
 
@@ -95,13 +105,13 @@ func (b *BasePromptBuilder) GetFemaleAudienceGuidance() string {
 }
 
 
-// GetModeDescription 獲取模式描述（統一字數設定）
+// GetModeDescription 獲取模式描述（強化字數要求）
 func (b *BasePromptBuilder) GetModeDescription() string {
 	switch b.chatMode {
 	case "novel":
-		return "- **小說模式**: 約450字，*動作* + 對話 + *動作* + 對話，詳細場景描寫"
+		return "- **小說模式**: 嚴格450字(400-500字範圍)，*動作* + 對話 + *動作* + 對話，詳細場景描寫"
 	default:
-		return "- **輕鬆模式**: 約200字，*動作* + 對話，溫馨簡潔"
+		return "- **輕鬆模式**: 嚴格200字(150-250字範圍)，*動作* + 對話，溫馨簡潔"
 	}
 }
 
@@ -272,21 +282,22 @@ func (b *BasePromptBuilder) GetEmotionalProgression() string {
 
 // GetStrictJSONContract 指定嚴格 JSON 合約（通用版本）
 func (b *BasePromptBuilder) GetStrictJSONContract() string {
-	return `**重要：必須回應 JSON 格式**
+	var wordCountRequirement string
+	switch b.chatMode {
+	case "novel":
+		wordCountRequirement = "400-500"
+	default:
+		wordCountRequirement = "150-250"
+	}
 
-格式：
-{
-  "content": "*動作*對話內容",
-  "emotion_delta": { "affection_change": 0 },
-  "mood": "neutral|happy|excited|shy|romantic|passionate|pleased|loving|friendly|polite|concerned|annoyed|upset|disappointed",
-  "relationship": "stranger|friend|close_friend|lover|soulmate",
-  "intimacy_level": "distant|friendly|close|intimate|deeply_intimate",
-  "reasoning": "一句話解釋決策（可選）"
-}
+	return fmt.Sprintf(`**嚴格內容要求**:
+- **CRITICAL**: content 必須嚴格包含 %s 個中文字符，不可過短或過長
+- **字數檢查**: 在寫作時計算字符數，確保在範圍內
+- **內容結構**: *動作描述* + 對話內容 + *場景描述*
+- **豐富度**: 內容應該有深度和情感層次
+- affection_change: 根據互動調整好感度變化 (-5 到 +5)
+- mood, relationship, intimacy_level: 根據對話內容選擇適當的狀態
 
-規則：
-- 只能輸出 JSON，不能有其他文字
-- 不能用 Markdown 程式碼框
-- content 包含動作和對話內容，應該豐富且有深度`
+**重要提醒**: 不遵守 %s 字符要求將被視為格式錯誤`, wordCountRequirement, wordCountRequirement)
 }
 

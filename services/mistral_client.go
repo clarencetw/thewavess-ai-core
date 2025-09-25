@@ -3,300 +3,328 @@ package services
 import (
 	"context"
 	"fmt"
-	"os"
-	"strings"
 	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/utils"
-	"github.com/gage-technologies/mistral-go"
-	"github.com/sirupsen/logrus"
+	"github.com/openai/openai-go/v2"
+	"github.com/openai/openai-go/v2/option"
+	"github.com/openai/openai-go/v2/shared"
 )
 
-// MistralClient Mistral AI API 客戶端
+// MistralClient Mistral AI API 客戶端 (使用 OpenAI SDK)
 type MistralClient struct {
-	client *mistral.MistralClient
-	config *MistralConfig
+	client      openai.Client
+	model       string
+	maxTokens   int
+	temperature float64
+	baseURL     string
 }
 
-// MistralConfig Mistral 配置
-type MistralConfig struct {
-	Model       string  `json:"model"`
-	MaxTokens   int     `json:"max_tokens"`
-	Temperature float64 `json:"temperature"`
-	TopP        float64 `json:"top_p"`
+// MistralRequest Mistral 請求結構 (相容 OpenAI 格式)
+type MistralRequest struct {
+	Model       string           `json:"model"`
+	Messages    []MistralMessage `json:"messages"`
+	MaxTokens   int              `json:"max_tokens"`
+	Temperature float64          `json:"temperature"`
+	User        string           `json:"user,omitempty"`
 }
 
-// MistralResponse Mistral 回應結構
-type MistralResponse struct {
-	Content   string                 `json:"content"`
-	Usage     *MistralUsage          `json:"usage,omitempty"`
-	Metadata  map[string]interface{} `json:"metadata,omitempty"`
-	RequestID string                 `json:"request_id,omitempty"`
+// MistralMessage Mistral 消息結構
+type MistralMessage struct {
+	Role    string `json:"role"` // system, user, assistant
+	Content string `json:"content"`
 }
 
-// MistralUsage 使用統計
-type MistralUsage struct {
-	PromptTokens     int `json:"prompt_tokens"`
-	CompletionTokens int `json:"completion_tokens"`
-	TotalTokens      int `json:"total_tokens"`
-}
+// MistralResponse 使用官方 OpenAI SDK 的 ChatCompletion 作為響應類型
+type MistralResponse = openai.ChatCompletion
 
-// NewMistralClient 創建新的 Mistral 客戶端
+// NewMistralClient 創建新的 Mistral 客戶端 (使用 OpenAI SDK)
 func NewMistralClient() *MistralClient {
-	apiKey := os.Getenv("MISTRAL_API_KEY")
+	// 確保環境變數已載入
+	utils.LoadEnv()
+
+	apiKey := utils.GetEnvWithDefault("MISTRAL_API_KEY", "")
 	if apiKey == "" {
-		utils.Logger.Warn("MISTRAL_API_KEY not found, Mistral client will be disabled")
-		return nil
+		utils.Logger.Fatal("MISTRAL_API_KEY is required but not set in environment")
 	}
 
-	// 預設配置
-	config := &MistralConfig{
-		Model:       "mistral-medium-latest", // 中等模型，平衡性能與成本的 NSFW 處理
-		MaxTokens:   1200,
-		Temperature: 0.8,
-		TopP:        0.9,
+	// 從環境變數讀取配置
+	modelName := utils.GetEnvWithDefault("MISTRAL_MODEL", "mistral-medium-latest")
+	maxTokens := utils.GetEnvIntWithDefault("MISTRAL_MAX_TOKENS", 1200)
+	temperature := utils.GetEnvFloatWithDefault("MISTRAL_TEMPERATURE", 0.8)
+
+	// 獲取 Mistral API URL
+	baseURL := utils.GetEnvWithDefault("MISTRAL_API_URL", "https://api.mistral.ai/v1")
+
+	// 準備客戶端選項
+	options := []option.RequestOption{
+		option.WithAPIKey(apiKey),
+		option.WithBaseURL(baseURL),
 	}
 
-	client := mistral.NewMistralClientDefault(apiKey)
+	// 創建 OpenAI 客戶端，使用 Mistral 端點
+	client := openai.NewClient(options...)
+
+	utils.Logger.WithField("base_url", baseURL).Info("Using Mistral API with OpenAI SDK")
 
 	return &MistralClient{
-		client: client,
-		config: config,
+		client:      client,
+		model:       modelName,
+		maxTokens:   maxTokens,
+		temperature: temperature,
+		baseURL:     baseURL,
 	}
 }
 
-// GenerateResponse 使用 Mistral 生成回應
-func (mc *MistralClient) GenerateResponse(ctx context.Context, systemPrompt, userMessage string, userID string) (*MistralResponse, error) {
-	if mc == nil || mc.client == nil {
-		return nil, fmt.Errorf("Mistral client not initialized")
-	}
-
+// GenerateResponse 生成對話回應 (使用 OpenAI SDK + Structured Output)
+func (c *MistralClient) GenerateResponse(ctx context.Context, request *MistralRequest) (*MistralResponse, error) {
 	startTime := time.Now()
 
-	utils.Logger.WithFields(logrus.Fields{
+	// 記錄請求開始
+	utils.Logger.WithFields(map[string]interface{}{
 		"service":        "mistral",
-		"model":          mc.config.Model,
-		"max_tokens":     mc.config.MaxTokens,
-		"temperature":    mc.config.Temperature,
-		"user":           userID,
-		"messages_count": 2,
-		"system_length":  len(systemPrompt),
-		"user_length":    len(userMessage),
+		"base_url":       c.baseURL,
+		"model":          request.Model,
+		"max_tokens":     request.MaxTokens,
+		"temperature":    request.Temperature,
+		"user":           request.User,
+		"messages_count": len(request.Messages),
 	}).Info("Mistral API request started")
 
 	// 開發模式下詳細記錄 prompt 內容
 	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
-		utils.Logger.WithFields(logrus.Fields{
+		utils.Logger.WithFields(map[string]interface{}{
 			"service": "mistral",
-			"model":   mc.config.Model,
-			"user":    userID,
+			"model":   request.Model,
+			"user":    request.User,
 		}).Info("🤖 Mistral Request Details")
 
-		utils.Logger.WithFields(logrus.Fields{
-			"service":        "mistral",
-			"message_index":  0,
-			"role":           "system",
-			"content_length": len(systemPrompt),
-		}).Info(fmt.Sprintf("📝 Prompt [SYSTEM]: %s", systemPrompt))
-
-		utils.Logger.WithFields(logrus.Fields{
-			"service":        "mistral",
-			"message_index":  1,
-			"role":           "user",
-			"content_length": len(userMessage),
-		}).Info(fmt.Sprintf("📝 Prompt [USER]: %s", userMessage))
-	} else {
-		// 生產環境只記錄基本信息
-		utils.Logger.WithFields(logrus.Fields{
-			"service":        "mistral",
-			"message_index":  0,
-			"role":           "system",
-			"content_length": len(systemPrompt),
-		}).Debug("Mistral request message")
-
-		utils.Logger.WithFields(logrus.Fields{
-			"service":        "mistral",
-			"message_index":  1,
-			"role":           "user",
-			"content_length": len(userMessage),
-		}).Debug("Mistral request message")
-	}
-
-	// 構建消息 - 歷史由 Chat Service 統一處理
-	messages := []mistral.ChatMessage{
-		{
-			Role:    mistral.RoleSystem,
-			Content: systemPrompt,
-		},
-		{
-			Role:    mistral.RoleUser,
-			Content: userMessage,
-		},
-	}
-
-	// 調用 Mistral API (使用簡化的 API 調用方式)
-	response, err := mc.client.Chat(mc.config.Model, messages, nil)
-	if err != nil {
-		utils.Logger.WithError(err).WithFields(logrus.Fields{
-			"model":   mc.config.Model,
-			"user_id": userID,
-		}).Error("Mistral API 調用失敗")
-		return nil, fmt.Errorf("Mistral API call failed: %w", err)
-	}
-
-	duration := time.Since(startTime)
-
-	// 提取回應內容
-	var content string
-	if len(response.Choices) > 0 && response.Choices[0].Message.Content != "" {
-		content = response.Choices[0].Message.Content
-	} else {
-		return nil, fmt.Errorf("Mistral API returned empty content")
-	}
-
-	// 構建回應
-	mistralResponse := &MistralResponse{
-		Content:   content,
-		RequestID: response.ID,
-		Metadata: map[string]interface{}{
-			"model":       response.Model,
-			"created":     response.Created,
-			"duration_ms": duration.Milliseconds(),
-			"finish_reason": func() string {
-				if len(response.Choices) > 0 {
-					return string(response.Choices[0].FinishReason)
-				}
-				return ""
-			}(),
-		},
-	}
-
-	// 添加使用統計
-	if response.Usage.PromptTokens > 0 {
-		mistralResponse.Usage = &MistralUsage{
-			PromptTokens:     response.Usage.PromptTokens,
-			CompletionTokens: response.Usage.CompletionTokens,
-			TotalTokens:      response.Usage.TotalTokens,
+		for i, msg := range request.Messages {
+			utils.Logger.WithFields(map[string]interface{}{
+				"service":        "mistral",
+				"message_index":  i,
+				"role":           msg.Role,
+				"content_length": len(msg.Content),
+			}).Info(fmt.Sprintf("📝 Prompt [%s]: %s", msg.Role, msg.Content))
 		}
 	}
 
-	utils.Logger.WithFields(logrus.Fields{
-		"service":           "mistral",
-		"response_id":       response.ID,
-		"model":             response.Model,
-		"prompt_tokens":     mistralResponse.Usage.PromptTokens,
-		"completion_tokens": mistralResponse.Usage.CompletionTokens,
-		"total_tokens":      mistralResponse.Usage.TotalTokens,
-		"choices_count":     len(response.Choices),
-		"duration_ms":       duration.Milliseconds(),
+	// 設置默認值
+	if request.Model == "" {
+		request.Model = c.model
+	}
+	if request.MaxTokens == 0 {
+		request.MaxTokens = c.maxTokens
+	}
+	if request.Temperature <= 0 {
+		request.Temperature = c.temperature
+	}
+
+	// 轉換為 OpenAI SDK 格式
+	messages := make([]openai.ChatCompletionMessageParamUnion, len(request.Messages))
+	for i, msg := range request.Messages {
+		messages[i] = openai.UserMessage(msg.Content)
+		switch msg.Role {
+		case "system":
+			messages[i] = openai.SystemMessage(msg.Content)
+		case "assistant":
+			messages[i] = openai.AssistantMessage(msg.Content)
+		}
+	}
+
+	// 構建請求參數
+	params := openai.ChatCompletionNewParams{
+		Model:       openai.ChatModel(request.Model),
+		Messages:    messages,
+		MaxTokens:   openai.Int(int64(request.MaxTokens)),
+		Temperature: openai.Float(request.Temperature),
+	}
+
+	if request.User != "" {
+		params.User = openai.String(request.User)
+	}
+
+	// 設置 Mistral 的 JSON Schema (與 OpenAI 相同格式)
+	schema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"content": map[string]interface{}{
+				"type":        "string",
+				"description": "角色回應內容，包含動作描述和對話",
+			},
+			"emotion_delta": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"affection_change": map[string]interface{}{
+						"type":        "integer",
+						"description": "好感度變化，必須是整數",
+						"minimum":     -5,
+						"maximum":     5,
+					},
+				},
+				"required":             []string{"affection_change"},
+				"additionalProperties": false,
+			},
+			"mood": map[string]interface{}{
+				"type": "string",
+				"enum": []string{
+					"neutral", "happy", "excited", "shy", "romantic",
+					"passionate", "pleased", "loving", "friendly",
+					"polite", "concerned", "annoyed", "upset", "disappointed",
+				},
+				"description": "角色當前情緒狀態",
+			},
+			"relationship": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"stranger", "friend", "close_friend", "lover", "soulmate"},
+				"description": "角色與用戶的關係狀態",
+			},
+			"intimacy_level": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"distant", "friendly", "close", "intimate", "deeply_intimate"},
+				"description": "親密度層級",
+			},
+			"reasoning": map[string]interface{}{
+				"type":        "string",
+				"description": "決策推理說明",
+			},
+		},
+		"required":             []string{"content", "emotion_delta", "mood", "relationship", "intimacy_level", "reasoning"},
+		"additionalProperties": false,
+	}
+
+	jsonSchemaParam := shared.ResponseFormatJSONSchemaJSONSchemaParam{
+		Name:        "character_response",
+		Description: openai.String("角色對話回應格式"),
+		Schema:      schema,
+		Strict:      openai.Bool(true),
+	}
+
+	params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
+		OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+			Type:       "json_schema",
+			JSONSchema: jsonSchemaParam,
+		},
+	}
+
+	// 發送請求
+	utils.Logger.WithFields(map[string]interface{}{
+		"service": "mistral",
+		"model":   request.Model,
+	}).Info("Sending Mistral API request via OpenAI SDK")
+
+	resp, err := c.client.Chat.Completions.New(ctx, params, option.WithRequestTimeout(30*time.Second))
+	if err != nil {
+		// 記錄詳細的錯誤信息用於診斷
+		utils.Logger.WithFields(map[string]interface{}{
+			"service":        "mistral",
+			"error":          err.Error(),
+			"error_type":     fmt.Sprintf("%T", err),
+			"model":          request.Model,
+			"base_url":       c.baseURL,
+			"max_tokens":     request.MaxTokens,
+			"temperature":    request.Temperature,
+			"messages_count": len(request.Messages),
+			"request_time":   time.Since(startTime),
+		}).Error("Mistral API call failed")
+
+		// 檢查是否是超時錯誤
+		if ctx.Err() == context.DeadlineExceeded {
+			utils.Logger.WithFields(map[string]interface{}{
+				"service":      "mistral",
+				"timeout_type": "context_deadline",
+				"elapsed":      time.Since(startTime),
+			}).Error("Mistral API 請求超時")
+		}
+
+		return nil, fmt.Errorf("failed Mistral API call: %w", err)
+	}
+
+	// 計算響應時間
+	duration := time.Since(startTime)
+
+	// 計算 Mistral API 成本 (多模型支援)
+	promptTokens := int(resp.Usage.PromptTokens)
+	completionTokens := int(resp.Usage.CompletionTokens)
+
+	// Mistral 定價系統 (per 1M tokens)
+	var inputCostPer1M, outputCostPer1M float64
+
+	switch string(resp.Model) {
+	// Mistral Small series
+	case "mistral-small-latest", "mistral-small-3.2", "mistral-small":
+		inputCostPer1M = 0.10  // $0.10 per 1M input tokens
+		outputCostPer1M = 0.30 // $0.30 per 1M output tokens
+
+	// Mistral Medium series
+	case "mistral-medium-latest", "mistral-medium-3", "mistral-medium":
+		inputCostPer1M = 0.40  // $0.40 per 1M input tokens
+		outputCostPer1M = 2.00 // $2.00 per 1M output tokens
+
+	// Mistral Large series
+	case "mistral-large-latest", "mistral-large", "mistral-large-2":
+		inputCostPer1M = 2.00  // $2.00 per 1M input tokens
+		outputCostPer1M = 6.00 // $6.00 per 1M output tokens
+
+	// Magistral series (thinking models)
+	case "magistral-small-latest", "magistral-small":
+		inputCostPer1M = 0.50  // $0.50 per 1M input tokens
+		outputCostPer1M = 1.50 // $1.50 per 1M output tokens
+
+	case "magistral-medium-latest", "magistral-medium":
+		inputCostPer1M = 2.00  // $2.00 per 1M input tokens
+		outputCostPer1M = 5.00 // $5.00 per 1M output tokens
+
+	// Legacy models
+	case "mistral-7b-instruct", "mistral-8x7b-instruct":
+		inputCostPer1M = 0.25  // Legacy pricing
+		outputCostPer1M = 0.25
+
+	default:
+		// Default to Small pricing for unknown models
+		inputCostPer1M = 0.10
+		outputCostPer1M = 0.30
+		utils.Logger.WithField("model", resp.Model).Warn("Unknown Mistral model, using Small pricing")
+	}
+
+	inputCost := float64(promptTokens) * inputCostPer1M / 1000000
+	outputCost := float64(completionTokens) * outputCostPer1M / 1000000
+	totalCost := inputCost + outputCost
+
+	// 記錄成功響應，包含詳細成本資訊
+	utils.Logger.WithFields(map[string]interface{}{
+		"service":            "mistral",
+		"response_id":        resp.ID,
+		"model":              resp.Model,
+		"prompt_tokens":      resp.Usage.PromptTokens,
+		"completion_tokens":  resp.Usage.CompletionTokens,
+		"total_tokens":       resp.Usage.TotalTokens,
+		"input_cost_usd":     fmt.Sprintf("$%.6f", inputCost),
+		"output_cost_usd":    fmt.Sprintf("$%.6f", outputCost),
+		"total_cost_usd":     fmt.Sprintf("$%.6f", totalCost),
+		"input_rate_per_1m":  fmt.Sprintf("$%.2f", inputCostPer1M),
+		"output_rate_per_1m": fmt.Sprintf("$%.2f", outputCostPer1M),
+		"choices_count":      len(resp.Choices),
+		"duration_ms":        duration.Milliseconds(),
 	}).Info("Mistral API response received")
 
 	// 開發模式下詳細記錄響應內容
 	if utils.GetEnvWithDefault("GO_ENV", "development") != "production" {
-		utils.Logger.WithFields(logrus.Fields{
+		utils.Logger.WithFields(map[string]interface{}{
 			"service":     "mistral",
-			"response_id": response.ID,
-			"model":       response.Model,
+			"response_id": resp.ID,
+			"model":       resp.Model,
 		}).Info("🎯 Mistral Response Details")
 
-		for i, choice := range response.Choices {
-			utils.Logger.WithFields(logrus.Fields{
+		for i, choice := range resp.Choices {
+			utils.Logger.WithFields(map[string]interface{}{
 				"service":        "mistral",
 				"choice_index":   i,
 				"finish_reason":  string(choice.FinishReason),
 				"content_length": len(choice.Message.Content),
 			}).Info(fmt.Sprintf("💬 Response [%d]: %s", i, choice.Message.Content))
 		}
-	} else {
-		// 生產環境只記錄基本信息
-		for i, choice := range response.Choices {
-			utils.Logger.WithFields(logrus.Fields{
-				"service":        "mistral",
-				"choice_index":   i,
-				"finish_reason":  string(choice.FinishReason),
-				"content_length": len(choice.Message.Content),
-			}).Debug("Mistral response choice")
-		}
 	}
 
-	return mistralResponse, nil
+	return resp, nil
 }
-
-// IsContentRejection 檢查是否為 Mistral 內容拒絕錯誤
-func (mc *MistralClient) IsContentRejection(err error) bool {
-	if err == nil {
-		return false
-	}
-
-	errorMessage := strings.ToLower(err.Error())
-
-	// Mistral 內容拒絕錯誤關鍵詞
-	rejectionKeywords := []string{
-		"content policy",
-		"safety filter",
-		"content filter",
-		"inappropriate",
-		"cannot generate",
-		"unable to provide",
-		"content guidelines",
-		"safety guidelines",
-		"moderation",
-		"违反",
-		"不当",
-		"安全",
-		"内容政策",
-	}
-
-	for _, keyword := range rejectionKeywords {
-		if strings.Contains(errorMessage, keyword) {
-			return true
-		}
-	}
-
-	return false
-}
-
-// GetModelInfo 獲取模型信息
-func (mc *MistralClient) GetModelInfo() map[string]interface{} {
-	if mc == nil || mc.config == nil {
-		return map[string]interface{}{
-			"available": false,
-			"reason":    "client_not_initialized",
-		}
-	}
-
-	return map[string]interface{}{
-		"available":   true,
-		"model":       mc.config.Model,
-		"max_tokens":  mc.config.MaxTokens,
-		"temperature": mc.config.Temperature,
-		"top_p":       mc.config.TopP,
-		"supports":    []string{"chat", "moderate_nsfw", "multilingual"},
-		"description": "Mistral AI 中等模型 - 適合處理進階 NSFW 內容",
-	}
-}
-
-// ValidateConnection 驗證 Mistral 連接
-func (mc *MistralClient) ValidateConnection(ctx context.Context) error {
-	if mc == nil || mc.client == nil {
-		return fmt.Errorf("Mistral client not initialized")
-	}
-
-	// 發送測試請求
-	testResponse, err := mc.GenerateResponse(ctx,
-		"You are a helpful assistant.",
-		"Hello, please respond with a simple greeting.",
-		"test_user")
-
-	if err != nil {
-		return fmt.Errorf("Mistral connection validation failed: %w", err)
-	}
-
-	if testResponse.Content == "" {
-		return fmt.Errorf("Mistral returned empty response")
-	}
-
-	utils.Logger.Info("Mistral 連接驗證成功")
-	return nil
-}
-

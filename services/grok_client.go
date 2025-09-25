@@ -11,6 +11,7 @@ import (
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/option"
+	"github.com/openai/openai-go/v2/shared"
 )
 
 // GrokClient Grok 客戶端 (使用 OpenAI SDK)
@@ -151,6 +152,72 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 
 	if request.User != "" {
 		params.User = openai.String(request.User)
+	}
+
+	// 設置 Grok 的 JSON Schema (官方 Structured Outputs 支援)
+	// 參考：https://docs.x.ai/api/endpoints#structured-outputs
+	// 支援模型：grok-2-1212 及更新版本
+	schema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"content": map[string]interface{}{
+				"type":        "string",
+				"description": "角色回應內容，包含動作描述和對話",
+			},
+			"emotion_delta": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"affection_change": map[string]interface{}{
+						"type":        "integer",
+						"description": "好感度變化，必須是整數",
+						"minimum":     -5,
+						"maximum":     5,
+					},
+				},
+				"required":             []string{"affection_change"},
+				"additionalProperties": false,
+			},
+			"mood": map[string]interface{}{
+				"type": "string",
+				"enum": []string{
+					"neutral", "happy", "excited", "shy", "romantic",
+					"passionate", "pleased", "loving", "friendly",
+					"polite", "concerned", "annoyed", "upset", "disappointed",
+				},
+				"description": "角色當前情緒狀態",
+			},
+			"relationship": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"stranger", "friend", "close_friend", "lover", "soulmate"},
+				"description": "角色與用戶的關係狀態",
+			},
+			"intimacy_level": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"distant", "friendly", "close", "intimate", "deeply_intimate"},
+				"description": "親密度層級",
+			},
+			"reasoning": map[string]interface{}{
+				"type":        "string",
+				"description": "決策推理說明",
+			},
+		},
+		"required":             []string{"content", "emotion_delta", "mood", "relationship", "intimacy_level", "reasoning"},
+		"additionalProperties": false,
+	}
+
+	// 使用 Grok 官方 Structured Outputs 格式
+	jsonSchemaParam := shared.ResponseFormatJSONSchemaJSONSchemaParam{
+		Name:        "character_response",
+		Description: openai.String("角色對話回應格式"),
+		Schema:      schema,
+		Strict:      openai.Bool(true),
+	}
+
+	params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
+		OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+			Type:       "json_schema",
+			JSONSchema: jsonSchemaParam,
+		},
 	}
 
 	// 發送請求

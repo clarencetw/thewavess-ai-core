@@ -196,13 +196,14 @@ func findCrossFileConflicts(allKeywords map[string][]int) []ConflictInfo {
 	conflicts := make([]ConflictInfo, 0)
 
 	for keyword, levels := range allKeywords {
-		if len(levels) > 1 {
-			// 去重levels並排序
-			uniqueLevels := make(map[int]bool)
-			for _, level := range levels {
-				uniqueLevels[level] = true
-			}
+		// 去重levels並排序
+		uniqueLevels := make(map[int]bool)
+		for _, level := range levels {
+			uniqueLevels[level] = true
+		}
 
+		// 只有當關鍵字出現在多個不同等級時才算衝突
+		if len(uniqueLevels) > 1 {
 			levelList := make([]int, 0, len(uniqueLevels))
 			fileList := make([]string, 0, len(uniqueLevels))
 
@@ -233,19 +234,31 @@ func findCrossFileConflicts(allKeywords map[string][]int) []ConflictInfo {
 func calculateQualityScore(report *AnalysisReport) float64 {
 	score := 100.0
 
-	// 重複關鍵字扣分 (每個重複關鍵字扣1分)
-	score -= float64(report.DuplicateCount)
+	// 重複關鍵字扣分 (每個重複關鍵字扣0.5分)
+	score -= float64(report.DuplicateCount) * 0.5
 
-	// 檔案間不平衡扣分
-	if len(report.LevelStats) > 0 {
+	// 檔案間不平衡扣分 (限制最大扣分)
+	if len(report.LevelStats) > 0 && report.TotalKeywords > 0 {
 		avgKeywords := float64(report.TotalKeywords) / float64(len(report.LevelStats))
+		totalDeviation := 0.0
 		for _, stats := range report.LevelStats {
 			deviation := float64(stats.TotalKeywords) - avgKeywords
 			if deviation < 0 {
 				deviation = -deviation
 			}
-			score -= deviation / avgKeywords * 10 // 最多扣10分
+			totalDeviation += deviation / avgKeywords
 		}
+		// 限制不平衡扣分最多20分
+		imbalancePenalty := totalDeviation * 2
+		if imbalancePenalty > 20 {
+			imbalancePenalty = 20
+		}
+		score -= imbalancePenalty
+	}
+
+	// 如果沒有重複關鍵字，給予獎勵
+	if report.DuplicateCount == 0 {
+		score += 5
 	}
 
 	// 確保分數在0-100範圍內

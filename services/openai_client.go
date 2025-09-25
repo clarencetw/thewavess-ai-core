@@ -11,6 +11,7 @@ import (
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/openai/openai-go/v2"
 	"github.com/openai/openai-go/v2/option"
+	"github.com/openai/openai-go/v2/shared"
 )
 
 // OpenAIClient OpenAI 客戶端
@@ -165,6 +166,71 @@ func (c *OpenAIClient) GenerateResponse(ctx context.Context, request *OpenAIRequ
 		MaxTokens:   openai.Int(int64(c.maxTokens)),
 		Temperature: openai.Float(c.temperature),
 		User:        openai.String(request.User),
+	}
+
+	// 設置 Structured Outputs - 確保 JSON 格式和類型正確性
+	schema := map[string]interface{}{
+		"type": "object",
+		"properties": map[string]interface{}{
+			"content": map[string]interface{}{
+				"type":        "string",
+				"description": "角色回應內容，包含動作描述和對話",
+				"minLength":   100,  // 最少100字符（約對應100個中文字）
+				"maxLength":   1000, // 最多1000字符（給予彈性空間）
+			},
+			"emotion_delta": map[string]interface{}{
+				"type": "object",
+				"properties": map[string]interface{}{
+					"affection_change": map[string]interface{}{
+						"type":        "integer",
+						"description": "好感度變化，必須是整數",
+						"minimum":     -5,
+						"maximum":     5,
+					},
+				},
+				"required":             []string{"affection_change"},
+				"additionalProperties": false,
+			},
+			"mood": map[string]interface{}{
+				"type": "string",
+				"enum": []string{
+					"neutral", "happy", "excited", "shy", "romantic",
+					"passionate", "pleased", "loving", "friendly",
+					"polite", "concerned", "annoyed", "upset", "disappointed",
+				},
+				"description": "角色當前情緒狀態",
+			},
+			"relationship": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"stranger", "friend", "close_friend", "lover", "soulmate"},
+				"description": "角色與用戶的關係狀態",
+			},
+			"intimacy_level": map[string]interface{}{
+				"type": "string",
+				"enum": []string{"distant", "friendly", "close", "intimate", "deeply_intimate"},
+				"description": "親密度層級",
+			},
+			"reasoning": map[string]interface{}{
+				"type":        "string",
+				"description": "決策推理說明（可選）",
+			},
+		},
+		"required":             []string{"content", "emotion_delta", "mood", "relationship", "intimacy_level", "reasoning"},
+		"additionalProperties": false,
+	}
+
+	jsonSchemaParam := shared.ResponseFormatJSONSchemaJSONSchemaParam{
+		Name:        "character_response",
+		Description: openai.String("角色對話回應格式"),
+		Schema:      schema,
+		Strict:      openai.Bool(true),
+	}
+
+	params.ResponseFormat = openai.ChatCompletionNewParamsResponseFormatUnion{
+		OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
+			Type:       "json_schema",
+			JSONSchema: jsonSchemaParam,
+		},
 	}
 
 	// 可選功能：Logprobs（調試和分析模型信心）

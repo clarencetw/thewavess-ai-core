@@ -84,26 +84,19 @@ func (es *EngineSelector) SelectEngine(
 		}
 	}
 
-	// 4. 高NSFW等級 -> Grok + 設置sticky
+	// 4. 中高NSFW等級 -> Grok + 設置sticky (L3-L5)
 	if nsfwLevel >= 3 {
 		es.chatService.markNSFWSticky(chatID)
 		return "grok"
 	}
 
-	// 5. 關係因素：親密關係 + 中等NSFW -> Grok
-	if conversationContext != nil && nsfwLevel >= 2 {
-		if es.isIntimateRelationship(conversationContext) {
-			return "grok"
-		}
-	}
-
-	// 6. 智能檢測：疑似隱晦表達但未被關鍵字捕獲
+	// 5. 智能檢測：疑似隱晦表達但未被關鍵字捕獲
 	if nsfwLevel == 1 && es.conversationClassifier.IsPotentialImplicitContent(msg) {
 		utils.Logger.Info("檢測到疑似隱晦內容，使用Grok處理")
 		return "grok"
 	}
 
-	// 7. 默認安全內容 -> OpenAI
+	// 6. 默認安全內容 -> OpenAI
 	return "openai"
 }
 

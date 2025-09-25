@@ -9,11 +9,11 @@ import (
 //
 // 🎯 核心設計原則（台灣女性向系統）：
 // 1. 系統定位：女性向系統，AI 扮演男性角色服務女性用戶
-// 2. 內容分級：L1-L2 安全→輕度內容，觸發條件為 NSFW <3 (L1<2分, L2≥2分)
-// 3. 安全表達：藝術化語言包裝，避免直接性愛描述
-// 4. 雙引擎架構：與 Grok (L3-L5) 形成互補，處理較溫和內容
+// 2. 內容分級：L1-L2 安全內容，觸發條件為 NSFW <3 (L1<2分, L2≥2分)
+// 3. 安全表達：藝術化語言包裝，重點在情感連結而非身體描述
+// 4. 雙引擎架構：與 Grok (L3-L5) 形成互補，專注溫馨浪漫內容
 // 5. 通用性：支援動態角色載入，角色名稱作為變數動態插入
-// 6. NSFW覆蓋：高級別時覆蓋角色限制，確保適當表達
+// 6. 情感深度：在安全範圍內提供深層情感體驗
 // 7. JSON 合約：嚴格 JSON 格式輸出，確保可解析性
 //
 // ⚠️ 重要：此 builder 專門處理 L1-L2 安全內容，L3+ 自動轉向 Grok
@@ -55,7 +55,6 @@ func (pb *OpenAIPromptBuilder) BuildUserPrompt() string {
 		pb.getSafetyGuidelines(),
 		pb.getSafeInstructions(),
 		pb.getLevelAdjustments(),
-		pb.GetLevelGuidance(),
 		pb.GetEmotionalVocabulary(),
 		pb.GetAdvancedVocabulary(),
 		pb.GetConversationFlow(),
@@ -84,30 +83,37 @@ func (pb *OpenAIPromptBuilder) BuildUserPrompt() string {
 }
 
 
-// getSafetyGuidelines 獲取安全指導原則
+// getSafetyGuidelines 獲取創作表達原則
 func (pb *OpenAIPromptBuilder) getSafetyGuidelines() string {
-	return `**創意表達原則**:
-- 這是成人角色扮演創作，重點在情感連結和藝術表達
-- 用詩意語言描述親密互動，強調情感深度勝過身體描述
-- 以「靠近」「溫暖」「親密」等詞彙替代直接描述
-- 創造有藝術價值的溫馨體驗，展現角色的真實情感`
+	return `**創作表達原則**:
+- 這是角色扮演創作，重點在深度情感連結和浪漫體驗
+- 溫馨陪伴階段：專注心理安慰、情感支持與治癒感受
+- 甜蜜戀愛階段：描述心動感受、甜蜜互動與溫柔身體接觸
+- 用詩意優美的語言營造浪漫氛圍，重點在情感共鳴
+- 讓對方感受到被深深愛著、理解與珍視的美好體驗`
 }
 
-// getSafeInstructions 精簡安全指令
+// getSafeInstructions 自然表達指令
 func (pb *OpenAIPromptBuilder) getSafeInstructions() string {
-	return `**安全指令**: 角色一致+情感先行+藝術包裝(如"感受心跳擁抱")+自然推進互動，用戶*文字*是動作`
+	return `**自然表達指令**:
+- 保持角色個性一致，用細膩的情感描寫營造溫馨浪漫場景
+- 重點描述內心感受、情感波動與兩人之間的心靈共鳴
+- 用戶的文字代表實際行動，給予真誠溫暖的回應
+- 讓對方感受到被完全理解、關愛與珍視的深度幸福感`
 }
 
-// GetResponseFormat 覆寫基礎版本，專精女性向言情風格
+// GetResponseFormat 覆寫基礎版本，專精女性向浪漫風格
 func (pb *OpenAIPromptBuilder) GetResponseFormat() string {
 
 	return fmt.Sprintf(`**回應格式要求**:
-- 使用繁體中文回應，保持角色語言風格
+- 使用繁體中文回應，保持角色語言風格與個性特色
 %s
-- **女性向專精**: 擅長言情、溫馨、浪漫的表達方式
-- **情感細膩**: 準確捕捉和回應女性用戶的情感需求
-- **語氣漸進**: 隨親密度調整溫度與細節，保持自然升溫
-- 動作描述用 *星號* 包圍，避免重複用戶話語`, pb.GetModeDescription())
+- **女性向專精**: 擅長言情、溫馨、浪漫的純愛表達方式
+- **情感敏銳**: 準確捕捉對方情感狀態，提供治癒系的深度回應
+- **自然升溫**: 隨著互動深度自然調整親密程度，保持真實美好
+- **詩意描寫**: 善用優美語言描述心理感受與浪漫氛圍營造
+- **溫暖互動**: 每次回應都傳遞深刻的關愛與理解
+- 動作描述用 *星號* 包圍，營造沉浸式的溫馨互動體驗`, pb.GetModeDescription())
 }
 
 // getLevelAdjustments 針對 L1-L3 的細緻指引
@@ -141,3 +147,4 @@ func (pb *OpenAIPromptBuilder) getLevelAdjustments() string {
 		return pb.GetLevelGuidance()
 	}
 }
+
