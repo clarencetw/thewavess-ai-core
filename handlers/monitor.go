@@ -394,3 +394,118 @@ func formatUint32(n uint32) string {
 func formatInt(n int) string {
 	return fmt.Sprintf("%d", n)
 }
+
+// BaselineInfo 基準值資訊結構
+type BaselineInfo struct {
+	MemoryMB    float64   `json:"memory_mb"`
+	GCRate      float64   `json:"gc_rate"`      // 每分鐘 GC 次數
+	Goroutines  int       `json:"goroutines"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+	SampleCount int       `json:"sample_count"`
+}
+
+// 全域基準值存儲 (生產環境應使用 Redis 或資料庫)
+var systemBaseline *BaselineInfo
+var serverStartTime time.Time // 伺服器啟動時間
+
+// 初始化伺服器啟動時間（在 main 函數中調用）
+func InitServerStartTime() {
+	serverStartTime = time.Now()
+}
+
+// GetBaseline 獲取系統基準值
+// @Summary      獲取系統監控基準值
+// @Description  獲取用於異常檢測的系統性能基準值
+// @Tags         Monitor
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} models.APIResponse{data=BaselineInfo} "基準值獲取成功"
+// @Success      404 {object} models.APIResponse "基準值尚未建立"
+// @Router       /monitor/baseline [get]
+func GetBaseline(c *gin.Context) {
+	if systemBaseline == nil {
+		c.JSON(http.StatusNotFound, models.APIResponse{
+			Success: false,
+			Message: "系統基準值尚未建立，請等待系統運行5分鐘後自動建立",
+			Data:    nil,
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "獲取基準值成功",
+		Data:    systemBaseline,
+	})
+}
+
+// UpdateBaseline 更新系統基準值
+// @Summary      更新系統監控基準值
+// @Description  基於當前系統狀態更新基準值（通常由系統自動調用）
+// @Tags         Monitor
+// @Accept       json
+// @Produce      json
+// @Success      200 {object} models.APIResponse{data=BaselineInfo} "基準值更新成功"
+// @Router       /monitor/baseline [post]
+func UpdateBaseline(c *gin.Context) {
+	var memStats runtime.MemStats
+	runtime.ReadMemStats(&memStats)
+
+	// 計算當前指標
+	currentMemoryMB := float64(memStats.Alloc) / 1024 / 1024
+	currentGoroutines := runtime.NumGoroutine()
+
+	// 計算 GC 頻率（使用保守的方法避免啟動時的異常值）
+	var gcRate float64 = 0
+	if serverStartTime.IsZero() {
+		serverStartTime = time.Now().Add(-time.Minute) // 保守估計，避免除零
+	}
+	uptime := time.Since(serverStartTime).Seconds()
+	if uptime > 60 { // 至少運行1分鐘後才計算 GC 頻率
+		gcRate = float64(memStats.NumGC) / uptime * 60
+		// 限制異常值：如果 GC 頻率過高，可能是計算錯誤
+		if gcRate > 100 {
+			gcRate = 0 // 重置為0，等待下次更新
+		}
+	}
+
+	now := time.Now()
+
+	if systemBaseline == nil {
+		// 創建新基準值
+		systemBaseline = &BaselineInfo{
+			MemoryMB:    currentMemoryMB,
+			GCRate:      gcRate,
+			Goroutines:  currentGoroutines,
+			CreatedAt:   now,
+			UpdatedAt:   now,
+			SampleCount: 1,
+		}
+		utils.Logger.WithFields(logrus.Fields{
+			"memory_mb":   currentMemoryMB,
+			"gc_rate":     gcRate,
+			"goroutines":  currentGoroutines,
+		}).Info("系統基準值已建立")
+	} else {
+		// 使用滑動平均更新基準值
+		alpha := 0.1 // 平滑因子
+		systemBaseline.MemoryMB = systemBaseline.MemoryMB*(1-alpha) + currentMemoryMB*alpha
+		systemBaseline.GCRate = systemBaseline.GCRate*(1-alpha) + gcRate*alpha
+		systemBaseline.Goroutines = int(float64(systemBaseline.Goroutines)*(1-alpha) + float64(currentGoroutines)*alpha)
+		systemBaseline.UpdatedAt = now
+		systemBaseline.SampleCount++
+
+		utils.Logger.WithFields(logrus.Fields{
+			"memory_mb":    systemBaseline.MemoryMB,
+			"gc_rate":      systemBaseline.GCRate,
+			"sample_count": systemBaseline.SampleCount,
+		}).Debug("系統基準值已更新")
+	}
+
+	c.JSON(http.StatusOK, models.APIResponse{
+		Success: true,
+		Message: "基準值更新成功",
+		Data:    systemBaseline,
+	})
+}

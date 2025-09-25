@@ -646,20 +646,59 @@ const AdminPages = {
         alertsVisible: false,
         lastAlertCheck: null,
         alertThresholds: {
-            goroutines: 100,  // 超過100個goroutines發出警告
-            memoryMB: 500,    // 超過500MB發出警告
-            gcCount: 50,      // GC次數過多
-            dbLatencyMs: 1000 // 資料庫延遲超過1秒
+            goroutines: 100,      // 超過100個goroutines發出警告
+            memoryGrowthRate: 1.5, // 記憶體增長率：1.5倍基準值 (基於SRE最佳實踐)
+            gcRate: 2.0,          // GC頻率：每分鐘超過2次 (基於Go官方建議)
+            dbLatencyMs: 1000     // 資料庫延遲超過1秒
         },
+        memoryBaseline: null,     // 記憶體基準值 (從 API 獲取)
+        gcBaseline: null,         // GC 基準值 (從 API 獲取)
 
         async init() {
             console.log('📊 初始化儀表板');
+            await this.loadBaseline();
             await this.loadStats();
             await this.loadSystemStatus();
             await this.loadPerformanceMetrics();
             await this.loadExtendedSystemInfo();
             await this.loadRecentActivity();
             await this.refreshAlerts();
+        },
+
+        async loadBaseline() {
+            try {
+                const response = await fetch('/api/v1/monitor/baseline');
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.data) {
+                        this.memoryBaseline = result.data.memory_mb;
+                        this.gcBaseline = result.data.gc_rate;
+                        console.log(`📊 基準值載入成功: Memory=${this.memoryBaseline.toFixed(2)}MB, GC=${this.gcBaseline.toFixed(2)}/min`);
+                    }
+                } else if (response.status === 404) {
+                    console.log('📊 基準值尚未建立，系統將自動建立');
+                    // 可以在這裡調用更新基準值 API
+                    await this.updateBaseline();
+                }
+            } catch (error) {
+                console.error('載入基準值失敗:', error);
+            }
+        },
+
+        async updateBaseline() {
+            try {
+                const response = await fetch('/api/v1/monitor/baseline', { method: 'POST' });
+                if (response.ok) {
+                    const result = await response.json();
+                    if (result.success && result.data) {
+                        this.memoryBaseline = result.data.memory_mb;
+                        this.gcBaseline = result.data.gc_rate;
+                        console.log('📊 基準值已更新');
+                    }
+                }
+            } catch (error) {
+                console.error('更新基準值失敗:', error);
+            }
         },
 
         async reload() {
@@ -1265,35 +1304,59 @@ const AdminPages = {
                 });
             }
 
-            // 檢查記憶體使用
+            // 檢查記憶體使用 (基於基準值的動態監控)
             const memoryStr = data.runtime?.memory_usage || '0 MB';
             const memoryMB = this.parseMemoryToMB(memoryStr);
-            if (memoryMB > this.alertThresholds.memoryMB) {
-                newAlerts.push({
-                    id: `memory_${now.getTime()}`,
-                    type: 'warning',
-                    title: '記憶體使用量過高',
-                    message: `當前記憶體使用量為 ${memoryStr}，超過警告閾值 ${this.alertThresholds.memoryMB} MB`,
-                    timestamp: now,
-                    metric: 'memory',
-                    value: memoryMB,
-                    threshold: this.alertThresholds.memoryMB
-                });
+            const uptimeSeconds = parseFloat(this.metrics?.uptime || 0);
+
+            // 基於 API 基準值進行監控 (SRE最佳實踐)
+            if (this.memoryBaseline && uptimeSeconds > 300) {
+                const growthRate = memoryMB / this.memoryBaseline;
+                if (growthRate > this.alertThresholds.memoryGrowthRate) {
+                    newAlerts.push({
+                        id: `memory_${now.getTime()}`,
+                        type: 'warning',
+                        title: '記憶體增長異常',
+                        message: `記憶體使用量 ${memoryStr}，為基準值的 ${growthRate.toFixed(2)} 倍（閾值: ${this.alertThresholds.memoryGrowthRate}x），可能存在記憶體洩漏`,
+                        timestamp: now,
+                        metric: 'memory',
+                        value: growthRate,
+                        threshold: this.alertThresholds.memoryGrowthRate,
+                        baseline: this.memoryBaseline
+                    });
+                }
             }
 
-            // 檢查 GC 次數
+            // 檢查 GC 頻率 (基於業界最佳實踐與基準值比較)
             const gcCount = data.runtime?.gc_count || 0;
-            if (gcCount > this.alertThresholds.gcCount) {
-                newAlerts.push({
-                    id: `gc_${now.getTime()}`,
-                    type: 'info',
-                    title: 'GC 執行次數較高',
-                    message: `當前 GC 執行次數為 ${gcCount}，可能需要關注記憶體使用模式`,
-                    timestamp: now,
-                    metric: 'gc',
-                    value: gcCount,
-                    threshold: this.alertThresholds.gcCount
-                });
+            const gcRate = uptimeSeconds > 60 ? (gcCount / uptimeSeconds) * 60 : 0; // 每分鐘 GC 次數
+
+            if (uptimeSeconds > 300) { // 至少運行5分鐘後才檢查
+                let shouldAlert = false;
+                let alertMessage = '';
+
+                // 優先使用基準值比較，否則使用固定閾值
+                if (this.gcBaseline && gcRate > this.gcBaseline * 2.0) {
+                    shouldAlert = true;
+                    alertMessage = `當前 GC 頻率為 ${gcRate.toFixed(2)} 次/分鐘，為基準值的 ${(gcRate / this.gcBaseline).toFixed(2)} 倍，建議檢查記憶體分配模式`;
+                } else if (!this.gcBaseline && gcRate > this.alertThresholds.gcRate) {
+                    shouldAlert = true;
+                    alertMessage = `當前 GC 頻率為 ${gcRate.toFixed(2)} 次/分鐘（閾值: ${this.alertThresholds.gcRate} 次/分鐘），建議檢查記憶體分配模式`;
+                }
+
+                if (shouldAlert) {
+                    newAlerts.push({
+                        id: `gc_${now.getTime()}`,
+                        type: 'warning',
+                        title: 'GC 頻率異常',
+                        message: alertMessage,
+                        timestamp: now,
+                        metric: 'gc',
+                        value: gcRate,
+                        threshold: this.gcBaseline ? this.gcBaseline * 2.0 : this.alertThresholds.gcRate,
+                        baseline: this.gcBaseline
+                    });
+                }
             }
 
             // 檢查資料庫連接狀態

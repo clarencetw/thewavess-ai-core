@@ -382,7 +382,7 @@ func (cr *ConflictResolver) generateReport(resolutions []ConflictResolution) {
 
 	fmt.Fprintf(file, "關鍵字衝突解決報告\n")
 	fmt.Fprintf(file, "產生時間: %s\n", time.Now().Format("2006-01-02 15:04:05"))
-	fmt.Fprintf(file, strings.Repeat("=", 60) + "\n\n")
+	fmt.Fprintf(file, "%s\n\n", strings.Repeat("=", 60))
 
 	fmt.Fprintf(file, "總衝突數: %d\n\n", len(resolutions))
 
@@ -400,7 +400,7 @@ func (cr *ConflictResolver) generateReport(resolutions []ConflictResolution) {
 
 	// 詳細列表
 	fmt.Fprintf(file, "詳細解決方案:\n")
-	fmt.Fprintf(file, strings.Repeat("-", 60) + "\n")
+	fmt.Fprintf(file, "%s\n", strings.Repeat("-", 60))
 
 	for i, r := range resolutions {
 		fmt.Fprintf(file, "%d. 關鍵字: %s\n", i+1, r.Keyword)

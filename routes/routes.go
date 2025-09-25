@@ -20,6 +20,8 @@ func SetupRoutes(router *gin.RouterGroup) {
 		monitor.GET("/live", handlers.Live)
 		monitor.GET("/stats", handlers.GetSystemStats)
 		monitor.GET("/metrics", handlers.GetMetrics)
+		monitor.GET("/baseline", handlers.GetBaseline)
+		monitor.POST("/baseline", handlers.UpdateBaseline)
 	}
 
 	// 認證路由（無需認證）
