@@ -441,13 +441,13 @@ func (s *ChatService) ProcessMessage(ctx context.Context, request *ProcessMessag
 	var response *CharacterResponseData
 	actualEngine := selectedEngine
 
-	// 為AI調用設置超時 (90秒總時間，充足支援 LLM 生成和 fallback)
+	// 為AI調用設置超時 (3分鐘總時間，更寬鬆的時間避免不必要的超時)
 	// Timeout 層級設計：
-	// - Context timeout (90s): 整個請求生命週期，包含所有重試和 fallback
-	// - RequestTimeout (30s): 每次 API 調用的單次超時，在 openai_client.go 和 grok_client.go 中設定
-	// - 90s > 30s 確保有充足時間進行 OpenAI → Mistral fallback
+	// - Context timeout (3min): 整個請求生命週期，包含所有重試和 fallback
+	// - RequestTimeout (60s): 每次 API 調用的單次超時，在 openai_client.go 和 grok_client.go 中設定
+	// - 3min > 60s 確保有充足時間進行 OpenAI → Grok fallback
 	// - 參考 OpenAI 官方範例：context.WithTimeout(5*time.Minute) + WithRequestTimeout(20*time.Second)
-	aiCtx, cancel := context.WithTimeout(ctx, 90*time.Second)
+	aiCtx, cancel := context.WithTimeout(ctx, 3*time.Minute)
 	defer cancel()
 
 	// 嘗試主要引擎（使用預獲取的角色資訊）
@@ -1387,7 +1387,7 @@ func (s *ChatService) generateGrokResponse(ctx context.Context, promptPair Promp
 	}
 
 	// 使用統一歷史處理方法（Grok - 25條完整歷史）
-	historyMessages := s.buildHistoryForEngine(context, currentUserMessage, "grok")
+	historyMessages := s.buildHistoryForEngine(ctx, context, currentUserMessage, "grok")
 	for _, msg := range historyMessages {
 		messages = append(messages, GrokMessage{Role: msg.Role, Content: msg.Content})
 		if msg.Action != "" {
@@ -1450,7 +1450,7 @@ func (s *ChatService) generateOpenAIResponse(ctx context.Context, promptPair Pro
 	}
 
 	// 使用統一歷史處理方法（OpenAI - 25條過濾後歷史）
-	historyMessages := s.buildHistoryForEngine(context, currentUserMessage, "openai")
+	historyMessages := s.buildHistoryForEngine(ctx, context, currentUserMessage, "openai")
 	for _, msg := range historyMessages {
 		messages = append(messages, OpenAIMessage{Role: msg.Role, Content: msg.Content})
 		if msg.Action != "" {
@@ -1512,7 +1512,7 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair Pr
 
 	// 調用 Mistral API（使用新的結構化請求格式）
 	// 構建歷史消息
-	historyMessages := s.buildHistoryForEngine(context, currentUserMessage, "mistral")
+	historyMessages := s.buildHistoryForEngine(ctx, context, currentUserMessage, "mistral")
 
 	// 轉換為 Mistral 請求格式
 	mistralMessages := []MistralMessage{}
@@ -1579,15 +1579,14 @@ func (s *ChatService) generateMistralResponse(ctx context.Context, promptPair Pr
 }
 
 // buildHistoryForEngine 為指定引擎構建歷史（統一方法）
-func (s *ChatService) buildHistoryForEngine(conversationContext *ConversationContext, currentUserMessage string, engineType string) []historyMessage {
+func (s *ChatService) buildHistoryForEngine(ctx context.Context, conversationContext *ConversationContext, currentUserMessage string, engineType string) []historyMessage {
 	var messages []historyMessage
 
 	if conversationContext == nil {
 		return messages
 	}
 
-	// 使用統一歷史服務獲取引擎適用的歷史
-	ctx := context.Background()
+	// 使用統一歷史服務獲取引擎適用的歷史（使用傳入的 context）
 	engineHistory, err := s.engineSelector.BuildHistoryForEngine(ctx, conversationContext.ChatID, CHAT_HISTORY_LIMIT, engineType)
 	if err != nil {
 		utils.Logger.WithError(err).Warnf("獲取 %s 歷史失敗，使用 RecentMessages", engineType)

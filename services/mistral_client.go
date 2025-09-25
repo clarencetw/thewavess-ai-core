@@ -213,7 +213,7 @@ func (c *MistralClient) GenerateResponse(ctx context.Context, request *MistralRe
 		"model":   request.Model,
 	}).Info("Sending Mistral API request via OpenAI SDK")
 
-	resp, err := c.client.Chat.Completions.New(ctx, params, option.WithRequestTimeout(30*time.Second))
+	resp, err := c.client.Chat.Completions.New(ctx, params, option.WithRequestTimeout(60*time.Second))
 	if err != nil {
 		// 記錄詳細的錯誤信息用於診斷
 		utils.Logger.WithFields(map[string]interface{}{

@@ -226,8 +226,8 @@ func (c *GrokClient) GenerateResponse(ctx context.Context, request *GrokRequest)
 		"model":   request.Model,
 	}).Info("Sending Grok API request via OpenAI SDK")
 
-	// WithRequestTimeout(30s): 單次 API 調用超時，必須小於 Context timeout (90s)
-	resp, err := c.client.Chat.Completions.New(ctx, params, option.WithRequestTimeout(30*time.Second))
+	// WithRequestTimeout(60s): 單次 API 調用超時，必須小於 Context timeout (3min)
+	resp, err := c.client.Chat.Completions.New(ctx, params, option.WithRequestTimeout(60*time.Second))
 	if err != nil {
 		// 記錄詳細的錯誤信息用於診斷
 		utils.Logger.WithFields(map[string]interface{}{

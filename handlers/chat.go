@@ -480,8 +480,8 @@ func SendMessage(c *gin.Context) {
 		Metadata:    map[string]interface{}{},
 	}
 
-	// 處理女性向AI對話
-	chatResponse, err := chatService.ProcessMessage(context.Background(), processRequest)
+	// 處理女性向AI對話（使用請求上下文以正確繼承超時設定）
+	chatResponse, err := chatService.ProcessMessage(c.Request.Context(), processRequest)
 	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{
 			"user_id":      userID,
@@ -1120,7 +1120,7 @@ func RegenerateResponse(c *gin.Context) {
 	chatService := services.GetChatService()
 
 	aiResponse, err := chatService.RegenerateMessage(
-		context.Background(),
+		c.Request.Context(),
 		previousUserMsg.Dialogue,
 		chatID,
 		chat.CharacterID,

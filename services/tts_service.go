@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"time"
 
 	"github.com/clarencetw/thewavess-ai-core/utils"
 	"github.com/openai/openai-go/v2"
@@ -78,14 +79,13 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 		Voice:          s.mapVoiceToOpenAI(voice),
 		ResponseFormat: openai.AudioSpeechNewParamsResponseFormatMP3,
 		Speed:          openai.Float(speed),
-	})
+	}, option.WithRequestTimeout(60*time.Second))
 	if err != nil {
 		utils.Logger.WithFields(map[string]interface{}{
 			"service": "tts",
 			"error":   err.Error(),
 		}).Error("TTS API request failed")
-		// 如果API調用失敗，返回mock響應作為fallback
-		return s.mockTTSResponse(text, voice), nil
+		return nil, fmt.Errorf("TTS API 請求失敗: %w", err)
 	}
 	// Note: Audio.Speech.New returns *http.Response which should be closed
 	defer resp.Body.Close()
@@ -97,11 +97,11 @@ func (s *TTSService) GenerateSpeech(ctx context.Context, text string, voice stri
 			"service": "tts",
 			"error":   err.Error(),
 		}).Error("Failed to read TTS response")
-		return s.mockTTSResponse(text, voice), nil
+		return nil, fmt.Errorf("讀取 TTS 響應失敗: %w", err)
 	}
 
-	// 計算音頻時長（估算：平均每字符0.2秒）
-	estimatedDuration := float64(len(text)) * 0.2
+	// 計算音頻時長（改進的估算算法）
+	estimatedDuration := s.calculateEstimatedDuration(text, speed)
 	durationStr := fmt.Sprintf("%.1fs", estimatedDuration)
 
 	utils.Logger.WithFields(map[string]interface{}{
@@ -143,6 +143,42 @@ func (s *TTSService) mapVoiceToOpenAI(voice string) openai.AudioSpeechNewParamsV
 	return openai.AudioSpeechNewParamsVoiceAlloy // 默認語音
 }
 
+// calculateEstimatedDuration 計算估算的音頻時長
+func (s *TTSService) calculateEstimatedDuration(text string, speed float64) float64 {
+	// 基礎估算：中文字符約 0.3 秒/字符，英文單詞約 0.6 秒/單詞
+	textLength := len(text)
+	chineseChars := 0
+	englishWords := 0
+
+	// 簡單統計中英文內容
+	for _, r := range text {
+		if r >= 0x4e00 && r <= 0x9fff {
+			chineseChars++
+		}
+	}
+
+	// 估算英文單詞數（非中文字符數除以平均單詞長度）
+	nonChineseChars := textLength - chineseChars
+	if nonChineseChars > 0 {
+		englishWords = nonChineseChars / 5 // 假設平均單詞長度為5個字符
+	}
+
+	// 計算基礎時長
+	baseDuration := float64(chineseChars)*0.3 + float64(englishWords)*0.6
+
+	// 根據語音速度調整
+	if speed > 0 {
+		baseDuration = baseDuration / speed
+	}
+
+	// 最小時長保護
+	if baseDuration < 0.5 {
+		baseDuration = 0.5
+	}
+
+	return baseDuration
+}
+
 // mockTTSResponse 創建模擬的 TTS 響應
 func (s *TTSService) mockTTSResponse(text string, voice string) *TTSResponse {
 	// 創建一個簡單的模擬音頻數據（實際上是空的MP3頭部）
@@ -153,7 +189,7 @@ func (s *TTSService) mockTTSResponse(text string, voice string) *TTSResponse {
 	}
 
 	// 計算估算時長
-	estimatedDuration := float64(len(text)) * 0.2
+	estimatedDuration := s.calculateEstimatedDuration(text, 1.0)
 	durationStr := fmt.Sprintf("%.1fs", estimatedDuration)
 
 	utils.Logger.WithFields(map[string]interface{}{
