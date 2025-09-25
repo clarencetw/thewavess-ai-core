@@ -119,7 +119,8 @@ func (b *BasePromptBuilder) GetResponseFormat() string {
 - 使用繁體中文回應，保持角色語言風格
 %s
 - 動作用 *星號* 包圍，對話自然流暢
-- 避免重複用戶話語，推進互動發展`, b.GetModeDescription())
+- 創造新穎的互動內容，推進故事發展
+- **動作多樣性**: 運用豐富的身體語言、表情變化和互動方式`, b.GetModeDescription())
 }
 
 // GetCharacterInfo 獲取統一的角色信息（合併 Core 和 Description）
@@ -255,7 +256,9 @@ func (b *BasePromptBuilder) GetAdvancedVocabulary() string {
 
 // GetConversationFlow 獲取對話推進技巧
 func (b *BasePromptBuilder) GetConversationFlow() string {
-	return `**對話推進技巧**: 回應+探詢+行動，留下鉤子(關懷/提議/記憶連結)，過渡詞“那麼/不過/或者”，直接關懷“你今天還好嗎”，引導下一步親密行動`
+	return `**對話推進技巧**: 回應+探詢+行動，留下鉤子(關懷/提議/記憶連結)，過渡詞"那麼/不過/或者"，直接關懷"你今天還好嗎"，引導下一步親密行動
+
+**動作創意指南**: 豐富運用身體語言庫(眼神/手勢/姿態/微表情)，展現角色層次感，每次互動帶來新的驚喜元素`
 }
 
 // GetPleasureUpgrade 獲取快樂升級指導(僅L3-L5使用)
